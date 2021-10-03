@@ -1,5 +1,6 @@
 #include "spotify_client.h"
 
+#include <iostream>
 #include <map>
 #include <thread>
 #include "credentials.h"
