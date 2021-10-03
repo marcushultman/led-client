@@ -437,6 +437,8 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
     _lengths1.fill(0);
     return;
   }
+  printf("%s\n", buffer.c_str());
+
   auto sv = std::string_view(buffer);
   sv.remove_prefix(sv.find("<rect"));
   sv.remove_prefix(sv.find("/>"));
@@ -467,6 +469,10 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
     sv.remove_prefix(sv.find("height="));
     sv.remove_prefix(8);
     _lengths1[i] = map[std::atoi(sv.data())];
+  }
+
+  for (auto i = 0; i < 23; ++i) {
+    printf("#%d: %d %d\n", i, _lengths0[i], _lengths1[i]);
   }
 
   // _scannable = parseScannable(_jq, buffer);
