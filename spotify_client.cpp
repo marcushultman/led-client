@@ -506,20 +506,25 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
 }
 
 void SpotifyClient::displayCode(const std::string &code, const std::string &url) {
+  static int q = 0;
+
   std::cerr << "display code: " << code.c_str() << ", url: " << url.c_str() << std::endl;
   _led->clear();
 
-  for (auto c : {'A'}) {
-    auto &glyph = kAlphaMap.find(c)->second;
-    auto col_offset = 4;
+  auto col_offset = 0, n = 0;
+  for (auto it = kAlphaMap.begin(); it != kAlphaMap.end() && n != 4; ++it, ++n) {
+    auto &[c, glyph] = *it;
     for (auto col = 0; col < glyph.size(); ++col) {
       for (auto i : glyph[col]) {
         _led->set(pixel(col_offset + col, i), 1, 1, 1);
       }
     }
+    col_offset += 5;
   }
 
   _led->show();
+
+  q += 4;
 }
 
 // clang-format off
