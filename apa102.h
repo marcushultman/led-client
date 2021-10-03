@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#if PI
+#if __arm__
 #include <wiringPi.h>
 #include <wiringPiSPI.h>
 #endif
@@ -16,7 +16,7 @@ char const hex_chars[16] = {
 class LED {
  public:
   LED(int num_leds, int hz = 6000000) : _num_leds{num_leds} {
-#if PI
+#if __arm__
     wiringPiSetup();
     if (wiringPiSPISetup(0, hz) < 0) {
       printf("wiringPiSPISetup failed\n");
@@ -51,7 +51,7 @@ class LED {
       s += hex_chars[(byte & 0x0F) >> 0];
     }
     printf("%s\n", s.c_str());
-#if PI
+#if __arm__
     wiringPiSPIDataRW(0, _buf, _buf.size());
 #endif
   }
