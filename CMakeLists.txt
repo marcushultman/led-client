@@ -9,4 +9,8 @@ set(SOURCES
   main.cpp
 )
 
+target_link_libraries(spoticode
+  wiringPi
+)
+
 add_executable(spoticode ${SOURCES})
