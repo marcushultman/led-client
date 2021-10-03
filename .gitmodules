@@ -1,0 +1,3 @@
+[submodule "spidev-lib"]
+	path = spidev-lib
+	url = https://github.com/milekium/spidev-lib.git
