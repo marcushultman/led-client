@@ -4,7 +4,7 @@
 #include <vector>
 
 #if __arm__
-#include <spidev_lib++.h>
+#include "spidev_lib++.h"
 #endif
 
 namespace apa102 {
