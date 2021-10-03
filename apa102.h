@@ -30,11 +30,18 @@ class LED {
     }
     int capacity = 4 + 4 * _num_leds + trailing;
     _buf.resize(capacity);
-    for (auto i = 0; i < _num_leds; ++i) {
-      _buf[(1 + i) * 4] = 0xff;
-    }
     for (auto i = 0; i < trailing; ++i) {
       _buf[(1 + _num_leds) * 4 + i] = 0xff;
+    }
+    clear();
+  }
+
+  void clear() {
+    for (auto i = 0; i < _num_leds; ++i) {
+      _buf[(1 + i) * 4] = 0xff;
+      _buf[(1 + i) * 4 + 1] = 0;
+      _buf[(1 + i) * 4 + 2] = 0;
+      _buf[(1 + i) * 4 + 3] = 0;
     }
   }
 

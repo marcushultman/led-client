@@ -587,6 +587,7 @@ void SpotifyClient::displayNPV() {
 }
 
 void SpotifyClient::displayScannable() {
+  _led->clear();
   for (auto col = 0; col < 23; ++col) {
     printf("#%d: %d %d\n", col, _lengths0[col], _lengths1[col]);
 
