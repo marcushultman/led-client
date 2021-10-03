@@ -421,7 +421,6 @@ void SpotifyClient::fetchContext(const std::string &url) {
 void SpotifyClient::fetchScannable(const std::string &uri) {
   curl_easy_reset(_curl);
   const auto url = credentials::kScannablesCdnUrl + uri + "?format=svg";
-  printf("fetching '%s'\n", url.c_str());
 
   curl_easy_setopt(_curl, CURLOPT_URL, url.c_str());
 
@@ -437,7 +436,6 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
     _lengths1.fill(0);
     return;
   }
-  printf("%s\n", buffer.c_str());
 
   auto sv = std::string_view(buffer);
   sv.remove_prefix(sv.find("<rect"));
@@ -589,8 +587,6 @@ void SpotifyClient::displayNPV() {
 void SpotifyClient::displayScannable() {
   _led->clear();
   for (auto col = 0; col < 23; ++col) {
-    printf("#%d: %d %d\n", col, _lengths0[col], _lengths1[col]);
-
     auto [start, end] = makeRange(col, _lengths0[col], _lengths1[col]);
     for (auto i = start; i < end; ++i) {
       _led->set(i, 1, 1, 1);
