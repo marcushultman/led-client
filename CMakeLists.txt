@@ -6,6 +6,9 @@ add_subdirectory(spidev-lib)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# boo
+include_directories(spidev-lib/src/)
+
 set(SOURCES
   apa102.h
   main.cpp
