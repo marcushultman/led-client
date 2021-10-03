@@ -59,7 +59,7 @@ class LED {
 #if __arm__
     printf("pi\n");
     for (auto i = 0; i < _buf.size(); i += 0xff) {
-      _spi->write(&_buf[i], std::min(0xff, _buf.size() - i));
+      _spi->write(&_buf[i], std::min<int>(0xff, _buf.size() - i));
     }
 #endif
   }
