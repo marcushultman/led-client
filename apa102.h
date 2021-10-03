@@ -4,8 +4,7 @@
 #include <vector>
 
 #if __arm__
-#include <wiringPi.h>
-#include <wiringPiSPI.h>
+#include <spidev_lib++.h>
 #endif
 
 namespace apa102 {
@@ -15,11 +14,17 @@ char const hex_chars[16] = {
 
 class LED {
  public:
-  LED(int num_leds, int hz = 6000000) : _num_leds{num_leds} {
+  LED(int num_leds, int hz = 4000000) : _num_leds{num_leds} {
 #if __arm__
-    wiringPiSetup();
-    if (wiringPiSPISetup(0, hz) < 0) {
-      printf("wiringPiSPISetup failed\n");
+    spi_config_t spi_config;
+    spi_config.mode = 0;
+    spi_config.speed = hz;
+    spi_config.delay = 0;
+    spi_config.bits_per_word = 8;
+    _spi = std::make_unique<SPI>("/dev/spidev1.0", &spi_config);
+
+    if (!_spi->begin()) {
+      printf("SPI failed\n");
     }
 #endif
     int trailing = _num_leds / 16;
@@ -37,7 +42,6 @@ class LED {
   }
 
   void set(int i, uint8_t r, uint8_t g, uint8_t b) {
-    printf("%d: %d/%d/%d\n", i, (1 + i) * 4 + 1, (1 + i) * 4 + 2, (1 + i) * 4 + 3);
     _buf[(1 + i) * 4 + 1] = b;
     _buf[(1 + i) * 4 + 2] = g;
     _buf[(1 + i) * 4 + 3] = r;
@@ -53,10 +57,13 @@ class LED {
     printf("%s\n", s.c_str());
 #if __arm__
     printf("pi\n");
-    wiringPiSPIDataRW(0, _buf.data(), _buf.size());
+    _spi->write(_buf.data(), _buf.size());
 #endif
   }
 
+#if __arm__
+  std::unique_ptr<SPI> _spi;
+#endif
   int _num_leds;
   std::vector<uint8_t> _buf;
 };

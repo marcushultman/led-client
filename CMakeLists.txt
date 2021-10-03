@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 
 project(spoticode)
 
+add_subdirectory(spidev-lib)
+
 set(CMAKE_CXX_STANDARD 17)
 
 set(SOURCES
@@ -15,6 +17,6 @@ message(STATUS "PI: ${PI}")
 
 if (PI)
   target_link_libraries(spoticode
-    wiringPi
+    spidev-lib++
   )
 endif()
