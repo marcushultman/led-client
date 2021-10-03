@@ -21,7 +21,7 @@ class LED {
     spi_config.speed = hz;
     spi_config.delay = 0;
     spi_config.bits_per_word = 8;
-    _spi = std::make_unique<SPI>("/dev/spidev1.0", &spi_config);
+    _spi = std::make_unique<SPI>("/dev/spidev0.0", &spi_config);
 
     if (!_spi->begin()) {
       printf("SPI failed\n");
