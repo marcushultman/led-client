@@ -1,0 +1,6 @@
+---
+Language:        Cpp
+BasedOnStyle:  Google
+BinPackParameters: false
+AccessModifierOffset: -1
+ColumnLimit:     100
