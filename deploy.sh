@@ -2,8 +2,6 @@
 
 set -eu
 
-ssh pi@192.168.1.66
-
 cd ~/spoticode-apa102
 git pull
 
