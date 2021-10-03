@@ -471,10 +471,6 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
     _lengths1[i] = map[std::atoi(sv.data())];
   }
 
-  for (auto i = 0; i < 23; ++i) {
-    printf("#%d: %d %d\n", i, _lengths0[i], _lengths1[i]);
-  }
-
   // _scannable = parseScannable(_jq, buffer);
 
   /*
@@ -592,6 +588,8 @@ void SpotifyClient::displayNPV() {
 
 void SpotifyClient::displayScannable() {
   for (auto col = 0; col < 23; ++col) {
+    printf("#%d: %d %d\n", col, _lengths0[col], _lengths1[col]);
+
     auto [start, end] = makeRange(col, _lengths0[col], _lengths1[col]);
     for (auto i = start; i < end; ++i) {
       _led->set(i, 1, 1, 1);
