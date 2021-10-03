@@ -52,6 +52,7 @@ class LED {
     }
     printf("%s\n", s.c_str());
 #if __arm__
+    printf("pi\n");
     wiringPiSPIDataRW(0, _buf.data(), _buf.size());
 #endif
   }
