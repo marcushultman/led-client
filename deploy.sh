@@ -11,6 +11,6 @@ mkdir -p ~/spoticode-apa102/build
 cd ~/spoticode-apa102/build
 
 cmake -DPI=1 ..
-make
+make spoticode
 
 ./spoticode
