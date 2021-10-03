@@ -10,7 +10,7 @@ git pull
 mkdir -p ~/spoticode-apa102/build
 cd ~/spoticode-apa102/build
 
-cmake ..
+cmake -DPI=1 ..
 make
 
 ./spoticode

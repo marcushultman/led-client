@@ -9,8 +9,12 @@ set(SOURCES
   main.cpp
 )
 
-target_link_libraries(spoticode
-  wiringPi
-)
-
 add_executable(spoticode ${SOURCES})
+
+message(STATUS "PI: ${PI}")
+
+if (PI)
+  target_link_libraries(spoticode
+    wiringPi
+  )
+endif()
