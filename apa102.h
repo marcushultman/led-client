@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 #include <vector>
 
 #if __arm__
@@ -9,9 +8,6 @@
 #endif
 
 namespace apa102 {
-
-char const hex_chars[16] = {
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
 class LED {
  public:
@@ -49,15 +45,7 @@ class LED {
   }
 
   void show() {
-    std::string s;
-    for (auto byte : _buf) {
-      s += "\\x";
-      s += hex_chars[(byte & 0xF0) >> 4];
-      s += hex_chars[(byte & 0x0F) >> 0];
-    }
-    printf("%s\n", s.c_str());
 #if __arm__
-    printf("pi\n");
     for (auto i = 0; i < _buf.size(); i += 0xff) {
       _spi->write(&_buf[i], std::min<int>(0xff, _buf.size() - i));
     }
