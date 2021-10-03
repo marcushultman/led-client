@@ -53,9 +53,7 @@ class LED {
 
   void show() {
 #if __arm__
-    for (auto i = 0; i < _buf.size(); i += 240) {
-      _spi->write(&_buf[i], std::min<int>(240, _buf.size() - i));
-    }
+    _spi->write(_buf.data(), _buf.size());
 #endif
   }
 
