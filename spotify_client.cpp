@@ -1,4 +1,5 @@
 #include "spotify_client.h"
+#include "alpha_map.h"
 
 #include <iostream>
 #include <map>
@@ -163,6 +164,13 @@ std::pair<int, int> makeRange(int col, int upper, int lower) {
   auto end = odd ? lower : upper;
   auto mid = 16 * col + 8;
   return {mid + start, mid + end};
+}
+
+int pixel(int col, int index) {
+  auto odd = col % 2 == 1;
+  auto offset = odd ? index : -index;
+  auto mid = 16 * col + 8;
+  return mid + offset;
 }
 
 }  // namespace
@@ -499,6 +507,19 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
 
 void SpotifyClient::displayCode(const std::string &code, const std::string &url) {
   std::cerr << "display code: " << code.c_str() << ", url: " << url.c_str() << std::endl;
+  _led->clear();
+
+  for (auto c : {'A'}) {
+    auto &glyph = kAlphaMap.find(c)->second;
+    auto col_offset = 4;
+    for (auto col = 0; col < glyph.size(); ++col) {
+      for (auto i : glyph[col]) {
+        _led->set(pixel(col_offset + col, i), 1, 1, 1);
+      }
+    }
+  }
+
+  _led->show();
 }
 
 // clang-format off
