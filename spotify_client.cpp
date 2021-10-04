@@ -254,8 +254,8 @@ SpotifyClient::AuthResult SpotifyClient::getAuthCode(const std::string &device_c
     if (err == kPollError) {
       return kAuthError;
     }
-    for (auto end = elapsed + interval; elapsed < end; elapsed += 33ms) {
-      std::this_thread::sleep_for(33ms);
+    for (auto end = elapsed + interval; elapsed < end; elapsed += 200ms) {
+      std::this_thread::sleep_for(200ms);
       displayCode(elapsed, user_code, verification_url);
     }
     if (system_clock::now() >= expiry) {
@@ -522,7 +522,7 @@ void SpotifyClient::displayCode(const std::chrono::milliseconds &elapsed,
 
   _led->clear();
 
-  auto offset = 24 - (static_cast<int>(kScrollSpeed * elapsed.count()) % 60);
+  auto offset = 23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % 23 + 30);
 
   for (auto n = 0; n < code.size(); ++n) {
     auto &glyph = kAlphaMap.at(code[n]);
