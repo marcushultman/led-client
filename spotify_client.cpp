@@ -518,7 +518,7 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
 void SpotifyClient::displayCode(const std::chrono::milliseconds &elapsed,
                                 const std::string &code,
                                 const std::string &url) {
-  const auto kScrollSpeed = 0.004;
+  const auto kScrollSpeed = 0.005;
 
   _led->clear();
 
