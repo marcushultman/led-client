@@ -225,10 +225,12 @@ SpotifyClient::AuthResult SpotifyClient::authenticateCode(const std::string &dev
                                                           const std::string &verification_url,
                                                           const std::chrono::seconds &expires_in,
                                                           const std::chrono::seconds &interval) {
-  displayCode(user_code, verification_url);
+  using namespace std::chrono_literals;
+  displayCode(0ms, user_code, verification_url);
 
   std::string auth_code;
-  if (auto err = getAuthCode(device_code, expires_in, interval, auth_code)) {
+  if (auto err =
+          getAuthCode(device_code, user_code, verification_url, expires_in, interval, auth_code)) {
     return err;
   }
   if (!fetchTokens(auth_code)) {
@@ -238,18 +240,24 @@ SpotifyClient::AuthResult SpotifyClient::authenticateCode(const std::string &dev
 }
 
 SpotifyClient::AuthResult SpotifyClient::getAuthCode(const std::string &device_code,
+                                                     const std::string &user_code,
+                                                     const std::string &verification_url,
                                                      const std::chrono::seconds &expires_in,
                                                      const std::chrono::seconds &interval,
                                                      std::string &auth_code) {
+  using namespace std::chrono_literals;
   using std::chrono::system_clock;
+
+  auto elapsed = 0ms;
   auto expiry = system_clock::now() + expires_in;
   while (auto err = pollAuthCode(device_code, auth_code)) {
     if (err == kPollError) {
       return kAuthError;
     }
-    displayCode("", "");
-
-    std::this_thread::sleep_for(interval);
+    for (auto end = elapsed + interval; elapsed < end; elapsed += 1ms) {
+      std::this_thread::sleep_for(1ms);
+      displayCode(elapsed, user_code, verification_url);
+    }
     if (system_clock::now() >= expiry) {
       return kAuthError;
     }
@@ -507,29 +515,29 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
   */
 }
 
-void SpotifyClient::displayCode(const std::string &code, const std::string &url) {
-  static int q = -4;
+void SpotifyClient::displayCode(const std::chrono::milliseconds &elapsed,
+                                const std::string &code,
+                                const std::string &url) {
+  const auto kScrollSpeed = 1;
 
   std::cerr << "display code: " << code.c_str() << ", url: " << url.c_str() << std::endl;
   _led->clear();
 
-  auto col_offset = 0;
-  auto it = kAlphaMap.begin();
-  for (auto n = 0; it != kAlphaMap.end() && n < q; ++it, ++n) {
+  auto offset = 24 - static_cast<int>(kScrollSpeed * elapsed.count());
+  if (offset < -25) {
+    offset += 50;
   }
-  for (auto n = 0; it != kAlphaMap.end() && n < 4; ++it, ++n) {
-    auto &[c, glyph] = *it;
+
+  for (auto n = 0; n < code.size(); ++n) {
+    auto &glyph = kAlphaMap.at(code[n]);
     for (auto col = 0; col < glyph.size(); ++col) {
       for (auto i : glyph[col]) {
-        _led->set(pixel(col_offset + col, i), 1, 1, 1);
+        _led->set(pixel(offset + 4 * n + col, i), 1, 1, 1);
       }
     }
-    col_offset += 5;
   }
 
   _led->show();
-
-  q += 4;
 }
 
 // clang-format off

@@ -54,6 +54,8 @@ class SpotifyClient {
                               const std::chrono::seconds &expires_in,
                               const std::chrono::seconds &interval);
   AuthResult getAuthCode(const std::string &device_code,
+                         const std::string &user_code,
+                         const std::string &verification_url,
                          const std::chrono::seconds &expires_in,
                          const std::chrono::seconds &interval,
                          std::string &auth_code);
@@ -70,7 +72,9 @@ class SpotifyClient {
  public:
   void fetchScannable(const std::string &uri);
 
-  void displayCode(const std::string &code, const std::string &verification_url);
+  void displayCode(const std::chrono::milliseconds &elapsed,
+                   const std::string &code,
+                   const std::string &verification_url);
   void displayNPV();
   void displayScannable();
 
