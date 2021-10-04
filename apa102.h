@@ -46,6 +46,9 @@ class LED {
   }
 
   void set(int i, uint8_t r, uint8_t g, uint8_t b) {
+    if (i < 0 || i >= _num_leds) {
+      return;
+    }
     _buf[(1 + i) * 4 + 1] = b;
     _buf[(1 + i) * 4 + 2] = g;
     _buf[(1 + i) * 4 + 3] = r;
