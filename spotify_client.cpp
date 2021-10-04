@@ -513,8 +513,11 @@ void SpotifyClient::displayCode(const std::string &code, const std::string &url)
   std::cerr << "display code: " << code.c_str() << ", url: " << url.c_str() << std::endl;
   _led->clear();
 
-  auto col_offset = 0, n = 0;
-  for (auto it = kAlphaMap.begin(); it != kAlphaMap.end() && n != 4; ++it, ++n) {
+  auto col_offset = 0;
+  auto it = kAlphaMap.begin();
+  for (auto n = 0; it != kAlphaMap.end() && n < q; ++it, ++n) {
+  }
+  for (auto n = 0; it != kAlphaMap.end() && n < 4; ++it, ++n) {
     auto &[c, glyph] = *it;
     for (auto col = 0; col < glyph.size(); ++col) {
       for (auto i : glyph[col]) {
