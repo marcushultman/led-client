@@ -522,10 +522,7 @@ void SpotifyClient::displayCode(const std::chrono::milliseconds &elapsed,
 
   _led->clear();
 
-  auto offset = 25 - (static_cast<int>(kScrollSpeed * elapsed.count()) % 50);
-
-  std::cerr << "display code: " << code.c_str() << ", url: " << url.c_str()
-            << ", offset: " << offset << std::endl;
+  auto offset = 24 - (static_cast<int>(kScrollSpeed * elapsed.count()) % 50);
 
   for (auto n = 0; n < code.size(); ++n) {
     auto &glyph = kAlphaMap.at(code[n]);
