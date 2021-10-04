@@ -11,7 +11,7 @@ namespace apa102 {
 
 class LED {
  public:
-  LED(int num_leds, int hz = 8000000) : _num_leds{num_leds} {
+  LED(int num_leds, int hz = 6000000) : _num_leds{num_leds} {
 #if __arm__
     spi_config_t spi_config;
     spi_config.mode = 0;
