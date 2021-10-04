@@ -518,11 +518,11 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
 void SpotifyClient::displayCode(const std::chrono::milliseconds &elapsed,
                                 const std::string &code,
                                 const std::string &url) {
-  const auto kScrollSpeed = 0.005;
+  const auto kScrollSpeed = 0.004;
 
   _led->clear();
 
-  auto offset = 24 - (static_cast<int>(kScrollSpeed * elapsed.count()) % 50);
+  auto offset = 24 - (static_cast<int>(kScrollSpeed * elapsed.count()) % 60);
 
   for (auto n = 0; n < code.size(); ++n) {
     auto &glyph = kAlphaMap.at(code[n]);

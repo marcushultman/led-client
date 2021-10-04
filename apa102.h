@@ -11,7 +11,7 @@ namespace apa102 {
 
 class LED {
  public:
-  LED(int num_leds, int hz = 6000000) : _num_leds{num_leds} {
+  LED(int num_leds, int hz = 10000000) : _num_leds{num_leds} {
 #if __arm__
     spi_config_t spi_config;
     spi_config.mode = 0;
@@ -59,12 +59,11 @@ class LED {
     _spi->write(_buf.data(), _buf.size());
 #endif
   }
-
+  int _num_leds;
+  std::vector<uint8_t> _buf;
 #if __arm__
   std::unique_ptr<SPI> _spi;
 #endif
-  int _num_leds;
-  std::vector<uint8_t> _buf;
 };
 
 }  // namespace apa102
