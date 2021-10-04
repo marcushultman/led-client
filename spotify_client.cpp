@@ -247,6 +247,8 @@ SpotifyClient::AuthResult SpotifyClient::getAuthCode(const std::string &device_c
     if (err == kPollError) {
       return kAuthError;
     }
+    displayCode("", "");
+
     std::this_thread::sleep_for(interval);
     if (system_clock::now() >= expiry) {
       return kAuthError;
