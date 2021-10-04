@@ -508,7 +508,7 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
 }
 
 void SpotifyClient::displayCode(const std::string &code, const std::string &url) {
-  static int q = 0;
+  static int q = -4;
 
   std::cerr << "display code: " << code.c_str() << ", url: " << url.c_str() << std::endl;
   _led->clear();
