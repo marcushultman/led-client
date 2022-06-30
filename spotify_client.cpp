@@ -104,7 +104,10 @@ TokenData parseTokenData(jq_state *jq, const std::string &buffer) {
   return {nextStr(jq), nextStr(jq)};
 }
 
-NowPlaying parseNowPlaying(jq_state *jq, const std::string &buffer) {
+NowPlaying parseNowPlaying(jq_state *jq, const std::string &buffer, bool verbose) {
+  if (verbose) {
+    std::cout << "parseNowPlaying: " << buffer.c_str() << std::endl;
+  }
   const auto input = jv_parse(buffer.c_str());
   jq_compile(jq,
              ".item.id,"
@@ -172,8 +175,8 @@ int pixel(int col, int offset) {
 
 }  // namespace
 
-SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq)
-    : _curl{curl}, _jq{jq}, _led{std::make_unique<apa102::LED>(16 * 23)} {}
+SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, bool verbose)
+    : _curl{curl}, _jq{jq}, _led{std::make_unique<apa102::LED>(16 * 23)}, _verbose{verbose} {}
 
 int SpotifyClient::run() {
   for (;;) {
@@ -390,7 +393,7 @@ bool SpotifyClient::fetchNowPlaying(bool retry) {
     return true;
   }
   _has_played = true;
-  auto now_playing = parseNowPlaying(_jq, buffer);
+  auto now_playing = parseNowPlaying(_jq, buffer, _verbose);
 
   if (now_playing.track_id == _now_playing.track_id) {
     _now_playing.progress = now_playing.progress;
@@ -525,7 +528,7 @@ void SpotifyClient::displayCode(const std::chrono::milliseconds &elapsed,
     auto &glyph = kAlphaMap.at(code[n]);
     for (auto col = 0; col < glyph.size(); ++col) {
       for (auto i : glyph[col]) {
-        _led->set(pixel(offset + 5 * n + col, i), 1, 1, 1);
+        _led->set(pixel(offset + 5 * n + col, i), 32, 32, 32);
       }
     }
   }
