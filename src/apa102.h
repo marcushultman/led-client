@@ -3,28 +3,11 @@
 #include <memory>
 #include <vector>
 
-#if __arm__
-#include "spidev_lib++.h"
-#endif
-
 namespace apa102 {
 
 class LED {
  public:
-  LED(int num_leds, int hz = 6000000) : _num_leds{num_leds} {
-#if __arm__
-    spi_config_t spi_config;
-    spi_config.mode = 0;
-    spi_config.speed = hz;
-    spi_config.delay = 0;
-    spi_config.bits_per_word = 8;
-    _spi = std::make_unique<SPI>("/dev/spidev0.0", &spi_config);
-
-    if (!_spi->begin()) {
-      printf("SPI failed\n");
-      _spi.reset();
-    }
-#endif
+  LED(int num_leds, int hz) : _num_leds{num_leds} {
     int trailing = _num_leds / 16;
     if (_num_leds % 16 != 0) {
       ++trailing;
@@ -55,18 +38,13 @@ class LED {
     _buf[(1 + i) * 4 + 3] = r;
   }
 
-  void show() {
-#if __arm__
-    if (_spi) {
-      _spi->write(_buf.data(), _buf.size());
-    }
-#endif
-  }
+  virtual void show() = 0;
+
+ protected:
   int _num_leds;
   std::vector<uint8_t> _buf;
-#if __arm__
-  std::unique_ptr<SPI> _spi;
-#endif
 };
+
+std::unique_ptr<LED> createLED(int num_leds, int hz = 6000000);
 
 }  // namespace apa102

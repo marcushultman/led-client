@@ -3,7 +3,8 @@
 set -eu
 
 cd ~/spoticode-apa102
-git pull
+git fetch origin master
+git checkout origin/master
 
 mkdir -p ~/spoticode-apa102/build
 cd ~/spoticode-apa102/build

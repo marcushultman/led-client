@@ -13,11 +13,14 @@ find_library(JQ jq)
 include_directories(spidev-lib/src/)
 
 set(SOURCES
+  apa102.cpp
   apa102.h
   main.cpp
   spotify_client.cpp
   spotify_client.h
 )
+
+list(TRANSFORM SOURCES PREPEND "src/")
 
 add_executable(spoticode ${SOURCES})
 
