@@ -166,11 +166,8 @@ std::pair<int, int> makeRange(int col, int upper, int lower) {
   return {mid + start, mid + end};
 }
 
-int pixel(int col, int index) {
-  auto odd = col % 2 == 1;
-  auto offset = odd ? -index : index;
-  auto mid = 16 * col + 8 - odd;
-  return mid + offset;
+int pixel(int col, int offset) {
+  return 16 * col + 8 + offset;
 }
 
 }  // namespace

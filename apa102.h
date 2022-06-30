@@ -22,6 +22,7 @@ class LED {
 
     if (!_spi->begin()) {
       printf("SPI failed\n");
+      _spi.reset();
     }
 #endif
     int trailing = _num_leds / 16;
@@ -56,7 +57,9 @@ class LED {
 
   void show() {
 #if __arm__
-    _spi->write(_buf.data(), _buf.size());
+    if (_spi) {
+      _spi->write(_buf.data(), _buf.size());
+    }
 #endif
   }
   int _num_leds;
