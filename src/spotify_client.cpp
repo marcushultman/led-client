@@ -175,8 +175,12 @@ int pixel(int col, int offset) {
 
 }  // namespace
 
-SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, bool verbose)
-    : _curl{curl}, _jq{jq}, _led{std::make_unique<apa102::LED>(16 * 23)}, _verbose{verbose} {}
+SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, int brightness, bool verbose)
+    : _curl{curl},
+      _jq{jq},
+      _led{std::make_unique<apa102::LED>(16 * 23)},
+      _brightness{brightness},
+      _verbose{verbose} {}
 
 int SpotifyClient::run() {
   for (;;) {
@@ -528,7 +532,7 @@ void SpotifyClient::displayCode(const std::chrono::milliseconds &elapsed,
     auto &glyph = kAlphaMap.at(code[n]);
     for (auto col = 0; col < glyph.size(); ++col) {
       for (auto i : glyph[col]) {
-        _led->set(pixel(offset + 5 * n + col, i), 32, 32, 32);
+        _led->set(pixel(offset + 5 * n + col, i), _brightness, _brightness, _brightness);
       }
     }
   }
@@ -624,7 +628,7 @@ void SpotifyClient::displayScannable() {
   for (auto col = 0; col < 23; ++col) {
     auto [start, end] = makeRange(col, _lengths0[col], _lengths1[col]);
     for (auto i = start; i < end; ++i) {
-      _led->set(i, 1, 1, 1);
+      _led->set(i, _brightness, _brightness, _brightness);
     }
   }
   _led->show();

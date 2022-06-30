@@ -41,7 +41,7 @@ class SpotifyClient {
   };
 
  public:
-  SpotifyClient(CURL *curl, jq_state *jq, bool verbose);
+  SpotifyClient(CURL *curl, jq_state *jq, int brightness, bool verbose);
 
   int run();
 
@@ -80,6 +80,7 @@ class SpotifyClient {
 
   CURL *_curl{nullptr};
   jq_state *_jq{nullptr};
+  int _brightness = 1;
   bool _verbose = false;
   std::unique_ptr<apa102::LED> _led;
 
