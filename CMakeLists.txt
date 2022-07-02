@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.16)
 
 project(spoticode)
 
-add_subdirectory(spidev-lib)
+if (PI)
+  add_subdirectory(spidev-lib)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -10,7 +12,9 @@ find_package(CURL REQUIRED)
 find_library(JQ jq)
 
 # boo
-include_directories(spidev-lib/src/)
+if (PI)
+  include_directories(spidev-lib/src/)
+endif()
 
 set(SOURCES
   apa102.cpp

@@ -19,6 +19,7 @@ class LED {
     }
     clear();
   }
+  virtual ~LED() = default;
 
   void clear() {
     for (auto i = 0; i < _num_leds; ++i) {

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <thread>
+#include "apa102.h"
 #include "credentials.h"
 
 namespace {
@@ -178,7 +179,7 @@ int pixel(int col, int offset) {
 SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, int brightness, bool verbose)
     : _curl{curl},
       _jq{jq},
-      _led{std::make_unique<apa102::LED>(16 * 23)},
+      _led{apa102::createLED(16 * 23)},
       _brightness{brightness},
       _verbose{verbose} {}
 
