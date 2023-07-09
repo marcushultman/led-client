@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -14,6 +15,7 @@ class LED {
     }
     int capacity = 4 + 4 * _num_leds + trailing;
     _buf.resize(capacity);
+    std::fill(_buf.begin(), _buf.end(), 0);
     for (auto i = 0; i < trailing; ++i) {
       _buf[4 + 4 * _num_leds + i] = 0xff;
     }
