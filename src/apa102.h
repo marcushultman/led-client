@@ -12,7 +12,7 @@ class LED {
     if (_num_leds % 16 != 0) {
       ++trailing;
     }
-    int capacity = 4 + 4 * _num_leds + trailing;
+    int capacity = (1 + _num_leds) * 4 + trailing;
     _buf.resize(capacity);
     for (auto i = 0; i < trailing; ++i) {
       _buf[(1 + _num_leds) * 4 + i] = 0xff;

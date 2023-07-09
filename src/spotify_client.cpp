@@ -1,9 +1,10 @@
 #include "spotify_client.h"
-#include "alpha_map.h"
 
 #include <iostream>
 #include <map>
 #include <thread>
+
+#include "alpha_map.h"
 #include "apa102.h"
 #include "credentials.h"
 
@@ -76,6 +77,8 @@ DeviceFlowData parseDeviceFlowData(jq_state *jq, const std::string &buffer) {
   return {nextStr(jq), nextStr(jq), nextSeconds(jq), nextStr(jq), nextStr(jq), nextSeconds(jq)};
 }
 
+#if 0
+
 struct AuthCodeData {
   std::string error;
   std::string auth_code;
@@ -88,7 +91,10 @@ AuthCodeData parseAuthCodeData(jq_state *jq, const std::string &buffer) {
   return {nextStr(jq), nextStr(jq)};
 }
 
+#endif
+
 struct TokenData {
+  std::string error;
   std::string access_token;
   // std::string token_type;  // "Bearer";
   // std::chrono::seconds expires_in;  // 3600;
@@ -100,9 +106,9 @@ struct TokenData {
 
 TokenData parseTokenData(jq_state *jq, const std::string &buffer) {
   const auto input = jv_parse(buffer.c_str());
-  jq_compile(jq, ".access_token, .refresh_token");
+  jq_compile(jq, ".error, .access_token, .refresh_token");
   jq_start(jq, input, 0);
-  return {nextStr(jq), nextStr(jq)};
+  return {nextStr(jq), nextStr(jq), nextStr(jq)};
 }
 
 NowPlaying parseNowPlaying(jq_state *jq, const std::string &buffer, bool verbose) {
@@ -120,15 +126,8 @@ NowPlaying parseNowPlaying(jq_state *jq, const std::string &buffer, bool verbose
              ".progress_ms,"
              ".item.duration_ms");
   jq_start(jq, input, 0);
-  return {nextStr(jq),
-          nextStr(jq),
-          "",
-          nextStr(jq),
-          nextStr(jq),
-          nextStr(jq),
-          nextStr(jq),
-          nextMs(jq),
-          nextMs(jq)};
+  return {nextStr(jq), nextStr(jq), "",         nextStr(jq), nextStr(jq),
+          nextStr(jq), nextStr(jq), nextMs(jq), nextMs(jq)};
 }
 
 std::string parseContext(jq_state *jq, const std::string &buffer) {
@@ -136,17 +135,6 @@ std::string parseContext(jq_state *jq, const std::string &buffer) {
   jq_compile(jq, ".name");
   jq_start(jq, input, 0);
   return nextStr(jq);
-}
-
-Scannable parseScannable(jq_state *jq, const std::string &buffer) {
-  const auto input = jv_parse(buffer.c_str());
-  jq_compile(jq, ".id0, .id1");
-  jq_start(jq, input, 0);
-  const auto id0 = nextStr(jq), id1 = nextStr(jq);
-  if (id0.empty() || id1.empty()) {
-    return {};
-  }
-  return {std::stoull(id0), std::stoull(id1)};
 }
 
 size_t bufferString(char *ptr, size_t size, size_t nmemb, void *obj) {
@@ -170,13 +158,11 @@ std::pair<int, int> makeRange(int col, int upper, int lower) {
   return {mid + start, mid + end};
 }
 
-int pixel(int col, int offset) {
-  return 16 * col + 8 + offset;
-}
+int pixel(int col, int offset) { return 16 * col + 8 + offset; }
 
 }  // namespace
 
-SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, int brightness, bool verbose)
+SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, uint8_t brightness, bool verbose)
     : _curl{curl},
       _jq{jq},
       _led{apa102::createLED(16 * 23)},
@@ -216,66 +202,50 @@ void SpotifyClient::authenticate() {
     auto res = parseDeviceFlowData(_jq, buffer);
     std::cerr << "url: " << res.verification_url_prefilled << std::endl;
 
-    auto err = authenticateCode(
-        res.device_code, res.user_code, res.verification_url, res.expires_in, res.interval);
-    if (err == kAuthSuccess) {
+    if (authenticateCode(res.device_code, res.user_code, res.expires_in, res.interval)) {
       return;
     }
     std::cerr << "failed to authenticate. retrying..." << std::endl;
   }
 }
 
-SpotifyClient::AuthResult SpotifyClient::authenticateCode(const std::string &device_code,
-                                                          const std::string &user_code,
-                                                          const std::string &verification_url,
-                                                          const std::chrono::seconds &expires_in,
-                                                          const std::chrono::seconds &interval) {
+bool SpotifyClient::authenticateCode(const std::string &device_code, const std::string &user_code,
+                                     const std::chrono::seconds &expires_in,
+                                     const std::chrono::seconds &interval) {
   using namespace std::chrono_literals;
-  displayCode(0ms, user_code, verification_url);
-
-  std::string auth_code;
-  if (auto err =
-          getAuthCode(device_code, user_code, verification_url, expires_in, interval, auth_code)) {
-    return err;
-  }
-  if (!fetchTokens(auth_code)) {
-    return kAuthError;
-  }
-  return kAuthSuccess;
+  displayString(0ms, user_code);
+  return fetchToken(device_code, user_code, expires_in, interval);
 }
 
-SpotifyClient::AuthResult SpotifyClient::getAuthCode(const std::string &device_code,
-                                                     const std::string &user_code,
-                                                     const std::string &verification_url,
-                                                     const std::chrono::seconds &expires_in,
-                                                     const std::chrono::seconds &interval,
-                                                     std::string &auth_code) {
+bool SpotifyClient::fetchToken(const std::string &device_code, const std::string &user_code,
+                               const std::chrono::seconds &expires_in,
+                               const std::chrono::seconds &interval) {
   using namespace std::chrono_literals;
   using std::chrono::system_clock;
 
   auto elapsed = 0ms;
   auto expiry = system_clock::now() + expires_in;
-  while (auto err = pollAuthCode(device_code, auth_code)) {
+  while (auto err = pollToken(device_code)) {
     if (err == kPollError) {
-      return kAuthError;
+      return false;
     }
     for (auto end = elapsed + interval; elapsed < end; elapsed += 200ms) {
       std::this_thread::sleep_for(200ms);
-      displayCode(elapsed, user_code, verification_url);
+      displayString(elapsed, user_code);
     }
     if (system_clock::now() >= expiry) {
-      return kAuthError;
+      return false;
     }
   }
-  return kAuthSuccess;
+  return true;
 }
 
-SpotifyClient::PollResult SpotifyClient::pollAuthCode(const std::string &device_code,
-                                                      std::string &auth_code) {
+SpotifyClient::PollResult SpotifyClient::pollToken(const std::string &device_code) {
   const auto header = curl_slist_append(nullptr, kContentTypeXWWWFormUrlencoded);
-  const auto data = std::string{"client_id="} + credentials::kClientId + "&code=" + device_code +
+  const auto data = std::string{"client_id="} + credentials::kClientId +
+                    "&device_code=" + device_code +
                     "&scope=user-read-playback-state"
-                    "&grant_type=http://spotify.com/oauth2/device/1";
+                    "&grant_type=urn:ietf:params:oauth:grant-type:device_code";
 
   curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, header);
   curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, data.c_str());
@@ -289,40 +259,19 @@ SpotifyClient::PollResult SpotifyClient::pollAuthCode(const std::string &device_
     std::cerr << "failed to get auth_code or error" << std::endl;
     return kPollError;
   }
-  auto res = parseAuthCodeData(_jq, buffer);
+  auto res = parseTokenData(_jq, buffer);
   if (!res.error.empty()) {
     std::cerr << "auth_code error: " << res.error << std::endl;
     return res.error == "authorization_pending" ? kPollWait : kPollError;
   }
-  auth_code = res.auth_code;
-  return kPollSuccess;
-}
 
-bool SpotifyClient::fetchTokens(const std::string &code) {
-  const auto header = curl_slist_append(nullptr, kContentTypeXWWWFormUrlencoded);
-  const auto data = std::string{"client_id="} + credentials::kClientId +
-                    "&client_secret=" + credentials::kClientSecret + "&code=" + code +
-                    "&grant_type=authorization_code";
-
-  curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, header);
-  curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, data.c_str());
-  curl_easy_setopt(_curl, CURLOPT_URL, kAuthTokenUrl);
-
-  std::string buffer;
-  curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
-  curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
-
-  if (curl_perform_and_check(_curl)) {
-    std::cerr << "failed to get token" << std::endl;
-    return false;
-  }
-  auto res = parseTokenData(_jq, buffer);
   std::cerr << "access_token: " << res.access_token << std::endl;
   std::cerr << "refresh_token: " << res.refresh_token << std::endl;
 
   _access_token = res.access_token;
   _refresh_token = res.refresh_token;
-  return true;
+
+  return kPollSuccess;
 }
 
 bool SpotifyClient::refreshToken() {
@@ -414,7 +363,6 @@ bool SpotifyClient::fetchNowPlaying(bool retry) {
   std::cerr << "artist: " << _now_playing.artist << "\n";
   std::cerr << "image: " << _now_playing.image << "\n";
   std::cerr << "uri: " << _now_playing.uri << "\n";
-  // std::cerr << "scannable id0: " << _scannable.id0 << ", id1: " << _scannable.id1 << "\n";
   std::cerr << "duration: " << _now_playing.duration.count() << std::endl;
 
   return true;
@@ -451,10 +399,9 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
   curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
   curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
 
-  long status{0};
+  long status = 0;
   if (curl_perform_and_check(_curl, status)) {
     std::cerr << "failed to fetch scannable id, status: " << status << std::endl;
-    // _scannable = {};
     _lengths0.fill(0);
     _lengths1.fill(0);
     return;
@@ -465,22 +412,8 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
   sv.remove_prefix(sv.find("/>"));
 
   auto map = std::map<int, int>{
-      {11, 1},
-      {44, 1},
-      {18, 2},
-      {41, 2},
-      {25, 3},
-      {37, 3},
-      {32, 4},
-      {34, 4},
-      {39, 5},
-      {30, 5},
-      {46, 6},
-      {27, 6},
-      {53, 7},
-      {23, 7},
-      {60, 8},
-      {20, 8},
+      {11, 1}, {44, 1}, {18, 2}, {41, 2}, {25, 3}, {37, 3}, {32, 4}, {34, 4},
+      {39, 5}, {30, 5}, {46, 6}, {27, 6}, {53, 7}, {23, 7}, {60, 8}, {20, 8},
   };
 
   for (auto i = 0; i < 23; ++i) {
@@ -491,46 +424,22 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
     sv.remove_prefix(8);
     _lengths1[i] = map[std::atoi(sv.data())];
   }
-
-  // _scannable = parseScannable(_jq, buffer);
-
-  /*
-  curl_easy_reset(_curl);
-  const auto auth_header = kAuthorizationBearer + _access_token;
-  const auto header = curl_slist_append(nullptr, auth_header.c_str());
-  const auto url = credentials::kScannablesUrl + uri + "?format=json";
-  printf("fetching '%s'\n", url.c_str());
-
-  curl_easy_setopt(_curl, CURLOPT_POST, 1);
-  curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, header);
-  curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, "");
-  curl_easy_setopt(_curl, CURLOPT_URL, url.c_str());
-
-  std::string buffer;
-  curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
-  curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
-
-  long status{0};
-  if (curl_perform_and_check(_curl, status)) {
-    std::cerr << "failed to fetch scannable id, status: " << status << std::endl;
-    _scannable = {};
-    return;
-  }
-  _scannable = parseScannable(_jq, buffer);
-  */
 }
 
-void SpotifyClient::displayCode(const std::chrono::milliseconds &elapsed,
-                                const std::string &code,
-                                const std::string &url) {
+void SpotifyClient::displayString(const std::chrono::milliseconds &elapsed, const std::string &s) {
   const auto kScrollSpeed = 0.005;
 
   _led->clear();
 
   auto offset = 23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + 30));
 
-  for (auto n = 0; n < code.size(); ++n) {
-    auto &glyph = kAlphaMap.at(code[n]);
+  for (auto n = 0; n < s.size(); ++n) {
+    auto it = kAlphaMap.find(s[n]);
+    if (it == kAlphaMap.end()) {
+      std::cerr << "invalid alpha-numeric char: " << s[n] << std::endl;
+      continue;
+    }
+    auto &glyph = it->second;
     for (auto col = 0; col < glyph.size(); ++col) {
       for (auto i : glyph[col]) {
         _led->set(pixel(offset + 5 * n + col, i), _brightness, _brightness, _brightness);
@@ -579,15 +488,16 @@ void SpotifyClient::displayNPV() {
 
   /*
   const auto title_offset = (38 - _now_playing.title.substr(0, 38).size()) / 2;
-  const auto artist_offset = (40 - _now_playing.artist.substr(0, 40).size()) / 2;
+  const auto artist_offset = (40 - _now_playing.artist.substr(0, 40).size()) /
+  2;
 
   using namespace templates;
   std::ofstream file{_out_file, std::ofstream::binary};
   file.write(kNpv, kNpvContextOffset);
   file << " " << _now_playing.context.substr(0, 33).c_str();
   file.write(kNpv + kNpvContextOffset, kNpvImageOffset - kNpvContextOffset);
-  for (auto line = kNpvImageLineBegin, i = 0; line < kNpvImageLineEnd; ++line, ++i) {
-    file << "OL," << line << ",         " << _image->line(i) << "\n";
+  for (auto line = kNpvImageLineBegin, i = 0; line < kNpvImageLineEnd; ++line,
+  ++i) { file << "OL," << line << ",         " << _image->line(i) << "\n";
   }
   file.write(kNpv + kNpvImageOffset, kNpvTitleOffset - kNpvImageOffset);
   for (auto i = 0u; i < title_offset; ++i) {
@@ -608,7 +518,8 @@ void SpotifyClient::displayNPV() {
   std::strftime(&progress_label[0], 6, "%M:%S", &progress_tm);
   std::strftime(&duration_label[0], 6, "%M:%S", &duration_tm);
 
-  auto progress_width = kNpvProgressWidth * static_cast<double>(_now_playing.progress.count()) /
+  auto progress_width = kNpvProgressWidth *
+  static_cast<double>(_now_playing.progress.count()) /
                         _now_playing.duration.count();
   file << "  " << progress_label << "\u001bW";
   for (auto i = 0; i < kNpvProgressWidth; ++i) {

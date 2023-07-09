@@ -1,10 +1,12 @@
 #pragma once
 
+#include <curl/curl.h>
+
 #include <array>
 #include <chrono>
 #include <memory>
 #include <string>
-#include <curl/curl.h>
+
 #include "apa102.h"
 
 extern "C" {
@@ -23,64 +25,42 @@ struct NowPlaying {
   std::chrono::milliseconds duration;
 };
 
-struct Scannable {
-  uint64_t id0;
-  uint64_t id1;
-};
-
 class SpotifyClient {
+ public:
+  SpotifyClient(CURL *curl, jq_state *jq, uint8_t brightness, bool verbose);
+
+  int run();
+
  private:
-  enum AuthResult {
-    kAuthSuccess = 0,
-    kAuthError,
-  };
   enum PollResult {
     kPollSuccess = 0,
     kPollWait,
     kPollError,
   };
 
- public:
-  SpotifyClient(CURL *curl, jq_state *jq, int brightness, bool verbose);
-
-  int run();
-
- private:
   // spotify device code auth flow
   void authenticate();
-  AuthResult authenticateCode(const std::string &device_code,
-                              const std::string &user_code,
-                              const std::string &verification_url,
-                              const std::chrono::seconds &expires_in,
-                              const std::chrono::seconds &interval);
-  AuthResult getAuthCode(const std::string &device_code,
-                         const std::string &user_code,
-                         const std::string &verification_url,
-                         const std::chrono::seconds &expires_in,
-                         const std::chrono::seconds &interval,
-                         std::string &auth_code);
-  PollResult pollAuthCode(const std::string &device_code, std::string &auth_code);
-  bool fetchTokens(const std::string &auth_code);
+  bool authenticateCode(const std::string &device_code, const std::string &user_code,
+                        const std::chrono::seconds &expires_in,
+                        const std::chrono::seconds &interval);
+  bool fetchToken(const std::string &device_code, const std::string &user_code,
+                  const std::chrono::seconds &expires_in, const std::chrono::seconds &interval);
+  PollResult pollToken(const std::string &device_code);
   bool refreshToken();
 
-  // update loop
   void loop();
 
   bool fetchNowPlaying(bool retry);
   void fetchContext(const std::string &url);
-
- public:
   void fetchScannable(const std::string &uri);
 
-  void displayCode(const std::chrono::milliseconds &elapsed,
-                   const std::string &code,
-                   const std::string &verification_url);
+  void displayString(const std::chrono::milliseconds &elapsed, const std::string &s);
   void displayNPV();
   void displayScannable();
 
   CURL *_curl{nullptr};
   jq_state *_jq{nullptr};
-  int _brightness = 1;
+  uint8_t _brightness = 1;
   bool _verbose = false;
   std::unique_ptr<apa102::LED> _led;
 
@@ -89,6 +69,5 @@ class SpotifyClient {
   bool _has_played{false};
 
   NowPlaying _now_playing;
-  // Scannable _scannable{};
   std::array<uint8_t, 23> _lengths0, _lengths1;
 };
