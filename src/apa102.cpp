@@ -1,5 +1,6 @@
 #include "apa102.h"
 
+#include <cassert>
 #include <fstream>
 #include <iostream>
 #include <string>
