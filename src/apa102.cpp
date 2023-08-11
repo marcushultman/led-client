@@ -44,11 +44,11 @@ class Simulator final : public LED {
   Simulator(int num_leds, int hz) : LED(num_leds, hz), _pipe("./simulator_out") {}
 
   void show() {
-    assert(_num_leds == 16 * 23);
+    assert(_num_leds == 19 + 16 * 23);
     _pipe << "\n\n\n\n";
     for (auto y = 0; y < 16; ++y) {
       for (auto x = 0; x < 23; ++x) {
-        auto i = x * 16 + 15 - y % 16;
+        auto i = 19 + x * 16 + 15 - y % 16;
         auto b = _buf[(1 + i) * 4 + 1];
         auto g = _buf[(1 + i) * 4 + 2];
         auto r = _buf[(1 + i) * 4 + 3];
