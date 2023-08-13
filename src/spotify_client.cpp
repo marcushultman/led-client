@@ -168,7 +168,10 @@ SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, uint8_t brightness, bool 
       _led{apa102::createLED(19 + 16 * 23)},
       _logo_brightness{std::min<uint8_t>(2 * brightness, uint8_t(32))},
       _brightness{brightness},
-      _verbose{verbose} {}
+      _verbose{verbose} {
+  std::cout << "Using logo brightness: " << int(_logo_brightness)
+            << ", brightness: " << int(_brightness) << std::endl;
+}
 
 int SpotifyClient::run() {
   for (;;) {
@@ -446,8 +449,12 @@ void SpotifyClient::displayString(const std::chrono::milliseconds &elapsed, cons
     }
     auto &glyph = it->second;
     for (auto col = 0; col < glyph.size(); ++col) {
+      auto pixel_col = offset + 5 * n + col;
+      if (pixel_col < 0) {
+        continue;
+      }
       for (auto i : glyph[col]) {
-        _led->set(19 + pixel(offset + 5 * n + col, i), _brightness, _brightness, _brightness);
+        _led->set(19 + pixel(pixel_col, i), _brightness, _brightness, _brightness);
       }
     }
   }
