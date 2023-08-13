@@ -32,6 +32,6 @@ int main(int argc, char *argv[]) {
       brightness = std::clamp(std::atoi(arg.data() + 13), 1, 32);
     }
   }
-  std::cout << "Using brightness: " << brightness << std::endl;
+  std::cout << "Using brightness: " << int(brightness) << std::endl;
   return std::make_unique<SpotifyClient>(curl, jq, brightness, verbose)->run();
 }
