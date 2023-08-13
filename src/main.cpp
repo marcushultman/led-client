@@ -24,7 +24,8 @@ int main(int argc, char *argv[]) {
     if (arg.find("--verbose") == 0) {
       verbose = true;
     } else if (arg.find("--brightness") == 0) {
-      brightness = std::clamp(std::atoi(arg.data() + 13), 1, 255);
+      // max 32 to avoid power brownout
+      brightness = std::clamp(std::atoi(arg.data() + 13), 1, 32);
     }
   }
   return std::make_unique<SpotifyClient>(curl, jq, brightness, verbose)->run();

@@ -166,6 +166,7 @@ SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, uint8_t brightness, bool 
     : _curl{curl},
       _jq{jq},
       _led{apa102::createLED(19 + 16 * 23)},
+      _logo_brightness{std::min<uint8_t>(2 * brightness, uint8_t(32))},
       _brightness{brightness},
       _verbose{verbose} {}
 
@@ -432,7 +433,7 @@ void SpotifyClient::displayString(const std::chrono::milliseconds &elapsed, cons
   _led->clear();
 
   for (auto i = 0; i < 19; ++i) {
-    _led->set(i, _brightness, _brightness, _brightness);
+    _led->set(i, _logo_brightness, _logo_brightness, _logo_brightness);
   }
 
   auto offset = 19 + 23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + 30));
@@ -542,7 +543,7 @@ void SpotifyClient::displayNPV() {
 void SpotifyClient::displayScannable() {
   _led->clear();
   for (auto i = 0; i < 19; ++i) {
-    _led->set(i, _brightness, _brightness, _brightness);
+    _led->set(i, _logo_brightness, _logo_brightness, _logo_brightness);
   }
   for (auto col = 0; col < 23; ++col) {
     auto [start, end] = makeRange(col, _lengths0[col], _lengths1[col]);

@@ -60,7 +60,8 @@ class SpotifyClient {
 
   CURL *_curl{nullptr};
   jq_state *_jq{nullptr};
-  uint8_t _brightness = 1;
+  uint8_t _logo_brightness = 16;
+  uint8_t _brightness = 8;
   bool _verbose = false;
   std::unique_ptr<apa102::LED> _led;
 
