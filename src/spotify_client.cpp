@@ -436,7 +436,7 @@ void SpotifyClient::displayString(const std::chrono::milliseconds &elapsed, cons
     _led->set(i, _logo_brightness, _logo_brightness, _logo_brightness);
   }
 
-  auto offset = 19 + 23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + 30));
+  auto offset = 23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + 30));
 
   for (auto n = 0; n < s.size(); ++n) {
     auto it = kAlphaMap.find(s[n]);
@@ -447,7 +447,7 @@ void SpotifyClient::displayString(const std::chrono::milliseconds &elapsed, cons
     auto &glyph = it->second;
     for (auto col = 0; col < glyph.size(); ++col) {
       for (auto i : glyph[col]) {
-        _led->set(pixel(offset + 5 * n + col, i), _brightness, _brightness, _brightness);
+        _led->set(19 + pixel(offset + 5 * n + col, i), _brightness, _brightness, _brightness);
       }
     }
   }
