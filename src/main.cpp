@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #include "spotify_client.h"
 
@@ -26,12 +25,11 @@ int main(int argc, char *argv[]) {
     auto arg = std::string_view(argv[i]);
     if (arg.find("--verbose") == 0) {
       verbose = true;
-    }
-    if (arg.find("--brightness") == 0) {
+    } else if (arg.find("--brightness") == 0) {
       // max 32 to avoid power brownout
       brightness = std::clamp(std::atoi(arg.data() + 13), 1, 32);
     }
   }
   std::cout << "Using brightness: " << int(brightness) << std::endl;
-  return std::make_unique<SpotifyClient>(curl, jq, brightness, verbose)->run();
+  return SpotifyClient::create(curl, jq, brightness, verbose)->run();
 }

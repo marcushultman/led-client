@@ -17,11 +17,15 @@ find_library(JQ REQUIRED)
 find_path(JQ_INCLUDE_DIR jq.h REQUIRED)
 
 set(SOURCES
+  font/font.cpp
+  font/font.h
   apa102.cpp
   apa102.h
   main.cpp
   spotify_client.cpp
   spotify_client.h
+  spotiled.cpp
+  spotiled.h
 )
 
 list(TRANSFORM SOURCES PREPEND "src/")
@@ -31,6 +35,7 @@ add_executable(spoticode ${SOURCES})
 target_include_directories(spoticode PRIVATE
   ${CURL_INCLUDE_DIR}
   ${JQ_INCLUDE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(spoticode

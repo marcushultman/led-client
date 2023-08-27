@@ -1,12 +1,15 @@
 #include "spotify_client.h"
 
+#include <array>
+#include <chrono>
 #include <iostream>
 #include <map>
+#include <string>
 #include <thread>
 
-#include "alpha_map.h"
-#include "apa102.h"
 #include "credentials.h"
+#include "font/font.h"
+#include "spotiled.h"
 
 namespace {
 
@@ -16,6 +19,18 @@ const auto kPlayerUrl = "https://api.spotify.com/v1/me/player";
 
 const auto kContentTypeXWWWFormUrlencoded = "Content-Type: application/x-www-form-urlencoded";
 const auto kAuthorizationBearer = "Authorization: Bearer ";
+
+struct NowPlaying {
+  std::string track_id;
+  std::string context_href;
+  std::string context;
+  std::string title;
+  std::string artist;
+  std::string image;
+  std::string uri;
+  std::chrono::milliseconds progress;
+  std::chrono::milliseconds duration;
+};
 
 bool curl_perform_and_check(CURL *curl, long &status) {
   return curl_easy_perform(curl) || curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status) ||
@@ -162,10 +177,67 @@ int pixel(int col, int offset) { return 16 * col + 8 + offset; }
 
 }  // namespace
 
-SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, uint8_t brightness, bool verbose)
+class SpotifyClientImpl final : public SpotifyClient {
+ public:
+  SpotifyClientImpl(CURL *curl, jq_state *jq, uint8_t brightness, bool verbose);
+
+  int run() final;
+
+ private:
+  enum PollResult {
+    kPollSuccess = 0,
+    kPollWait,
+    kPollError,
+  };
+
+  // spotify device code auth flow
+  void authenticate();
+  bool authenticateCode(const std::string &device_code,
+                        const std::string &user_code,
+                        const std::chrono::seconds &expires_in,
+                        const std::chrono::seconds &interval);
+  bool fetchToken(const std::string &device_code,
+                  const std::string &user_code,
+                  const std::chrono::seconds &expires_in,
+                  const std::chrono::seconds &interval);
+  PollResult pollToken(const std::string &device_code);
+  bool refreshToken();
+
+  void loop();
+
+  bool fetchNowPlaying(bool retry);
+  void fetchContext(const std::string &url);
+  void fetchScannable(const std::string &uri);
+
+  void displayString(const std::chrono::milliseconds &elapsed, const std::string &s);
+  void displayScannable();
+
+  CURL *_curl = nullptr;
+  jq_state *_jq = nullptr;
+  uint8_t _logo_brightness = 16;
+  uint8_t _brightness = 8;
+  bool _verbose = false;
+  std::unique_ptr<SpotiLED> _led;
+
+  std::string _access_token;
+  std::string _refresh_token;
+  bool _has_played = false;
+
+  NowPlaying _now_playing;
+  std::array<uint8_t, 23> _lengths0, _lengths1;
+};
+
+std::unique_ptr<SpotifyClient> SpotifyClient::create(CURL *curl,
+                                                     jq_state *jq,
+                                                     uint8_t brightness,
+                                                     bool verbose) {
+  return std::make_unique<SpotifyClientImpl>(curl, jq, brightness, verbose);
+}
+
+SpotifyClientImpl::SpotifyClientImpl(CURL *curl, jq_state *jq, uint8_t brightness, bool verbose)
     : _curl{curl},
       _jq{jq},
-      _led{apa102::createLED(19 + 16 * 23)},
+      _led{SpotiLED::create()},
       _logo_brightness{std::min<uint8_t>(2 * brightness, uint8_t(32))},
       _brightness{brightness},
       _verbose{verbose} {
@@ -173,7 +245,7 @@ SpotifyClient::SpotifyClient(CURL *curl, jq_state *jq, uint8_t brightness, bool 
             << ", brightness: " << int(_brightness) << std::endl;
 }
 
-int SpotifyClient::run() {
+int SpotifyClientImpl::run() {
   for (;;) {
     authenticate();
     loop();
@@ -181,7 +253,7 @@ int SpotifyClient::run() {
   return 0;
 }
 
-void SpotifyClient::authenticate() {
+void SpotifyClientImpl::authenticate() {
   curl_easy_reset(_curl);
   const auto header = curl_slist_append(nullptr, kContentTypeXWWWFormUrlencoded);
   const auto data = std::string{"client_id="} + credentials::kClientId +
@@ -213,17 +285,19 @@ void SpotifyClient::authenticate() {
   }
 }
 
-bool SpotifyClient::authenticateCode(const std::string &device_code, const std::string &user_code,
-                                     const std::chrono::seconds &expires_in,
-                                     const std::chrono::seconds &interval) {
+bool SpotifyClientImpl::authenticateCode(const std::string &device_code,
+                                         const std::string &user_code,
+                                         const std::chrono::seconds &expires_in,
+                                         const std::chrono::seconds &interval) {
   using namespace std::chrono_literals;
   displayString(0ms, user_code);
   return fetchToken(device_code, user_code, expires_in, interval);
 }
 
-bool SpotifyClient::fetchToken(const std::string &device_code, const std::string &user_code,
-                               const std::chrono::seconds &expires_in,
-                               const std::chrono::seconds &interval) {
+bool SpotifyClientImpl::fetchToken(const std::string &device_code,
+                                   const std::string &user_code,
+                                   const std::chrono::seconds &expires_in,
+                                   const std::chrono::seconds &interval) {
   using namespace std::chrono_literals;
   using std::chrono::system_clock;
 
@@ -244,7 +318,7 @@ bool SpotifyClient::fetchToken(const std::string &device_code, const std::string
   return true;
 }
 
-SpotifyClient::PollResult SpotifyClient::pollToken(const std::string &device_code) {
+SpotifyClientImpl::PollResult SpotifyClientImpl::pollToken(const std::string &device_code) {
   const auto header = curl_slist_append(nullptr, kContentTypeXWWWFormUrlencoded);
   const auto data = std::string{"client_id="} + credentials::kClientId +
                     "&device_code=" + device_code +
@@ -278,7 +352,7 @@ SpotifyClient::PollResult SpotifyClient::pollToken(const std::string &device_cod
   return kPollSuccess;
 }
 
-bool SpotifyClient::refreshToken() {
+bool SpotifyClientImpl::refreshToken() {
   const auto header = curl_slist_append(nullptr, kContentTypeXWWWFormUrlencoded);
   const auto data = std::string{"client_id="} + credentials::kClientId +
                     "&client_secret=" + credentials::kClientSecret +
@@ -304,10 +378,9 @@ bool SpotifyClient::refreshToken() {
   return true;
 }
 
-void SpotifyClient::loop() {
+void SpotifyClientImpl::loop() {
   for (;;) {
     if (fetchNowPlaying(true)) {
-      displayNPV();
       displayScannable();
     }
     if (_has_played && _now_playing.track_id.empty()) {
@@ -319,12 +392,11 @@ void SpotifyClient::loop() {
     for (auto i = 0; i < 5; ++i) {
       std::this_thread::sleep_for(std::chrono::seconds{1});
       _now_playing.progress += std::chrono::seconds{1};
-      displayNPV();
     }
   }
 }
 
-bool SpotifyClient::fetchNowPlaying(bool retry) {
+bool SpotifyClientImpl::fetchNowPlaying(bool retry) {
   curl_easy_reset(_curl);
   const auto auth_header = kAuthorizationBearer + _access_token;
   const auto header = curl_slist_append(nullptr, auth_header.c_str());
@@ -372,7 +444,7 @@ bool SpotifyClient::fetchNowPlaying(bool retry) {
   return true;
 }
 
-void SpotifyClient::fetchContext(const std::string &url) {
+void SpotifyClientImpl::fetchContext(const std::string &url) {
   if (url.empty()) {
     return;
   }
@@ -393,7 +465,7 @@ void SpotifyClient::fetchContext(const std::string &url) {
   _now_playing.context = parseContext(_jq, buffer);
 }
 
-void SpotifyClient::fetchScannable(const std::string &uri) {
+void SpotifyClientImpl::fetchScannable(const std::string &uri) {
   curl_easy_reset(_curl);
   const auto url = credentials::kScannablesCdnUrl + uri + "?format=svg";
 
@@ -430,132 +502,32 @@ void SpotifyClient::fetchScannable(const std::string &uri) {
   }
 }
 
-void SpotifyClient::displayString(const std::chrono::milliseconds &elapsed, const std::string &s) {
+void SpotifyClientImpl::displayString(const std::chrono::milliseconds &elapsed,
+                                      const std::string &s) {
   const auto kScrollSpeed = 0.005;
 
   _led->clear();
+  _led->setLogo(Color{_logo_brightness, _logo_brightness, _logo_brightness});
 
-  for (auto i = 0; i < 19; ++i) {
-    _led->set(i, _logo_brightness, _logo_brightness, _logo_brightness);
-  }
+  static auto _text = font::TextPage::create();
+  static auto _presenter =
+      RollingPresenter::create(*_led, Direction::kHorizontal, _brightness, _logo_brightness);
 
-  auto offset = 23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + 30));
+  _presenter->HACK_setElapsed(elapsed);
 
-  for (auto n = 0; n < s.size(); ++n) {
-    auto it = kAlphaMap.find(s[n]);
-    if (it == kAlphaMap.end()) {
-      std::cerr << "invalid alpha-numeric char: " << s[n] << std::endl;
-      continue;
-    }
-    auto &glyph = it->second;
-    for (auto col = 0; col < glyph.size(); ++col) {
-      auto pixel_col = offset + 5 * n + col;
-      if (pixel_col < 0) {
-        continue;
-      }
-      for (auto i : glyph[col]) {
-        _led->set(19 + pixel(pixel_col, i), _brightness, _brightness, _brightness);
-      }
-    }
-  }
-
-  _led->show();
+  _text->setText(s);
+  _presenter->present(*_text);
 }
 
-// clang-format off
-// const auto ranges = std::vector<std::pair<int, int>>{
-//   makeRange(0, 1, 1),
-//   makeRange(1, 7, 7),
-//   makeRange(2, 1, 1),
-//   makeRange(3, 3, 3),
-//   makeRange(4, 5, 5),
-//   makeRange(5, 6, 6),
-//   makeRange(6, 2, 2),
-//   makeRange(7, 5, 5),
-//   makeRange(8, 6, 6),
-//   makeRange(9, 3, 3),
-//   makeRange(10, 4, 4),
-//   makeRange(11, 8, 8),
-//   makeRange(12, 4, 4),
-//   makeRange(13, 8, 8),
-//   makeRange(14, 3, 3),
-//   makeRange(15, 6, 6),
-//   makeRange(16, 7, 7),
-//   makeRange(17, 3, 3),
-//   makeRange(18, 6, 6),
-//   makeRange(19, 8, 8),
-//   makeRange(20, 5, 5),
-//   makeRange(21, 4, 4),
-//   makeRange(22, 1, 1),
-// };
-// clang-format on
-
-void SpotifyClient::displayNPV() {
-  // for (auto &[start, end] : ranges) {
-  //   for (auto i = start; i < end; ++i) {
-  //     _led->set(i, 1, 1, 1);
-  //   }
-  // }
-  // _led->show();
-
-  /*
-  const auto title_offset = (38 - _now_playing.title.substr(0, 38).size()) / 2;
-  const auto artist_offset = (40 - _now_playing.artist.substr(0, 40).size()) /
-  2;
-
-  using namespace templates;
-  std::ofstream file{_out_file, std::ofstream::binary};
-  file.write(kNpv, kNpvContextOffset);
-  file << " " << _now_playing.context.substr(0, 33).c_str();
-  file.write(kNpv + kNpvContextOffset, kNpvImageOffset - kNpvContextOffset);
-  for (auto line = kNpvImageLineBegin, i = 0; line < kNpvImageLineEnd; ++line,
-  ++i) { file << "OL," << line << ",         " << _image->line(i) << "\n";
-  }
-  file.write(kNpv + kNpvImageOffset, kNpvTitleOffset - kNpvImageOffset);
-  for (auto i = 0u; i < title_offset; ++i) {
-    file << " ";
-  }
-  file << _now_playing.title.substr(0, 38).c_str();
-  file.write(kNpv + kNpvTitleOffset, kNpvArtistOffset - kNpvTitleOffset);
-  for (auto i = 0u; i < artist_offset; ++i) {
-    file << " ";
-  }
-  file << _now_playing.artist.substr(0, 40).c_str();
-  file.write(kNpv + kNpvArtistOffset, kNpvProgressOffset - kNpvArtistOffset);
-
-  auto progress_label = std::string{"00:00"};
-  auto duration_label = std::string{"00:00"};
-  const auto progress_tm = chronoToTm(_now_playing.progress);
-  const auto duration_tm = chronoToTm(_now_playing.duration);
-  std::strftime(&progress_label[0], 6, "%M:%S", &progress_tm);
-  std::strftime(&duration_label[0], 6, "%M:%S", &duration_tm);
-
-  auto progress_width = kNpvProgressWidth *
-  static_cast<double>(_now_playing.progress.count()) /
-                        _now_playing.duration.count();
-  file << "  " << progress_label << "\u001bW";
-  for (auto i = 0; i < kNpvProgressWidth; ++i) {
-    unsigned char out = 1 << 5;
-    if (progress_width > i) {
-      out |= 1 << 2 | 1 << 3;
-    } else if (progress_width > i - 0.5) {
-      out |= 1 << 2;
-    }
-    file << out;
-  }
-  file << "\u001bG" << duration_label;
-  */
-}
-
-void SpotifyClient::displayScannable() {
+void SpotifyClientImpl::displayScannable() {
   _led->clear();
-  for (auto i = 0; i < 19; ++i) {
-    _led->set(i, _logo_brightness, _logo_brightness, _logo_brightness);
-  }
+  _led->setLogo({_logo_brightness, _logo_brightness, _logo_brightness});
+
   for (auto col = 0; col < 23; ++col) {
-    auto [start, end] = makeRange(col, _lengths0[col], _lengths1[col]);
-    for (auto i = start; i < end; ++i) {
-      _led->set(19 + i, _brightness, _brightness, _brightness);
+    auto start = _lengths0[col];
+    auto end = _lengths1[col];
+    for (auto y = start; y < end; ++y) {
+      _led->set({.x = col, .y = y}, {_brightness, _brightness, _brightness});
     }
   }
   _led->show();

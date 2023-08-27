@@ -3,7 +3,7 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
-#include <string>
+#include <vector>
 
 #if __arm__
 #include "spidev_lib++.h"
@@ -11,20 +11,59 @@
 
 namespace apa102 {
 
+class LEDBase : public LED {
+ public:
+  LEDBase(size_t num_leds, size_t hz) : _num_leds{num_leds} {
+    auto trailing = _num_leds / 16;
+    if (_num_leds % 16 != 0) {
+      ++trailing;
+    }
+    auto capacity = 4 + 4 * _num_leds + trailing;
+    _buf.resize(capacity);
+    for (auto i = 0; i < trailing; ++i) {
+      _buf[4 + 4 * _num_leds + i] = 0xff;
+    }
+    clear();
+  }
+
+  void clear() {
+    for (auto i = 0; i < _num_leds; ++i) {
+      _buf[4 + 4 * i] = 0xff;
+      _buf[4 + 4 * i + 1] = 0;
+      _buf[4 + 4 * i + 2] = 0;
+      _buf[4 + 4 * i + 3] = 0;
+    }
+  }
+
+  void set(size_t i, uint8_t r, uint8_t g, uint8_t b) {
+    if (i >= _num_leds) {
+      return;
+    }
+    _buf[4 + 4 * i + 1] = b;
+    _buf[4 + 4 * i + 2] = g;
+    _buf[4 + 4 * i + 3] = r;
+  }
+
+ protected:
+  size_t _num_leds;
+  std::vector<uint8_t> _buf;
+};
+
 #if __arm__
 
-class SPILED final : public LED {
+class SPILED final : public LEDBase {
  public:
-  SPILED(int num_leds, int hz) : LED(num_leds, hz) {
-    spi_config_t spi_config;
-    spi_config.mode = 0;
-    spi_config.speed = hz;
-    spi_config.delay = 0;
-    spi_config.bits_per_word = 8;
-    _spi = std::make_unique<SPI>("/dev/spidev0.0", &spi_config);
+  SPILED(int num_leds, int hz)
+      : LEDBase(num_leds, hz),
+        _config{
+            .mode = 0,
+            .speed = hz,
+            .delay = 0,
+            .bits_per_word = 8,
+        } {
+    _spi = std::make_unique<SPI>("/dev/spidev0.0", &_config);
 
     if (!_spi->begin()) {
-      printf("SPI failed\n");
       _spi.reset();
     }
   }
@@ -34,30 +73,64 @@ class SPILED final : public LED {
       _spi->write(_buf.data(), _buf.size());
     }
   }
+
+ private:
+  spi_config_t _config;
   std::unique_ptr<SPI> _spi;
 };
 
 #endif
 
-class Simulator final : public LED {
+std::string_view simLogo(uint8_t *abgr) {
+  auto b = *(abgr + 1), g = *(abgr + 2), r = *(abgr + 3);
+  if (r > g) {
+    return (r > b ? "🔴" : b > r ? "🔵" : "🟣");
+  } else if (g > b) {
+    return (g > r ? "🟢" : r > g ? "🔴" : "🟡");
+  } else if (b > r) {
+    return (b > g ? "🔵" : g > b ? "🟢" : "🩵");
+  } else {
+    return (r ? "⚪️" : "⚫️");
+  }
+}
+
+std::string_view simBrightness(uint8_t *abgr) {
+  auto b = *(abgr + 1), g = *(abgr + 2), r = *(abgr + 3);
+  if ((r + g + b) == 0) {
+    return " ";
+  } else if ((r + g + b) < 255) {
+    return ".";
+  } else if ((r + g + b) < (255 * 2)) {
+    return "-";
+  } else {
+    return "|";
+  }
+}
+
+class Simulator final : public LEDBase {
  public:
-  Simulator(int num_leds, int hz) : LED(num_leds, hz), _pipe("./simulator_out") {}
+  Simulator(int num_leds, int hz) : LEDBase(num_leds, hz), _pipe("./simulator_out") {}
 
   void show() {
     assert(_num_leds == 19 + 16 * 23);
     _pipe << "\n\n\n\n";
+    for (auto i = 0; i < 19; ++i) {
+      auto *abgr = &_buf[(1 + i) * 4];
+      _pipe << simLogo(abgr) << simBrightness(abgr);
+    }
+    _pipe << "\n\n";
+
     for (auto y = 0; y < 16; ++y) {
       for (auto x = 0; x < 23; ++x) {
         auto i = 19 + x * 16 + 15 - y % 16;
-        auto b = _buf[(1 + i) * 4 + 1];
-        auto g = _buf[(1 + i) * 4 + 2];
-        auto r = _buf[(1 + i) * 4 + 3];
-        _pipe << (r > std::max(b, g) ? " 🔴 " : (b > g ? " 🔵 " : g ? " 🟢 " : " ⚫️ "));
+        auto *abgr = &_buf[(1 + i) * 4];
+        _pipe << " " << simLogo(abgr) << simBrightness(abgr);
       }
       _pipe << std::endl;
     }
   }
 
+ private:
   std::ofstream _pipe;
 };
 
