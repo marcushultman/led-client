@@ -5,16 +5,16 @@
 #include <iostream>
 #include <string>
 
+#include "http/http.h"
 #include "spotify_client.h"
 
 int main(int argc, char *argv[]) {
-  auto curl = curl_easy_init();
-  if (!curl) {
+  auto http = http::Http::create();
+  if (!http) {
     return 1;
   }
   auto jq = jq_init();
   if (!jq) {
-    curl_easy_cleanup(curl);
     return 1;
   }
 
@@ -31,5 +31,5 @@ int main(int argc, char *argv[]) {
     }
   }
   std::cout << "Using brightness: " << int(brightness) << std::endl;
-  return SpotifyClient::create(curl, jq, brightness, verbose)->run();
+  return SpotifyClient::create(*http, jq, brightness, verbose)->run();
 }
