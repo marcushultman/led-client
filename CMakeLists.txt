@@ -13,12 +13,16 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 list(APPEND CMAKE_SYSTEM_PREFIX_PATH /opt/homebrew)
 
 find_package(CURL REQUIRED)
-find_library(JQ REQUIRED)
+find_library(JQ NAMES libjq.dylib REQUIRED)
 find_path(JQ_INCLUDE_DIR jq.h REQUIRED)
 
 set(SOURCES
+  async/scheduler.cpp
+  async/scheduler.h
   font/font.cpp
   font/font.h
+  http/http.cpp
+  http/http.h
   apa102.cpp
   apa102.h
   main.cpp

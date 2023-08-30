@@ -2,6 +2,7 @@
 
 #include <array>
 #include <chrono>
+#include <future>
 #include <iostream>
 #include <map>
 #include <string>
@@ -17,8 +18,9 @@ const auto kAuthDeviceCodeUrl = "https://accounts.spotify.com/api/device/code";
 const auto kAuthTokenUrl = "https://accounts.spotify.com/api/token";
 const auto kPlayerUrl = "https://api.spotify.com/v1/me/player";
 
-const auto kContentTypeXWWWFormUrlencoded = "Content-Type: application/x-www-form-urlencoded";
-const auto kAuthorizationBearer = "Authorization: Bearer ";
+const auto kContentType = "content-type";
+const auto kXWWWFormUrlencoded = "application/x-www-form-urlencoded";
+const auto kAuthorization = "authorization";
 
 struct NowPlaying {
   std::string track_id;
@@ -31,16 +33,6 @@ struct NowPlaying {
   std::chrono::milliseconds progress;
   std::chrono::milliseconds duration;
 };
-
-bool curl_perform_and_check(CURL *curl, long &status) {
-  return curl_easy_perform(curl) || curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status) ||
-         status >= 400;
-}
-
-bool curl_perform_and_check(CURL *curl) {
-  long status{0};
-  return curl_perform_and_check(curl, status);
-}
 
 std::string nextStr(jq_state *jq) {
   const auto jv = jq_next(jq);
@@ -179,7 +171,7 @@ int pixel(int col, int offset) { return 16 * col + 8 + offset; }
 
 class SpotifyClientImpl final : public SpotifyClient {
  public:
-  SpotifyClientImpl(CURL *curl, jq_state *jq, uint8_t brightness, bool verbose);
+  SpotifyClientImpl(http::Http &http, jq_state *jq, uint8_t brightness, bool verbose);
 
   int run() final;
 
@@ -212,7 +204,8 @@ class SpotifyClientImpl final : public SpotifyClient {
   void displayString(const std::chrono::milliseconds &elapsed, const std::string &s);
   void displayScannable();
 
-  CURL *_curl = nullptr;
+  http::Http &_http;
+  std::unique_ptr<async::Thread> _response_thread = async::Thread::create("response");
   jq_state *_jq = nullptr;
   uint8_t _logo_brightness = 16;
   uint8_t _brightness = 8;
@@ -227,15 +220,18 @@ class SpotifyClientImpl final : public SpotifyClient {
   std::array<uint8_t, 23> _lengths0, _lengths1;
 };
 
-std::unique_ptr<SpotifyClient> SpotifyClient::create(CURL *curl,
+std::unique_ptr<SpotifyClient> SpotifyClient::create(http::Http &http,
                                                      jq_state *jq,
                                                      uint8_t brightness,
                                                      bool verbose) {
-  return std::make_unique<SpotifyClientImpl>(curl, jq, brightness, verbose);
+  return std::make_unique<SpotifyClientImpl>(http, jq, brightness, verbose);
 }
 
-SpotifyClientImpl::SpotifyClientImpl(CURL *curl, jq_state *jq, uint8_t brightness, bool verbose)
-    : _curl{curl},
+SpotifyClientImpl::SpotifyClientImpl(http::Http &http,
+                                     jq_state *jq,
+                                     uint8_t brightness,
+                                     bool verbose)
+    : _http{http},
       _jq{jq},
       _led{SpotiLED::create()},
       _logo_brightness{std::min<uint8_t>(2 * brightness, uint8_t(32))},
@@ -254,28 +250,30 @@ int SpotifyClientImpl::run() {
 }
 
 void SpotifyClientImpl::authenticate() {
-  curl_easy_reset(_curl);
-  const auto header = curl_slist_append(nullptr, kContentTypeXWWWFormUrlencoded);
   const auto data = std::string{"client_id="} + credentials::kClientId +
                     "&scope=user-read-playback-state"
                     "&description=Spotify-LED";
 
   for (;;) {
-    curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, header);
-    curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, data.c_str());
-    curl_easy_setopt(_curl, CURLOPT_URL, kAuthDeviceCodeUrl);
+    std::promise<http::Response> res_promise;
+    auto request = _http.request({
+        .method = http::Method::POST,
+        .url = kAuthDeviceCodeUrl,
+        .headers = {{kContentType, kXWWWFormUrlencoded}},
+        .body = data,
+        .post_to = _response_thread->scheduler(),
+        .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+    });
+    auto response = res_promise.get_future().get();
 
-    std::string buffer;
-    curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
-    curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
-
-    if (curl_perform_and_check(_curl)) {
+    if (response.status / 100 != 2) {
       std::cerr << "failed to get device_code" << std::endl;
       std::this_thread::sleep_for(std::chrono::seconds{5});
       std::cerr << "retrying..." << std::endl;
       continue;
     }
-    auto res = parseDeviceFlowData(_jq, buffer);
+
+    auto res = parseDeviceFlowData(_jq, response.body);
     std::cerr << "url: " << res.verification_url_prefilled << std::endl;
 
     if (authenticateCode(res.device_code, res.user_code, res.expires_in, res.interval)) {
@@ -319,25 +317,28 @@ bool SpotifyClientImpl::fetchToken(const std::string &device_code,
 }
 
 SpotifyClientImpl::PollResult SpotifyClientImpl::pollToken(const std::string &device_code) {
-  const auto header = curl_slist_append(nullptr, kContentTypeXWWWFormUrlencoded);
   const auto data = std::string{"client_id="} + credentials::kClientId +
                     "&device_code=" + device_code +
                     "&scope=user-read-playback-state"
                     "&grant_type=urn:ietf:params:oauth:grant-type:device_code";
 
-  curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, header);
-  curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, data.c_str());
-  curl_easy_setopt(_curl, CURLOPT_URL, kAuthTokenUrl);
+  std::promise<http::Response> res_promise;
+  auto request = _http.request({
+      .method = http::Method::POST,
+      .url = kAuthTokenUrl,
+      .headers = {{kContentType, kXWWWFormUrlencoded}},
+      .body = data,
+      .post_to = _response_thread->scheduler(),
+      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+  });
+  auto response = res_promise.get_future().get();
 
-  std::string buffer;
-  curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
-  curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
-
-  if (curl_easy_perform(_curl)) {
+  if (response.status / 100 == 5) {
     std::cerr << "failed to get auth_code or error" << std::endl;
     return kPollError;
   }
-  auto res = parseTokenData(_jq, buffer);
+
+  auto res = parseTokenData(_jq, response.body);
   if (!res.error.empty()) {
     std::cerr << "auth_code error: " << res.error << std::endl;
     return res.error == "authorization_pending" ? kPollWait : kPollError;
@@ -353,24 +354,27 @@ SpotifyClientImpl::PollResult SpotifyClientImpl::pollToken(const std::string &de
 }
 
 bool SpotifyClientImpl::refreshToken() {
-  const auto header = curl_slist_append(nullptr, kContentTypeXWWWFormUrlencoded);
   const auto data = std::string{"client_id="} + credentials::kClientId +
                     "&client_secret=" + credentials::kClientSecret +
                     "&refresh_token=" + _refresh_token + "&grant_type=refresh_token";
 
-  curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, header);
-  curl_easy_setopt(_curl, CURLOPT_POSTFIELDS, data.c_str());
-  curl_easy_setopt(_curl, CURLOPT_URL, kAuthTokenUrl);
+  std::promise<http::Response> res_promise;
+  auto request = _http.request({
+      .method = http::Method::POST,
+      .url = kAuthTokenUrl,
+      .headers = {{kContentType, kXWWWFormUrlencoded}},
+      .body = data,
+      .post_to = _response_thread->scheduler(),
+      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+  });
+  auto response = res_promise.get_future().get();
 
-  std::string buffer;
-  curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
-  curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
-
-  if (curl_perform_and_check(_curl)) {
+  if (response.status / 100 != 200) {
     std::cerr << "failed to refresh token" << std::endl;
     return false;
   }
-  auto res = parseTokenData(_jq, buffer);
+
+  auto res = parseTokenData(_jq, response.body);
   std::cerr << "access_token: " << res.access_token << std::endl;
 
   _access_token = res.access_token;
@@ -397,25 +401,22 @@ void SpotifyClientImpl::loop() {
 }
 
 bool SpotifyClientImpl::fetchNowPlaying(bool retry) {
-  curl_easy_reset(_curl);
-  const auto auth_header = kAuthorizationBearer + _access_token;
-  const auto header = curl_slist_append(nullptr, auth_header.c_str());
+  std::promise<http::Response> res_promise;
+  auto request = _http.request({
+      .url = kPlayerUrl,
+      .headers = {{kAuthorization, "Bearer " + _access_token}},
+      .post_to = _response_thread->scheduler(),
+      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+  });
+  auto response = res_promise.get_future().get();
 
-  curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, header);
-  curl_easy_setopt(_curl, CURLOPT_URL, kPlayerUrl);
-
-  std::string buffer;
-  curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
-  curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
-
-  long status{0};
-  if (curl_perform_and_check(_curl, status)) {
+  if (response.status / 100 != 2) {
     if (!retry) {
       std::cerr << "failed to get player state" << std::endl;
     }
     return retry && refreshToken() && fetchNowPlaying(false);
   }
-  if (status == 204) {
+  if (response.status == 204) {
     if (!_now_playing.track_id.empty()) {
       std::cerr << "nothing is playing" << std::endl;
       _now_playing = {};
@@ -423,7 +424,7 @@ bool SpotifyClientImpl::fetchNowPlaying(bool retry) {
     return true;
   }
   _has_played = true;
-  auto now_playing = parseNowPlaying(_jq, buffer, _verbose);
+  auto now_playing = parseNowPlaying(_jq, response.body, _verbose);
 
   if (now_playing.track_id == _now_playing.track_id) {
     _now_playing.progress = now_playing.progress;
@@ -448,42 +449,42 @@ void SpotifyClientImpl::fetchContext(const std::string &url) {
   if (url.empty()) {
     return;
   }
-  const auto auth_header = kAuthorizationBearer + _access_token;
-  const auto header = curl_slist_append(nullptr, auth_header.c_str());
 
-  curl_easy_setopt(_curl, CURLOPT_HTTPHEADER, header);
-  curl_easy_setopt(_curl, CURLOPT_URL, url.c_str());
+  std::promise<http::Response> res_promise;
+  auto request = _http.request({
+      .url = url,
+      .headers = {{"authorization", "Bearer " + _access_token}},
+      .post_to = _response_thread->scheduler(),
+      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+  });
+  auto response = res_promise.get_future().get();
 
-  std::string buffer;
-  curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
-  curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
-
-  if (curl_perform_and_check(_curl)) {
+  if (response.status / 100 != 2) {
     std::cerr << "failed to fetch context" << std::endl;
     return;
   }
-  _now_playing.context = parseContext(_jq, buffer);
+  _now_playing.context = parseContext(_jq, response.body);
 }
 
 void SpotifyClientImpl::fetchScannable(const std::string &uri) {
-  curl_easy_reset(_curl);
   const auto url = credentials::kScannablesCdnUrl + uri + "?format=svg";
 
-  curl_easy_setopt(_curl, CURLOPT_URL, url.c_str());
+  std::promise<http::Response> res_promise;
+  auto request = _http.request({
+      .url = url,
+      .post_to = _response_thread->scheduler(),
+      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+  });
+  auto response = res_promise.get_future().get();
 
-  std::string buffer;
-  curl_easy_setopt(_curl, CURLOPT_WRITEDATA, &buffer);
-  curl_easy_setopt(_curl, CURLOPT_WRITEFUNCTION, bufferString);
-
-  long status = 0;
-  if (curl_perform_and_check(_curl, status)) {
-    std::cerr << "failed to fetch scannable id, status: " << status << std::endl;
+  if (response.status / 100 != 2) {
+    std::cerr << "failed to fetch scannable id, status: " << response.status << std::endl;
     _lengths0.fill(0);
     _lengths1.fill(0);
     return;
   }
 
-  auto sv = std::string_view(buffer);
+  auto sv = std::string_view(response.body);
   sv.remove_prefix(sv.find("<rect"));
   sv.remove_prefix(sv.find("/>"));
 
@@ -524,8 +525,8 @@ void SpotifyClientImpl::displayScannable() {
   _led->setLogo({_logo_brightness, _logo_brightness, _logo_brightness});
 
   for (auto col = 0; col < 23; ++col) {
-    auto start = _lengths0[col];
-    auto end = _lengths1[col];
+    auto start = 8 - _lengths0[col];
+    auto end = 8 + _lengths1[col];
     for (auto y = start; y < end; ++y) {
       _led->set({.x = col, .y = y}, {_brightness, _brightness, _brightness});
     }
