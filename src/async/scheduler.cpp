@@ -11,9 +11,10 @@ namespace async {
 struct Entry {
   Fn fn;
   std::weak_ptr<void> sentinel;
-  std::shared_ptr<std::chrono::system_clock::time_point> at;
+  std::chrono::system_clock::time_point at;
+  std::chrono::milliseconds period;
 
-  bool operator<(const Entry &rhs) const { return *at < *rhs.at; }
+  bool operator<(const Entry &rhs) const { return at < rhs.at; }
 };
 
 struct CVNotifier {
@@ -24,24 +25,18 @@ struct CVNotifier {
   std::shared_ptr<std::condition_variable> _cv;
 };
 
-struct ScheduleLifetime {
-  explicit ScheduleLifetime(std::shared_ptr<std::condition_variable> cv)
-      : _notifer{std::move(cv)} {}
-
- private:
-  CVNotifier _notifer;
-};
-
 class SchedulerImpl final : public Scheduler {
  public:
   Lifetime schedule(Fn &&fn, const Options &options = {}) final {
     auto sentinel = std::make_shared<CVNotifier>(_cv);
     {
       auto lock = std::unique_lock(_mutex);
-      _queue.insert(Entry{.fn = std::move(fn),
-                          .sentinel = sentinel,
-                          .at = std::make_shared<std::chrono::system_clock::time_point>(
-                              std::chrono::system_clock::now() + options.delay)});
+      _queue.insert(Entry{
+          .fn = std::move(fn),
+          .sentinel = sentinel,
+          .at = std::chrono::system_clock::now() + options.delay,
+          .period = options.period,
+      });
     }
     _cv->notify_all();
     return sentinel;
@@ -51,7 +46,7 @@ class SchedulerImpl final : public Scheduler {
     auto lock = std::unique_lock(_mutex);
     for (;;) {
       auto next_event = _queue.empty() ? std::chrono::system_clock::now() + std::chrono::seconds(10)
-                                       : *_queue.begin()->at;
+                                       : _queue.begin()->at;
       _cv->wait_until(lock, next_event, [this] { return !_queue.empty() || _stop; });
       if (_stop && _queue.empty()) {
         break;
@@ -64,12 +59,15 @@ class SchedulerImpl final : public Scheduler {
 
       for (auto it = queue.begin(); it != queue.end();) {
         if (auto alive = it->sentinel.lock()) {
-          if (*it->at > now) {
+          if (it->at > now) {
             ++it;
             continue;
           }
           if (it->fn) {
             it->fn();
+          }
+          if (it->period.count()) {
+            schedulerNext(*it);
           }
         }
         it = queue.erase(it);
@@ -86,6 +84,12 @@ class SchedulerImpl final : public Scheduler {
   }
 
  private:
+  void schedulerNext(Entry entry) {
+    entry.at += entry.period;
+    auto lock = std::unique_lock(_mutex);
+    _queue.insert(std::move(entry));
+  }
+
   std::mutex _mutex;
   std::shared_ptr<std::condition_variable> _cv = std::make_shared<std::condition_variable>();
   std::atomic_bool _stop = false;
@@ -105,6 +109,9 @@ class ThreadImpl final : public Thread {
   }
 
   Scheduler &scheduler() final { return *_scheduler; }
+
+  void join() final { _thread.join(); }
+  void stop() final { _scheduler->stop(); }
 
  private:
   std::thread _thread;
