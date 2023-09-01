@@ -2,7 +2,6 @@
 
 #include <array>
 #include <chrono>
-#include <future>
 #include <iostream>
 #include <map>
 #include <string>
@@ -84,22 +83,6 @@ DeviceFlowData parseDeviceFlowData(jq_state *jq, const std::string &buffer) {
   return {nextStr(jq), nextStr(jq), nextSeconds(jq), nextStr(jq), nextStr(jq), nextSeconds(jq)};
 }
 
-#if 0
-
-struct AuthCodeData {
-  std::string error;
-  std::string auth_code;
-};
-
-AuthCodeData parseAuthCodeData(jq_state *jq, const std::string &buffer) {
-  const auto input = jv_parse(buffer.c_str());
-  jq_compile(jq, ".error, .auth_code");
-  jq_start(jq, input, 0);
-  return {nextStr(jq), nextStr(jq)};
-}
-
-#endif
-
 struct TokenData {
   std::string error;
   std::string access_token;
@@ -165,8 +148,6 @@ std::pair<int, int> makeRange(int col, int upper, int lower) {
   return {mid + start, mid + end};
 }
 
-int pixel(int col, int offset) { return 16 * col + 8 + offset; }
-
 }  // namespace
 
 class SpotifyClientImpl final : public SpotifyClient {
@@ -182,30 +163,44 @@ class SpotifyClientImpl final : public SpotifyClient {
     kPollError,
   };
 
+  void entrypoint();
+  void scheduleAuthRetry(std::chrono::milliseconds delay = {});
+
   // spotify device code auth flow
   void authenticate();
-  bool authenticateCode(const std::string &device_code,
+  void onAuthResponse(http::Response response);
+
+  void authenticateCode(const std::string &device_code,
                         const std::string &user_code,
                         const std::chrono::seconds &expires_in,
                         const std::chrono::seconds &interval);
-  bool fetchToken(const std::string &device_code,
+  void fetchToken(const std::string &device_code,
                   const std::string &user_code,
                   const std::chrono::seconds &expires_in,
                   const std::chrono::seconds &interval);
-  PollResult pollToken(const std::string &device_code);
-  bool refreshToken();
 
-  void loop();
+  void pollToken();
+  void onPollTokenResponse(http::Response response);
+  void displayDeviceCodeForInterval();
 
-  bool fetchNowPlaying(bool retry);
+  void refreshToken();
+  void onRefreshTokenResponse(http::Response response);
+
+  void fetchNowPlaying(bool retry);
+  void onNowPlayingResponse(bool retry, http::Response response);
+
   void fetchContext(const std::string &url);
+  void onContext(http::Response response);
+
   void fetchScannable(const std::string &uri);
+  void onScannable(http::Response response);
+
+  void renderScannable();
 
   void displayString(const std::chrono::milliseconds &elapsed, const std::string &s);
   void displayScannable();
 
   http::Http &_http;
-  std::unique_ptr<async::Thread> _response_thread = async::Thread::create("response");
   jq_state *_jq = nullptr;
   uint8_t _logo_brightness = 16;
   uint8_t _brightness = 8;
@@ -218,6 +213,23 @@ class SpotifyClientImpl final : public SpotifyClient {
 
   NowPlaying _now_playing;
   std::array<uint8_t, 23> _lengths0, _lengths1;
+
+  async::Lifetime _main_loop;
+  async::Lifetime _rendering_work;
+
+  std::unique_ptr<http::Request> _request;
+
+  struct AuthState {
+    std::chrono::system_clock::time_point start;
+    std::chrono::system_clock::time_point expiry;
+    std::chrono::milliseconds interval;
+    std::string device_code;
+    std::string user_code;
+  };
+  AuthState _auth_state;
+
+  std::unique_ptr<async::Thread> _response_thread = async::Thread::create("response");
+  async::Scheduler &_main_scheduler = _response_thread->scheduler();
 };
 
 std::unique_ptr<SpotifyClient> SpotifyClient::create(http::Http &http,
@@ -242,11 +254,22 @@ SpotifyClientImpl::SpotifyClientImpl(http::Http &http,
 }
 
 int SpotifyClientImpl::run() {
-  for (;;) {
-    authenticate();
-    loop();
-  }
+  _main_loop = _response_thread->scheduler().schedule([this] { entrypoint(); }, {});
+  _response_thread->join();
   return 0;
+}
+
+void SpotifyClientImpl::entrypoint() {
+  _access_token.empty() ? authenticate() : fetchNowPlaying(true);
+}
+
+void SpotifyClientImpl::scheduleAuthRetry(std::chrono::milliseconds delay) {
+  _main_loop = _main_scheduler.schedule(
+      [this] {
+        std::cerr << "failed to authenticate. retrying..." << std::endl;
+        entrypoint();
+      },
+      {.delay = delay});
 }
 
 void SpotifyClientImpl::authenticate() {
@@ -254,94 +277,78 @@ void SpotifyClientImpl::authenticate() {
                     "&scope=user-read-playback-state"
                     "&description=Spotify-LED";
 
-  for (;;) {
-    std::promise<http::Response> res_promise;
-    auto request = _http.request({
-        .method = http::Method::POST,
-        .url = kAuthDeviceCodeUrl,
-        .headers = {{kContentType, kXWWWFormUrlencoded}},
-        .body = data,
-        .post_to = _response_thread->scheduler(),
-        .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
-    });
-    auto response = res_promise.get_future().get();
-
-    if (response.status / 100 != 2) {
-      std::cerr << "failed to get device_code" << std::endl;
-      std::this_thread::sleep_for(std::chrono::seconds{5});
-      std::cerr << "retrying..." << std::endl;
-      continue;
-    }
-
-    auto res = parseDeviceFlowData(_jq, response.body);
-    std::cerr << "url: " << res.verification_url_prefilled << std::endl;
-
-    if (authenticateCode(res.device_code, res.user_code, res.expires_in, res.interval)) {
-      return;
-    }
-    std::cerr << "failed to authenticate. retrying..." << std::endl;
-  }
+  _request = _http.request({
+      .method = http::Method::POST,
+      .url = kAuthDeviceCodeUrl,
+      .headers = {{kContentType, kXWWWFormUrlencoded}},
+      .body = data,
+      .post_to = _main_scheduler,
+      .callback = [this](auto response) { onAuthResponse(std::move(response)); },
+  });
 }
 
-bool SpotifyClientImpl::authenticateCode(const std::string &device_code,
+void SpotifyClientImpl::onAuthResponse(http::Response response) {
+  if (response.status / 100 != 2) {
+    std::cerr << "failed to get device_code" << std::endl;
+    scheduleAuthRetry(std::chrono::seconds{5});
+    return;
+  }
+
+  auto res = parseDeviceFlowData(_jq, response.body);
+  std::cerr << "url: " << res.verification_url_prefilled << std::endl;
+
+  authenticateCode(res.device_code, res.user_code, res.expires_in, res.interval);
+}
+
+void SpotifyClientImpl::authenticateCode(const std::string &device_code,
                                          const std::string &user_code,
                                          const std::chrono::seconds &expires_in,
                                          const std::chrono::seconds &interval) {
-  using namespace std::chrono_literals;
-  displayString(0ms, user_code);
-  return fetchToken(device_code, user_code, expires_in, interval);
+  displayString({}, user_code);
+  fetchToken(device_code, user_code, expires_in, interval);
 }
 
-bool SpotifyClientImpl::fetchToken(const std::string &device_code,
+void SpotifyClientImpl::fetchToken(const std::string &device_code,
                                    const std::string &user_code,
                                    const std::chrono::seconds &expires_in,
                                    const std::chrono::seconds &interval) {
-  using namespace std::chrono_literals;
-  using std::chrono::system_clock;
+  auto now = std::chrono::system_clock::now();
+  _auth_state.start = now;
+  _auth_state.expiry = now + expires_in;
+  _auth_state.interval = interval;
+  _auth_state.device_code = device_code;
+  _auth_state.user_code = user_code;
 
-  auto elapsed = 0ms;
-  auto expiry = system_clock::now() + expires_in;
-  while (auto err = pollToken(device_code)) {
-    if (err == kPollError) {
-      return false;
-    }
-    for (auto end = elapsed + interval; elapsed < end; elapsed += 200ms) {
-      std::this_thread::sleep_for(200ms);
-      displayString(elapsed, user_code);
-    }
-    if (system_clock::now() >= expiry) {
-      return false;
-    }
-  }
-  return true;
+  pollToken();
 }
 
-SpotifyClientImpl::PollResult SpotifyClientImpl::pollToken(const std::string &device_code) {
+void SpotifyClientImpl::pollToken() {
   const auto data = std::string{"client_id="} + credentials::kClientId +
-                    "&device_code=" + device_code +
+                    "&device_code=" + _auth_state.device_code +
                     "&scope=user-read-playback-state"
                     "&grant_type=urn:ietf:params:oauth:grant-type:device_code";
 
-  std::promise<http::Response> res_promise;
-  auto request = _http.request({
+  _request = _http.request({
       .method = http::Method::POST,
       .url = kAuthTokenUrl,
       .headers = {{kContentType, kXWWWFormUrlencoded}},
       .body = data,
-      .post_to = _response_thread->scheduler(),
-      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+      .post_to = _main_scheduler,
+      .callback = [this](auto response) { onPollTokenResponse(std::move(response)); },
   });
-  auto response = res_promise.get_future().get();
+}
 
+void SpotifyClientImpl::onPollTokenResponse(http::Response response) {
   if (response.status / 100 == 5) {
     std::cerr << "failed to get auth_code or error" << std::endl;
-    return kPollError;
+    return scheduleAuthRetry();
   }
 
   auto res = parseTokenData(_jq, response.body);
   if (!res.error.empty()) {
     std::cerr << "auth_code error: " << res.error << std::endl;
-    return res.error == "authorization_pending" ? kPollWait : kPollError;
+    return res.error == "authorization_pending" ? displayDeviceCodeForInterval()
+                                                : scheduleAuthRetry();
   }
 
   std::cerr << "access_token: " << res.access_token << std::endl;
@@ -350,28 +357,51 @@ SpotifyClientImpl::PollResult SpotifyClientImpl::pollToken(const std::string &de
   _access_token = res.access_token;
   _refresh_token = res.refresh_token;
 
-  return kPollSuccess;
+  fetchNowPlaying(true);
 }
 
-bool SpotifyClientImpl::refreshToken() {
+void SpotifyClientImpl::displayDeviceCodeForInterval() {
+  using namespace std::chrono_literals;
+
+  _rendering_work = _main_scheduler.schedule(
+      [this] {
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now() - _auth_state.start);
+        displayString(elapsed, _auth_state.user_code);
+      },
+      {.period = 200ms});
+
+  _main_loop = _main_scheduler.schedule(
+      [this] {
+        _rendering_work = {};
+
+        if (std::chrono::system_clock::now() >= _auth_state.expiry) {
+          return scheduleAuthRetry();
+        }
+        pollToken();
+      },
+      {.delay = _auth_state.interval});
+}
+
+void SpotifyClientImpl::refreshToken() {
   const auto data = std::string{"client_id="} + credentials::kClientId +
                     "&client_secret=" + credentials::kClientSecret +
                     "&refresh_token=" + _refresh_token + "&grant_type=refresh_token";
 
-  std::promise<http::Response> res_promise;
-  auto request = _http.request({
+  _request = _http.request({
       .method = http::Method::POST,
       .url = kAuthTokenUrl,
       .headers = {{kContentType, kXWWWFormUrlencoded}},
       .body = data,
-      .post_to = _response_thread->scheduler(),
-      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+      .post_to = _main_scheduler,
+      .callback = [this](auto response) { onRefreshTokenResponse(std::move(response)); },
   });
-  auto response = res_promise.get_future().get();
+}
 
-  if (response.status / 100 != 200) {
+void SpotifyClientImpl::onRefreshTokenResponse(http::Response response) {
+  if (response.status / 100 != 2) {
     std::cerr << "failed to refresh token" << std::endl;
-    return false;
+    return scheduleAuthRetry();
   }
 
   auto res = parseTokenData(_jq, response.body);
@@ -379,109 +409,85 @@ bool SpotifyClientImpl::refreshToken() {
 
   _access_token = res.access_token;
 
-  return true;
+  fetchNowPlaying(false);
 }
 
-void SpotifyClientImpl::loop() {
-  for (;;) {
-    if (fetchNowPlaying(true)) {
-      displayScannable();
-    }
-    if (_has_played && _now_playing.track_id.empty()) {
-      _access_token = {};
-      _refresh_token = {};
-      _has_played = false;
-      break;
-    }
-    for (auto i = 0; i < 5; ++i) {
-      std::this_thread::sleep_for(std::chrono::seconds{1});
-      _now_playing.progress += std::chrono::seconds{1};
-    }
-  }
-}
-
-bool SpotifyClientImpl::fetchNowPlaying(bool retry) {
-  std::promise<http::Response> res_promise;
-  auto request = _http.request({
+void SpotifyClientImpl::fetchNowPlaying(bool retry) {
+  _request = _http.request({
       .url = kPlayerUrl,
       .headers = {{kAuthorization, "Bearer " + _access_token}},
-      .post_to = _response_thread->scheduler(),
-      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+      .post_to = _main_scheduler,
+      .callback = [this,
+                   retry](auto response) { onNowPlayingResponse(retry, std::move(response)); },
   });
-  auto response = res_promise.get_future().get();
+}
 
+void SpotifyClientImpl::onNowPlayingResponse(bool retry, http::Response response) {
   if (response.status / 100 != 2) {
     if (!retry) {
       std::cerr << "failed to get player state" << std::endl;
+      return scheduleAuthRetry();
     }
-    return retry && refreshToken() && fetchNowPlaying(false);
+    return refreshToken();
   }
+
   if (response.status == 204) {
     if (!_now_playing.track_id.empty()) {
       std::cerr << "nothing is playing" << std::endl;
       _now_playing = {};
     }
-    return true;
+    return renderScannable();
   }
+
   _has_played = true;
   auto now_playing = parseNowPlaying(_jq, response.body, _verbose);
 
   if (now_playing.track_id == _now_playing.track_id) {
     _now_playing.progress = now_playing.progress;
-    return true;
+    return renderScannable();
   }
   _now_playing = now_playing;
 
   fetchContext(_now_playing.context_href);
-  fetchScannable(_now_playing.uri);
-
-  std::cerr << "context: " << _now_playing.context << "\n";
-  std::cerr << "title: " << _now_playing.title << "\n";
-  std::cerr << "artist: " << _now_playing.artist << "\n";
-  std::cerr << "image: " << _now_playing.image << "\n";
-  std::cerr << "uri: " << _now_playing.uri << "\n";
-  std::cerr << "duration: " << _now_playing.duration.count() << std::endl;
-
-  return true;
 }
 
 void SpotifyClientImpl::fetchContext(const std::string &url) {
   if (url.empty()) {
-    return;
+    return fetchScannable(_now_playing.uri);
   }
 
-  std::promise<http::Response> res_promise;
-  auto request = _http.request({
+  _request = _http.request({
       .url = url,
       .headers = {{"authorization", "Bearer " + _access_token}},
-      .post_to = _response_thread->scheduler(),
-      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+      .post_to = _main_scheduler,
+      .callback = [this](auto response) { onContext(std::move(response)); },
   });
-  auto response = res_promise.get_future().get();
+}
 
+void SpotifyClientImpl::onContext(http::Response response) {
   if (response.status / 100 != 2) {
     std::cerr << "failed to fetch context" << std::endl;
-    return;
+    return authenticate();
   }
   _now_playing.context = parseContext(_jq, response.body);
+
+  fetchScannable(_now_playing.uri);
 }
 
 void SpotifyClientImpl::fetchScannable(const std::string &uri) {
-  const auto url = credentials::kScannablesCdnUrl + uri + "?format=svg";
-
-  std::promise<http::Response> res_promise;
-  auto request = _http.request({
-      .url = url,
-      .post_to = _response_thread->scheduler(),
-      .callback = [&](auto response) { res_promise.set_value(std::move(response)); },
+  _request = _http.request({
+      .url = credentials::kScannablesCdnUrl + uri + "?format=svg",
+      .post_to = _main_scheduler,
+      .callback = [this](auto response) { onScannable(std::move(response)); },
   });
-  auto response = res_promise.get_future().get();
+}
 
+void SpotifyClientImpl::onScannable(http::Response response) {
   if (response.status / 100 != 2) {
     std::cerr << "failed to fetch scannable id, status: " << response.status << std::endl;
     _lengths0.fill(0);
     _lengths1.fill(0);
-    return;
+    return renderScannable();
   }
 
   auto sv = std::string_view(response.body);
@@ -501,12 +507,33 @@ void SpotifyClientImpl::fetchScannable(const std::string &uri) {
     sv.remove_prefix(8);
     _lengths1[i] = map[std::atoi(sv.data())];
   }
+
+  std::cerr << "context: " << _now_playing.context << "\n";
+  std::cerr << "title: " << _now_playing.title << "\n";
+  std::cerr << "artist: " << _now_playing.artist << "\n";
+  std::cerr << "image: " << _now_playing.image << "\n";
+  std::cerr << "uri: " << _now_playing.uri << "\n";
+  std::cerr << "duration: " << _now_playing.duration.count() << std::endl;
+
+  renderScannable();
+}
+
+void SpotifyClientImpl::renderScannable() {
+  displayScannable();
+
+  if (_has_played && _now_playing.track_id.empty()) {
+    _access_token = {};
+    _refresh_token = {};
+    _has_played = false;
+    return authenticate();
+  }
+
+  _main_loop = _main_scheduler.schedule([this] { fetchNowPlaying(true); },
+                                        {.delay = std::chrono::seconds{5}});
 }
 
 void SpotifyClientImpl::displayString(const std::chrono::milliseconds &elapsed,
                                       const std::string &s) {
-  const auto kScrollSpeed = 0.005;
-
   _led->clear();
   _led->setLogo(Color{_logo_brightness, _logo_brightness, _logo_brightness});
 
