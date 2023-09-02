@@ -13,11 +13,6 @@ int main(int argc, char *argv[]) {
   if (!http) {
     return 1;
   }
-  auto jq = jq_init();
-  if (!jq) {
-    return 1;
-  }
-
   auto verbose = false;
   uint8_t brightness = 1;
 
@@ -30,6 +25,14 @@ int main(int argc, char *argv[]) {
       brightness = std::clamp(std::atoi(arg.data() + 13), 1, 32);
     }
   }
-  std::cout << "Using brightness: " << int(brightness) << std::endl;
-  return SpotifyClient::create(*http, jq, brightness, verbose)->run();
+
+  auto main_thread = async::Thread::create("main");
+  auto client = SpotifyClient::create(main_thread->scheduler(), *http, brightness, verbose);
+
+  if (!client) {
+    return 1;
+  }
+
+  main_thread->join();
+  return 0;
 }

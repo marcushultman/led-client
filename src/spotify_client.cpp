@@ -11,6 +11,10 @@
 #include "font/font.h"
 #include "spotiled.h"
 
+extern "C" {
+#include <jq.h>
+}
+
 namespace {
 
 const auto kAuthDeviceCodeUrl = "https://accounts.spotify.com/api/device/code";
@@ -152,9 +156,12 @@ std::pair<int, int> makeRange(int col, int upper, int lower) {
 
 class SpotifyClientImpl final : public SpotifyClient {
  public:
-  SpotifyClientImpl(http::Http &http, jq_state *jq, uint8_t brightness, bool verbose);
-
-  int run() final;
+  SpotifyClientImpl(async::Scheduler &main_scheduler,
+                    http::Http &http,
+                    jq_state *jq,
+                    uint8_t brightness,
+                    bool verbose);
+  ~SpotifyClientImpl();
 
  private:
   enum PollResult {
@@ -197,7 +204,7 @@ class SpotifyClientImpl final : public SpotifyClient {
 
   void renderScannable();
 
-  void displayString(const std::chrono::milliseconds &elapsed, const std::string &s);
+  void displayString(const std::string &s);
   void displayScannable();
 
   http::Http &_http;
@@ -228,22 +235,30 @@ class SpotifyClientImpl final : public SpotifyClient {
   };
   AuthState _auth_state;
 
-  std::unique_ptr<async::Thread> _response_thread = async::Thread::create("response");
-  async::Scheduler &_main_scheduler = _response_thread->scheduler();
+  async::Scheduler &_main_scheduler;
+
+  std::unique_ptr<RollingPresenter> _text_presenter;
+  std::unique_ptr<font::TextPage> _text = font::TextPage::create();
 };
 
-std::unique_ptr<SpotifyClient> SpotifyClient::create(http::Http &http,
-                                                     jq_state *jq,
+std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_scheduler,
+                                                     http::Http &http,
                                                      uint8_t brightness,
                                                      bool verbose) {
-  return std::make_unique<SpotifyClientImpl>(http, jq, brightness, verbose);
+  auto jq = jq_init();
+  if (!jq) {
+    return nullptr;
+  }
+  return std::make_unique<SpotifyClientImpl>(main_scheduler, http, jq, brightness, verbose);
 }
 
-SpotifyClientImpl::SpotifyClientImpl(http::Http &http,
+SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
+                                     http::Http &http,
                                      jq_state *jq,
                                      uint8_t brightness,
                                      bool verbose)
-    : _http{http},
+    : _main_scheduler{main_scheduler},
+      _http{http},
       _jq{jq},
       _led{SpotiLED::create()},
       _logo_brightness{std::min<uint8_t>(2 * brightness, uint8_t(32))},
@@ -251,13 +266,10 @@ SpotifyClientImpl::SpotifyClientImpl(http::Http &http,
       _verbose{verbose} {
   std::cout << "Using logo brightness: " << int(_logo_brightness)
             << ", brightness: " << int(_brightness) << std::endl;
+  _main_loop = _main_scheduler.schedule([this] { entrypoint(); }, {});
 }
 
-int SpotifyClientImpl::run() {
-  _main_loop = _response_thread->scheduler().schedule([this] { entrypoint(); }, {});
-  _response_thread->join();
-  return 0;
-}
+SpotifyClientImpl::~SpotifyClientImpl() { jq_teardown(&_jq); }
 
 void SpotifyClientImpl::entrypoint() {
   _access_token.empty() ? authenticate() : fetchNowPlaying(true);
@@ -304,7 +316,9 @@ void SpotifyClientImpl::authenticateCode(const std::string &device_code,
                                          const std::string &user_code,
                                          const std::chrono::seconds &expires_in,
                                          const std::chrono::seconds &interval) {
-  displayString({}, user_code);
+  _text_presenter =
+      RollingPresenter::create(*_led, Direction::kHorizontal, _brightness, _logo_brightness);
+  displayString(user_code);
   fetchToken(device_code, user_code, expires_in, interval);
 }
 
@@ -363,13 +377,8 @@ void SpotifyClientImpl::onPollTokenResponse(http::Response response) {
 void SpotifyClientImpl::displayDeviceCodeForInterval() {
   using namespace std::chrono_literals;
 
-  _rendering_work = _main_scheduler.schedule(
-      [this] {
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now() - _auth_state.start);
-        displayString(elapsed, _auth_state.user_code);
-      },
-      {.period = 200ms});
+  _rendering_work =
+      _main_scheduler.schedule([this] { displayString(_auth_state.user_code); }, {.period = 200ms});
 
   _main_loop = _main_scheduler.schedule(
       [this] {
@@ -532,19 +541,17 @@ void SpotifyClientImpl::renderScannable() {
                                         {.delay = std::chrono::seconds{5}});
 }
 
-void SpotifyClientImpl::displayString(const std::chrono::milliseconds &elapsed,
-                                      const std::string &s) {
+void SpotifyClientImpl::displayString(const std::string &s) {
+  if (!_text_presenter) {
+    std::cerr << "display string without presenter" << s << std::endl;
+    return;
+  }
+
   _led->clear();
   _led->setLogo(Color{_logo_brightness, _logo_brightness, _logo_brightness});
 
-  static auto _text = font::TextPage::create();
-  static auto _presenter =
-      RollingPresenter::create(*_led, Direction::kHorizontal, _brightness, _logo_brightness);
-
-  _presenter->HACK_setElapsed(elapsed);
-
   _text->setText(s);
-  _presenter->present(*_text);
+  _text_presenter->present(*_text);
 }
 
 void SpotifyClientImpl::displayScannable() {
