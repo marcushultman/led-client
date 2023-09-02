@@ -60,13 +60,24 @@ int main(int argc, char *argv[]) {
   auto main_thread = async::Thread::create("main");
   auto led = SpotiLED::create();
 
-  auto client = SpotifyClient::create(main_thread->scheduler(), *http, *led, brightness, verbose);
+  // mode
+  int mode = -1;
+  std::shared_ptr<void> runner;
+  auto next_mode = [&] {
+    mode = (mode + 1) % 2;
+    switch (mode) {
+      case 0:
+        led->clear();
+        led->show();
+        return runner.reset();
+      case 1:
+        runner = SpotifyClient::create(main_thread->scheduler(), *http, *led, brightness, verbose);
+        return;
+    }
+  };
+  next_mode();
 
-  if (!client) {
-    return 1;
-  }
-
-  auto server = makeServer();
+  auto server = makeServer(main_thread->scheduler(), next_mode);
   std::cout << "Listening on port: " << server->port() << std::endl;
 
   auto interrupt = std::promise<int>();
