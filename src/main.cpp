@@ -7,6 +7,7 @@
 #include <string>
 
 #include "http/http.h"
+#include "server/server.h"
 #include "spotify_client.h"
 #include "spotiled.h"
 
@@ -65,9 +66,14 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  auto server = makeServer();
+  std::cout << "Listening on port: " << server->port() << std::endl;
+
   auto interrupt = std::promise<int>();
-  auto sig = SignalHandler(main_thread->scheduler(), [&](auto) { interrupt.set_value(0); });
+  auto sig = SignalHandler(main_thread->scheduler(), [&](auto) {
+    server.reset();
+    interrupt.set_value(0);
+  });
 
   return interrupt.get_future().get();
-  ;
 }
