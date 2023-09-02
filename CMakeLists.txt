@@ -23,6 +23,8 @@ set(SOURCES
   font/font.h
   http/http.cpp
   http/http.h
+  server/server.cpp
+  server/server.h
   apa102.cpp
   apa102.h
   main.cpp
