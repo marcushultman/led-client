@@ -57,9 +57,9 @@ class SPILED final : public LEDBase {
       : LEDBase(num_leds, hz),
         _config{
             .mode = 0,
+            .bits_per_word = 8,
             .speed = hz,
             .delay = 0,
-            .bits_per_word = 8,
         } {
     _spi = std::make_unique<SPI>("/dev/spidev0.0", &_config);
 
