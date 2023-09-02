@@ -402,7 +402,7 @@ void SpotifyClientImpl::onRefreshTokenResponse(http::Response response) {
 }
 
 void SpotifyClientImpl::fetchNowPlaying(bool allow_retry) {
-  _request = _http.request({
+  _request = _http.request(http::RequestInit{
       .url = kPlayerUrl,
       .headers = {{kAuthorization, "Bearer " + _access_token}},
       .post_to = _main_scheduler,
@@ -445,7 +445,7 @@ void SpotifyClientImpl::fetchContext(const std::string &url) {
     return fetchScannable(_now_playing.uri);
   }
 
-  _request = _http.request({
+  _request = _http.request(http::RequestInit{
       .url = url,
       .headers = {{"authorization", "Bearer " + _access_token}},
       .post_to = _main_scheduler,
@@ -464,7 +464,7 @@ void SpotifyClientImpl::onContext(http::Response response) {
 }
 
 void SpotifyClientImpl::fetchScannable(const std::string &uri) {
-  _request = _http.request({
+  _request = _http.request(http::RequestInit{
       .url = credentials::kScannablesCdnUrl + uri + "?format=svg",
       .post_to = _main_scheduler,
       .callback = [this](auto response) { onScannable(std::move(response)); },
