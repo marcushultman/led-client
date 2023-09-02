@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "apa102.h"
+#include "async/scheduler.h"
 
 struct Coord {
   int x = 0;
@@ -75,7 +76,9 @@ enum class Direction {
 };
 
 struct RollingPresenter : Presenter {
-  static std::unique_ptr<RollingPresenter> create(SpotiLED &,
+  static std::unique_ptr<RollingPresenter> create(async::Scheduler &scheduler,
+                                                  SpotiLED &,
+                                                  Page &,
                                                   Direction,
                                                   uint8_t brightness,
                                                   uint8_t logo_brightness);
