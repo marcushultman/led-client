@@ -1,12 +1,42 @@
 #include <stdio.h>
 
-#include <algorithm>
+#include <csignal>
 #include <cstdlib>
+#include <future>
 #include <iostream>
 #include <string>
 
 #include "http/http.h"
 #include "spotify_client.h"
+#include "spotiled.h"
+
+struct SignalHandler {
+  using Callback = std::function<void(int)>;
+
+  SignalHandler(async::Scheduler &scheduler, Callback callback)
+      : _scheduler{scheduler}, _callback{std::move(callback)} {
+    if (s_handler) {
+      std::terminate();
+    }
+    s_handler = this;
+    std::signal(SIGINT, [](int sig) { s_handler->schedule(sig); });
+  }
+  ~SignalHandler() {
+    std::signal(SIGINT, nullptr);
+    s_handler = nullptr;
+  }
+
+  void schedule(int sig) {
+    _lifetime = _scheduler.schedule([this, sig] { _callback(sig); });
+  }
+
+  static SignalHandler *s_handler;
+  async::Scheduler &_scheduler;
+  Callback _callback;
+  async::Lifetime _lifetime;
+};
+
+SignalHandler *SignalHandler::s_handler = nullptr;
 
 int main(int argc, char *argv[]) {
   auto http = http::Http::create();
@@ -27,12 +57,17 @@ int main(int argc, char *argv[]) {
   }
 
   auto main_thread = async::Thread::create("main");
-  auto client = SpotifyClient::create(main_thread->scheduler(), *http, brightness, verbose);
+  auto led = SpotiLED::create();
+
+  auto client = SpotifyClient::create(main_thread->scheduler(), *http, *led, brightness, verbose);
 
   if (!client) {
     return 1;
   }
 
-  main_thread->join();
-  return 0;
+  auto interrupt = std::promise<int>();
+  auto sig = SignalHandler(main_thread->scheduler(), [&](auto) { interrupt.set_value(0); });
+
+  return interrupt.get_future().get();
+  ;
 }

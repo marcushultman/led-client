@@ -61,13 +61,9 @@ struct SpotiLED {
 
 //
 
-struct Presenter {
-  virtual ~Presenter() = default;
-  virtual void present(Page &) = 0;
-};
-
-struct StaticPresenter : Presenter {
-  static std::unique_ptr<StaticPresenter> create(SpotiLED &, u_int8_t brightness);
+struct StaticPresenter {
+  virtual ~StaticPresenter() = default;
+  static std::unique_ptr<StaticPresenter> create(SpotiLED &, Page &, u_int8_t brightness);
 };
 
 enum class Direction {
@@ -75,7 +71,8 @@ enum class Direction {
   kHorizontal,
 };
 
-struct RollingPresenter : Presenter {
+struct RollingPresenter {
+  virtual ~RollingPresenter() = default;
   static std::unique_ptr<RollingPresenter> create(async::Scheduler &scheduler,
                                                   SpotiLED &,
                                                   Page &,
@@ -84,6 +81,6 @@ struct RollingPresenter : Presenter {
                                                   uint8_t logo_brightness);
 };
 
-struct PagedPresenter : Presenter {
+struct PagedPresenter {
   static std::unique_ptr<PagedPresenter> create(SpotiLED &);
 };

@@ -495,7 +495,6 @@ std::unique_ptr<TextPage> TextPage::create() { return std::make_unique<TextPageI
 int run() {
   std::string input;
   auto led = SpotiLED::create();
-  auto presenter = StaticPresenter::create(*led, 1);
   auto page = TextPage::create();
 
   for (;;) {
@@ -506,7 +505,7 @@ int run() {
       return 0;
     }
     page->setText(input);
-    presenter->present(*page);
+    StaticPresenter::create(*led, *page, 1);
   }
 
   return 0;

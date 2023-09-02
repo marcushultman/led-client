@@ -9,7 +9,6 @@
 
 #include "credentials.h"
 #include "font/font.h"
-#include "spotiled.h"
 
 extern "C" {
 #include <jq.h>
@@ -158,6 +157,7 @@ class SpotifyClientImpl final : public SpotifyClient {
  public:
   SpotifyClientImpl(async::Scheduler &main_scheduler,
                     http::Http &http,
+                    SpotiLED &led,
                     jq_state *jq,
                     uint8_t brightness,
                     bool verbose);
@@ -177,10 +177,6 @@ class SpotifyClientImpl final : public SpotifyClient {
   void authenticate();
   void onAuthResponse(http::Response response);
 
-  void authenticateCode(const std::string &device_code,
-                        const std::string &user_code,
-                        const std::chrono::seconds &expires_in,
-                        const std::chrono::seconds &interval);
   void fetchToken(const std::string &device_code,
                   const std::string &user_code,
                   const std::chrono::seconds &expires_in,
@@ -188,13 +184,13 @@ class SpotifyClientImpl final : public SpotifyClient {
 
   void pollToken();
   void onPollTokenResponse(http::Response response);
-  void displayDeviceCodeForInterval();
+  void scheduleNextPollToken();
 
   void refreshToken();
   void onRefreshTokenResponse(http::Response response);
 
-  void fetchNowPlaying(bool retry);
-  void onNowPlayingResponse(bool retry, http::Response response);
+  void fetchNowPlaying(bool allow_retry);
+  void onNowPlayingResponse(bool allow_retry, http::Response response);
 
   void fetchContext(const std::string &url);
   void onContext(http::Response response);
@@ -206,12 +202,13 @@ class SpotifyClientImpl final : public SpotifyClient {
 
   void displayScannable();
 
+  async::Scheduler &_main_scheduler;
   http::Http &_http;
+  SpotiLED &_led;
   jq_state *_jq = nullptr;
   uint8_t _logo_brightness = 16;
   uint8_t _brightness = 8;
   bool _verbose = false;
-  std::unique_ptr<SpotiLED> _led;
 
   std::string _access_token;
   std::string _refresh_token;
@@ -220,12 +217,7 @@ class SpotifyClientImpl final : public SpotifyClient {
   NowPlaying _now_playing;
   std::array<uint8_t, 23> _lengths0, _lengths1;
 
-  async::Lifetime _main_loop;
-
-  std::unique_ptr<http::Request> _request;
-
   struct AuthState {
-    std::chrono::system_clock::time_point start;
     std::chrono::system_clock::time_point expiry;
     std::chrono::milliseconds interval;
     std::string device_code;
@@ -233,38 +225,41 @@ class SpotifyClientImpl final : public SpotifyClient {
   };
   AuthState _auth_state;
 
-  async::Scheduler &_main_scheduler;
-
   std::unique_ptr<font::TextPage> _text = font::TextPage::create();
   std::unique_ptr<RollingPresenter> _text_presenter;
+
+  std::unique_ptr<http::Request> _request;
+  async::Lifetime _work;
 };
 
 std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_scheduler,
                                                      http::Http &http,
+                                                     SpotiLED &led,
                                                      uint8_t brightness,
                                                      bool verbose) {
   auto jq = jq_init();
   if (!jq) {
     return nullptr;
   }
-  return std::make_unique<SpotifyClientImpl>(main_scheduler, http, jq, brightness, verbose);
+  return std::make_unique<SpotifyClientImpl>(main_scheduler, http, led, jq, brightness, verbose);
 }
 
 SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
                                      http::Http &http,
+                                     SpotiLED &led,
                                      jq_state *jq,
                                      uint8_t brightness,
                                      bool verbose)
     : _main_scheduler{main_scheduler},
       _http{http},
       _jq{jq},
-      _led{SpotiLED::create()},
+      _led{led},
       _logo_brightness{std::min<uint8_t>(2 * brightness, uint8_t(32))},
       _brightness{brightness},
       _verbose{verbose} {
   std::cout << "Using logo brightness: " << int(_logo_brightness)
             << ", brightness: " << int(_brightness) << std::endl;
-  _main_loop = _main_scheduler.schedule([this] { entrypoint(); }, {});
+  _work = _main_scheduler.schedule([this] { entrypoint(); }, {});
 }
 
 SpotifyClientImpl::~SpotifyClientImpl() { jq_teardown(&_jq); }
@@ -274,7 +269,7 @@ void SpotifyClientImpl::entrypoint() {
 }
 
 void SpotifyClientImpl::scheduleAuthRetry(std::chrono::milliseconds delay) {
-  _main_loop = _main_scheduler.schedule(
+  _work = _main_scheduler.schedule(
       [this] {
         std::cerr << "failed to authenticate. retrying..." << std::endl;
         authenticate();
@@ -304,21 +299,14 @@ void SpotifyClientImpl::onAuthResponse(http::Response response) {
     return;
   }
 
-  auto res = parseDeviceFlowData(_jq, response.body);
-  std::cerr << "url: " << res.verification_url_prefilled << std::endl;
+  auto data = parseDeviceFlowData(_jq, response.body);
+  std::cerr << "url: " << data.verification_url_prefilled << std::endl;
 
-  authenticateCode(res.device_code, res.user_code, res.expires_in, res.interval);
-}
-
-void SpotifyClientImpl::authenticateCode(const std::string &device_code,
-                                         const std::string &user_code,
-                                         const std::chrono::seconds &expires_in,
-                                         const std::chrono::seconds &interval) {
-  _text->setText(user_code);
-  _text_presenter = RollingPresenter::create(_main_scheduler, *_led, *_text, Direction::kHorizontal,
+  _text->setText(data.user_code);
+  _text_presenter = RollingPresenter::create(_main_scheduler, _led, *_text, Direction::kHorizontal,
                                              _brightness, _logo_brightness);
 
-  fetchToken(device_code, user_code, expires_in, interval);
+  fetchToken(data.device_code, data.user_code, data.expires_in, data.interval);
 }
 
 void SpotifyClientImpl::fetchToken(const std::string &device_code,
@@ -326,7 +314,6 @@ void SpotifyClientImpl::fetchToken(const std::string &device_code,
                                    const std::chrono::seconds &expires_in,
                                    const std::chrono::seconds &interval) {
   auto now = std::chrono::system_clock::now();
-  _auth_state.start = now;
   _auth_state.expiry = now + expires_in;
   _auth_state.interval = interval;
   _auth_state.device_code = device_code;
@@ -357,28 +344,25 @@ void SpotifyClientImpl::onPollTokenResponse(http::Response response) {
     return scheduleAuthRetry();
   }
 
-  auto res = parseTokenData(_jq, response.body);
-  if (!res.error.empty()) {
-    std::cerr << "auth_code error: " << res.error << std::endl;
-    return res.error == "authorization_pending" ? displayDeviceCodeForInterval()
-                                                : scheduleAuthRetry();
+  auto data = parseTokenData(_jq, response.body);
+  if (!data.error.empty()) {
+    std::cerr << "auth_code error: " << data.error << std::endl;
+    return data.error == "authorization_pending" ? scheduleNextPollToken() : scheduleAuthRetry();
   }
 
   _text_presenter.reset();
 
-  std::cerr << "access_token: " << res.access_token << std::endl;
-  std::cerr << "refresh_token: " << res.refresh_token << std::endl;
+  std::cerr << "access_token: " << data.access_token << std::endl;
+  std::cerr << "refresh_token: " << data.refresh_token << std::endl;
 
-  _access_token = res.access_token;
-  _refresh_token = res.refresh_token;
+  _access_token = data.access_token;
+  _refresh_token = data.refresh_token;
 
   fetchNowPlaying(true);
 }
 
-void SpotifyClientImpl::displayDeviceCodeForInterval() {
-  using namespace std::chrono_literals;
-
-  _main_loop = _main_scheduler.schedule(
+void SpotifyClientImpl::scheduleNextPollToken() {
+  _work = _main_scheduler.schedule(
       [this] {
         if (std::chrono::system_clock::now() >= _auth_state.expiry) {
           return scheduleAuthRetry();
@@ -409,27 +393,27 @@ void SpotifyClientImpl::onRefreshTokenResponse(http::Response response) {
     return scheduleAuthRetry();
   }
 
-  auto res = parseTokenData(_jq, response.body);
-  std::cerr << "access_token: " << res.access_token << std::endl;
+  auto data = parseTokenData(_jq, response.body);
+  std::cerr << "access_token: " << data.access_token << std::endl;
 
-  _access_token = res.access_token;
+  _access_token = data.access_token;
 
   fetchNowPlaying(false);
 }
 
-void SpotifyClientImpl::fetchNowPlaying(bool retry) {
+void SpotifyClientImpl::fetchNowPlaying(bool allow_retry) {
   _request = _http.request({
       .url = kPlayerUrl,
       .headers = {{kAuthorization, "Bearer " + _access_token}},
       .post_to = _main_scheduler,
-      .callback = [this,
-                   retry](auto response) { onNowPlayingResponse(retry, std::move(response)); },
+      .callback = [this, allow_retry](
+                      auto response) { onNowPlayingResponse(allow_retry, std::move(response)); },
   });
 }
 
-void SpotifyClientImpl::onNowPlayingResponse(bool retry, http::Response response) {
+void SpotifyClientImpl::onNowPlayingResponse(bool allow_retry, http::Response response) {
   if (response.status / 100 != 2) {
-    if (!retry) {
+    if (!allow_retry) {
       std::cerr << "failed to get player state" << std::endl;
       return scheduleAuthRetry();
     }
@@ -524,29 +508,29 @@ void SpotifyClientImpl::onScannable(http::Response response) {
 }
 
 void SpotifyClientImpl::renderScannable() {
-  displayScannable();
-
   if (_has_played && _now_playing.track_id.empty()) {
+    _led.clear();
     _access_token = {};
     _refresh_token = {};
     _has_played = false;
     return authenticate();
   }
 
-  _main_loop = _main_scheduler.schedule([this] { fetchNowPlaying(true); },
-                                        {.delay = std::chrono::seconds{5}});
+  displayScannable();
+  _work = _main_scheduler.schedule([this] { fetchNowPlaying(true); },
+                                   {.delay = std::chrono::seconds{5}});
 }
 
 void SpotifyClientImpl::displayScannable() {
-  _led->clear();
-  _led->setLogo({_logo_brightness, _logo_brightness, _logo_brightness});
+  _led.clear();
+  _led.setLogo({_logo_brightness, _logo_brightness, _logo_brightness});
 
   for (auto col = 0; col < 23; ++col) {
     auto start = 8 - _lengths0[col];
     auto end = 8 + _lengths1[col];
     for (auto y = start; y < end; ++y) {
-      _led->set({.x = col, .y = y}, {_brightness, _brightness, _brightness});
+      _led.set({.x = col, .y = y}, {_brightness, _brightness, _brightness});
     }
   }
-  _led->show();
+  _led.show();
 }
