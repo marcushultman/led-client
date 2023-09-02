@@ -25,8 +25,10 @@ std::unique_ptr<SpotiLED> SpotiLED::create() {
       }
     }
     void set(Coord pos, Color color) final {
-      auto [r, g, b] = color;
-      _led->set(19 + offset(pos), r, g, b);
+      if (pos.x >= 0 && pos.x < 23 && pos.y >= 0 && pos.y < 16) {
+        auto [r, g, b] = color;
+        _led->set(19 + offset(pos), r, g, b);
+      }
     }
     void show() final { _led->show(); }
 
@@ -48,7 +50,10 @@ std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led, uint8_t 
     void present(Page &page) {
       _led.clear();
       for (auto &placement : page.sprites()) {
-        for (auto &section : placement.sprite.sections) {
+        if (!placement.sprite) {
+          continue;
+        }
+        for (auto &section : placement.sprite->sections) {
           for (auto pos : section.coords) {
             auto [r, g, b] = section.color * _brightness;
             _led.set(placement.pos + placement.scale * pos, section.color * _brightness);
@@ -67,6 +72,12 @@ std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led, uint8_t 
 
 // rolling_presenter.cpp
 
+namespace {
+
+const auto kScrollSpeed = 0.005;
+
+}  // namespace
+
 std::unique_ptr<RollingPresenter> RollingPresenter::create(SpotiLED &led,
                                                            Direction direction,
                                                            uint8_t brightness,
@@ -80,40 +91,39 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(SpotiLED &led,
         : _led{led},
           _direction{direction},
           _brightness{brightness},
-          _logo_brightness(logo_brightness) {}
+          _logo_brightness{logo_brightness},
+          _started{std::chrono::system_clock::now()} {}
 
     void present(Page &page) {
       _led.clear();
       _led.setLogo({_logo_brightness, _logo_brightness, _logo_brightness});
 
-      const auto kScrollSpeed = 0.005;
-      auto offset = Coord{23 - (static_cast<int>(kScrollSpeed * _elapsed.count()) % (23 + 30)), 0};
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::system_clock::now() - _started);
+
+      // todo: respect direction
+      auto offset = Coord{23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + 30)), 0};
 
       for (auto &placement : page.sprites()) {
-        for (auto &section : placement.sprite.sections) {
+        if (!placement.sprite) {
+          continue;
+        }
+        for (auto &section : placement.sprite->sections) {
           for (auto pos : section.coords) {
             auto [r, g, b] = section.color;
-            auto pixel_pos = offset + placement.pos + placement.scale * pos;
-            if (pixel_pos.x < 0) {
-              continue;
-            }
-            _led.set(pixel_pos, section.color * _brightness);
+            _led.set(offset + placement.pos + placement.scale * pos, section.color * _brightness);
           }
         }
       }
       _led.show();
     }
 
-    void HACK_setElapsed(std::chrono::milliseconds elapsed) { _elapsed = elapsed; }
-
    private:
     SpotiLED &_led;
     Direction _direction;
     uint8_t _brightness;
     uint8_t _logo_brightness;
-
-    // calculate this internally using threads
-    std::chrono::milliseconds _elapsed;
+    std::chrono::system_clock::time_point _started;
   };
   return std::make_unique<RollingPresenterImpl>(led, direction, brightness, logo_brightness);
 }

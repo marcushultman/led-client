@@ -38,7 +38,7 @@ constexpr auto kNormalScale = Coord{1, 1};
 struct Page {
   struct SpritePlacement {
     Coord pos;
-    Sprite sprite;
+    const Sprite *sprite = nullptr;
     Coord scale = kNormalScale;
   };
 
@@ -75,8 +75,6 @@ enum class Direction {
 };
 
 struct RollingPresenter : Presenter {
-  virtual void HACK_setElapsed(std::chrono::milliseconds) = 0;
-
   static std::unique_ptr<RollingPresenter> create(SpotiLED &,
                                                   Direction,
                                                   uint8_t brightness,

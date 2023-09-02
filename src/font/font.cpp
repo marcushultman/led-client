@@ -443,8 +443,8 @@ struct WeatherPageImpl final : TextPage {
 
     _sprites.push_back({.pos = {0, 2},
                         .sprite = text.size() && text[0] == '1'
-                                      ? kSun
-                                      : text.size() && text[0] == '2' ? kCloud : kRain});
+                                      ? &kSun
+                                      : text.size() && text[0] == '2' ? &kCloud : &kRain});
 
     auto x = 10;
 
@@ -454,10 +454,10 @@ struct WeatherPageImpl final : TextPage {
         continue;
       }
       auto &glyph = it->second;
-      _sprites.push_back({.pos = {x, 3}, .sprite = glyph, .scale = {1, 2}});
+      _sprites.push_back({.pos = {x, 3}, .sprite = &glyph, .scale = {1, 2}});
       x += glyph.width + 1;
     }
-    _sprites.push_back({.pos = {x, 3}, .sprite = kDegrees});
+    _sprites.push_back({.pos = {x, 3}, .sprite = &kDegrees});
   }
 
  private:
@@ -479,7 +479,7 @@ struct TextPageImpl final : TextPage {
         continue;
       }
       auto &glyph = it->second;
-      _sprites.push_back({.pos = {x, 3}, .sprite = glyph, .scale = {1, 2}});
+      _sprites.push_back({.pos = {x, 3}, .sprite = &glyph, .scale = {1, 2}});
       x += glyph.width + 1;
     }
   }
