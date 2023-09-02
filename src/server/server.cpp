@@ -44,7 +44,7 @@ struct ServerImpl : Server {
   async::Scheduler &_main_scheduler;
   OnRequest _on_request;
   asio::io_context _ctx;
-  tcp::acceptor _acceptor{_ctx, tcp::endpoint(tcp::v4(), 0)};
+  tcp::acceptor _acceptor{_ctx, tcp::endpoint(tcp::v4(), 8080)};
   std::unique_ptr<async::Thread> _thread;
   async::Lifetime _asio_work;
   async::Lifetime _main_work;
