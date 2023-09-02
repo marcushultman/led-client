@@ -43,14 +43,17 @@ std::unique_ptr<SpotiLED> SpotiLED::create() {
 
 // static_presenter.cpp
 
-std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led, uint8_t brightness) {
+std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led,
+                                                         Page &page,
+                                                         uint8_t brightness) {
   class StaticPresenterImpl final : public StaticPresenter {
    public:
-    StaticPresenterImpl(SpotiLED &led, uint8_t brightness) : _led{led}, _brightness{brightness} {}
+    StaticPresenterImpl(SpotiLED &led, Page &page, uint8_t brightness)
+        : _led{led}, _page{page}, _brightness{brightness} {}
 
-    void present(Page &page) {
+    void present() {
       _led.clear();
-      for (auto &placement : page.sprites()) {
+      for (auto &placement : _page.sprites()) {
         if (!placement.sprite) {
           continue;
         }
@@ -66,9 +69,10 @@ std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led, uint8_t 
 
    private:
     SpotiLED &_led;
+    Page &_page;
     uint8_t _brightness = 0;
   };
-  return std::make_unique<StaticPresenterImpl>(led, brightness);
+  return std::make_unique<StaticPresenterImpl>(led, page, brightness);
 };
 
 // rolling_presenter.cpp
@@ -101,9 +105,9 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
           _brightness{brightness},
           _logo_brightness{logo_brightness},
           _started{std::chrono::system_clock::now()},
-          _render{scheduler.schedule([this] { present(_page); }, {.period = 200ms})} {}
+          _render{scheduler.schedule([this] { present(); }, {.period = 200ms})} {}
 
-    void present(Page &) {
+    void present() {
       _led.clear();
       _led.setLogo({_logo_brightness, _logo_brightness, _logo_brightness});
 

@@ -23,8 +23,6 @@ struct Scheduler {
 struct Thread {
   virtual ~Thread() = default;
   virtual Scheduler &scheduler() = 0;
-  virtual void join() = 0;
-  virtual void stop() = 0;
 
   static std::unique_ptr<Thread> create(std::string_view name = "");
 };

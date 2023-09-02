@@ -110,9 +110,6 @@ class ThreadImpl final : public Thread {
 
   Scheduler &scheduler() final { return *_scheduler; }
 
-  void join() final { _thread.join(); }
-  void stop() final { _scheduler->stop(); }
-
  private:
   std::thread _thread;
   std::unique_ptr<SchedulerImpl> _scheduler = std::make_unique<SchedulerImpl>();
