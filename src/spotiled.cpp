@@ -1,6 +1,7 @@
 #include "spotiled.h"
 
 #include <array>
+#include <iostream>
 #include <iterator>
 #include <vector>
 
@@ -74,27 +75,35 @@ std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led, uint8_t 
 
 namespace {
 
+using namespace std::chrono_literals;
+
 const auto kScrollSpeed = 0.005;
 
 }  // namespace
 
-std::unique_ptr<RollingPresenter> RollingPresenter::create(SpotiLED &led,
+std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &scheduler,
+                                                           SpotiLED &led,
+                                                           Page &page,
                                                            Direction direction,
                                                            uint8_t brightness,
                                                            uint8_t logo_brightness) {
   class RollingPresenterImpl final : public RollingPresenter {
    public:
-    RollingPresenterImpl(SpotiLED &led,
+    RollingPresenterImpl(async::Scheduler &scheduler,
+                         SpotiLED &led,
+                         Page &page,
                          Direction direction,
                          uint8_t brightness,
                          uint8_t logo_brightness)
         : _led{led},
+          _page{page},
           _direction{direction},
           _brightness{brightness},
           _logo_brightness{logo_brightness},
-          _started{std::chrono::system_clock::now()} {}
+          _started{std::chrono::system_clock::now()},
+          _render{scheduler.schedule([this] { present(_page); }, {.period = 200ms})} {}
 
-    void present(Page &page) {
+    void present(Page &) {
       _led.clear();
       _led.setLogo({_logo_brightness, _logo_brightness, _logo_brightness});
 
@@ -104,7 +113,7 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(SpotiLED &led,
       // todo: respect direction
       auto offset = Coord{23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + 30)), 0};
 
-      for (auto &placement : page.sprites()) {
+      for (auto &placement : _page.sprites()) {
         if (!placement.sprite) {
           continue;
         }
@@ -120,10 +129,13 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(SpotiLED &led,
 
    private:
     SpotiLED &_led;
+    Page &_page;
     Direction _direction;
     uint8_t _brightness;
     uint8_t _logo_brightness;
     std::chrono::system_clock::time_point _started;
+    async::Lifetime _render;
   };
-  return std::make_unique<RollingPresenterImpl>(led, direction, brightness, logo_brightness);
+  return std::make_unique<RollingPresenterImpl>(scheduler, led, page, direction, brightness,
+                                                logo_brightness);
 }

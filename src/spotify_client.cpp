@@ -204,7 +204,6 @@ class SpotifyClientImpl final : public SpotifyClient {
 
   void renderScannable();
 
-  void displayString(const std::string &s);
   void displayScannable();
 
   http::Http &_http;
@@ -222,7 +221,6 @@ class SpotifyClientImpl final : public SpotifyClient {
   std::array<uint8_t, 23> _lengths0, _lengths1;
 
   async::Lifetime _main_loop;
-  async::Lifetime _rendering_work;
 
   std::unique_ptr<http::Request> _request;
 
@@ -237,8 +235,8 @@ class SpotifyClientImpl final : public SpotifyClient {
 
   async::Scheduler &_main_scheduler;
 
-  std::unique_ptr<RollingPresenter> _text_presenter;
   std::unique_ptr<font::TextPage> _text = font::TextPage::create();
+  std::unique_ptr<RollingPresenter> _text_presenter;
 };
 
 std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_scheduler,
@@ -279,7 +277,7 @@ void SpotifyClientImpl::scheduleAuthRetry(std::chrono::milliseconds delay) {
   _main_loop = _main_scheduler.schedule(
       [this] {
         std::cerr << "failed to authenticate. retrying..." << std::endl;
-        entrypoint();
+        authenticate();
       },
       {.delay = delay});
 }
@@ -316,9 +314,10 @@ void SpotifyClientImpl::authenticateCode(const std::string &device_code,
                                          const std::string &user_code,
                                          const std::chrono::seconds &expires_in,
                                          const std::chrono::seconds &interval) {
-  _text_presenter =
-      RollingPresenter::create(*_led, Direction::kHorizontal, _brightness, _logo_brightness);
-  displayString(user_code);
+  _text->setText(user_code);
+  _text_presenter = RollingPresenter::create(_main_scheduler, *_led, *_text, Direction::kHorizontal,
+                                             _brightness, _logo_brightness);
+
   fetchToken(device_code, user_code, expires_in, interval);
 }
 
@@ -365,6 +364,8 @@ void SpotifyClientImpl::onPollTokenResponse(http::Response response) {
                                                 : scheduleAuthRetry();
   }
 
+  _text_presenter.reset();
+
   std::cerr << "access_token: " << res.access_token << std::endl;
   std::cerr << "refresh_token: " << res.refresh_token << std::endl;
 
@@ -377,13 +378,8 @@ void SpotifyClientImpl::onPollTokenResponse(http::Response response) {
 void SpotifyClientImpl::displayDeviceCodeForInterval() {
   using namespace std::chrono_literals;
 
-  _rendering_work =
-      _main_scheduler.schedule([this] { displayString(_auth_state.user_code); }, {.period = 200ms});
-
   _main_loop = _main_scheduler.schedule(
       [this] {
-        _rendering_work = {};
-
         if (std::chrono::system_clock::now() >= _auth_state.expiry) {
           return scheduleAuthRetry();
         }
@@ -539,19 +535,6 @@ void SpotifyClientImpl::renderScannable() {
 
   _main_loop = _main_scheduler.schedule([this] { fetchNowPlaying(true); },
                                         {.delay = std::chrono::seconds{5}});
-}
-
-void SpotifyClientImpl::displayString(const std::string &s) {
-  if (!_text_presenter) {
-    std::cerr << "display string without presenter" << s << std::endl;
-    return;
-  }
-
-  _led->clear();
-  _led->setLogo(Color{_logo_brightness, _logo_brightness, _logo_brightness});
-
-  _text->setText(s);
-  _text_presenter->present(*_text);
 }
 
 void SpotifyClientImpl::displayScannable() {
