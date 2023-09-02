@@ -100,9 +100,12 @@ class ThreadImpl final : public Thread {
  public:
   explicit ThreadImpl(std::string_view name)
       : _thread{[this, name = std::string(name)] {
+#if !__arm__
           pthread_setname_np(name.c_str());
+#endif
           _scheduler->run();
-        }} {}
+        }} {
+  }
   ~ThreadImpl() {
     _scheduler->stop();
     _thread.join();
