@@ -17,6 +17,7 @@ Coord operator*(const Coord &lhs, const Coord &rhs);
 
 using Color = std::array<uint8_t, 3>;
 
+Color operator*(const Color &, const Color &);
 Color operator*(const Color &c, uint8_t s);
 
 constexpr auto kBlack = Color{0, 0, 0};
@@ -61,9 +62,14 @@ struct SpotiLED {
 
 //
 
+using ColorProvider = std::function<Color()>;
+
 struct StaticPresenter {
   virtual ~StaticPresenter() = default;
-  static std::unique_ptr<StaticPresenter> create(SpotiLED &, Page &, u_int8_t brightness);
+  static std::unique_ptr<StaticPresenter> create(SpotiLED &,
+                                                 Page &,
+                                                 ColorProvider brightness,
+                                                 ColorProvider logo_brightness);
 };
 
 enum class Direction {
@@ -77,8 +83,8 @@ struct RollingPresenter {
                                                   SpotiLED &,
                                                   Page &,
                                                   Direction,
-                                                  uint8_t brightness,
-                                                  uint8_t logo_brightness);
+                                                  ColorProvider brightness,
+                                                  ColorProvider logo_brightness);
 };
 
 struct PagedPresenter {

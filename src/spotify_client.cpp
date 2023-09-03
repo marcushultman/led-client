@@ -206,8 +206,8 @@ class SpotifyClientImpl final : public SpotifyClient {
   http::Http &_http;
   SpotiLED &_led;
   jq_state *_jq = nullptr;
-  uint8_t _logo_brightness = 16;
-  uint8_t _brightness = 8;
+  ColorProvider _logo_brightness;
+  ColorProvider _brightness;
   bool _verbose = false;
 
   std::string _access_token;
@@ -244,6 +244,19 @@ std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_sche
   return std::make_unique<SpotifyClientImpl>(main_scheduler, http, led, jq, brightness, verbose);
 }
 
+uint8_t brightnessForTimeOfDay(int hour) {
+  return 32 + (255 - 32) * std::sin(M_PI * ((24 + hour - 3) % 24) / 24);
+}
+
+int getHour() {
+  auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  return std::localtime(&now)->tm_hour;
+}
+
+uint8_t timeOfDayBrightness(uint8_t b, int hour = getHour()) {
+  return (brightnessForTimeOfDay(hour) * b) / 255;
+}
+
 SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
                                      http::Http &http,
                                      SpotiLED &led,
@@ -254,11 +267,17 @@ SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
       _http{http},
       _jq{jq},
       _led{led},
-      _logo_brightness{std::min<uint8_t>(2 * brightness, uint8_t(32))},
-      _brightness{brightness},
+      _logo_brightness{[b = brightness] {
+        auto c = timeOfDayBrightness(b);
+        return Color{c, c, c};
+      }},
+      _brightness{[b = 3 * brightness / 4] {
+        auto c = timeOfDayBrightness(b);
+        return Color{c, c, c};
+      }},
       _verbose{verbose} {
-  std::cout << "Using logo brightness: " << int(_logo_brightness)
-            << ", brightness: " << int(_brightness) << std::endl;
+  std::cout << "Using logo brightness: " << int(_logo_brightness()[0])
+            << ", brightness: " << int(_brightness()[0]) << std::endl;
   _work = _main_scheduler.schedule([this] { entrypoint(); }, {});
 }
 
@@ -523,13 +542,14 @@ void SpotifyClientImpl::renderScannable() {
 
 void SpotifyClientImpl::displayScannable() {
   _led.clear();
-  _led.setLogo({_logo_brightness, _logo_brightness, _logo_brightness});
+  _led.setLogo(_logo_brightness());
+  auto brightness = _brightness();
 
   for (auto col = 0; col < 23; ++col) {
     auto start = 8 - _lengths0[col];
     auto end = 8 + _lengths1[col];
     for (auto y = start; y < end; ++y) {
-      _led.set({.x = col, .y = y}, {_brightness, _brightness, _brightness});
+      _led.set({.x = col, .y = y}, brightness);
     }
   }
   _led.show();
