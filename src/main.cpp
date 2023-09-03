@@ -74,10 +74,7 @@ int main(int argc, char *argv[]) {
       std::transform(text.begin(), text.end(), text.begin(), ::toupper);
       page->setText(text);
 
-      auto color = [b = 3 * brightness / 4] {
-        auto c = timeOfDayBrightness(b);
-        return Color{c, c, c};
-      };
+      auto color = [b = 3 * brightness / 4] { return Color(timeOfDayBrightness(b)); };
 
       runner = std::make_shared<std::vector<async::Lifetime>>(std::vector<async::Lifetime>{
           page, RollingPresenter::create(main_thread->scheduler(), *led, *page,

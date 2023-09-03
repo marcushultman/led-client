@@ -2,6 +2,7 @@
 
 #include <array>
 #include <iterator>
+#include <utility>
 #include <vector>
 
 #include "apa102.h"
@@ -15,13 +16,29 @@ struct Coord {
 Coord operator+(const Coord &lhs, const Coord &rhs);
 Coord operator*(const Coord &lhs, const Coord &rhs);
 
-using Color = std::array<uint8_t, 3>;
+struct Color : public std::array<uint8_t, 3> {
+  using array::array;
+  constexpr Color(uint8_t c) : array({c, c, c}) {}
+  constexpr Color(uint8_t r, uint8_t g, uint8_t b) : array({r, g, b}) {}
 
-Color operator*(const Color &, const Color &);
-Color operator*(const Color &c, uint8_t s);
+  constexpr Color operator*(const Color &) const;
+  constexpr Color operator*(uint8_t) const;
 
-constexpr auto kBlack = Color{0, 0, 0};
-constexpr auto kWhite = Color{255, 255, 255};
+  template <std::size_t I>
+  std::tuple_element_t<I, Color> &get() {
+    return at(I);
+  }
+};
+
+namespace std {
+template <>
+struct tuple_size<Color> : std::integral_constant<std::size_t, 3> {};
+template <size_t Index>
+struct tuple_element<Index, Color> : std::type_identity<uint8_t> {};
+}  // namespace std
+
+constexpr auto kBlack = Color(0);
+constexpr auto kWhite = Color(255);
 
 struct Section {
   Color color;
