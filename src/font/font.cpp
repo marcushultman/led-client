@@ -474,7 +474,7 @@ struct TextPageImpl final : TextPage {
     _sprites.reserve(text.size());
 
     for (auto x = 0, n = 0; n < text.size(); ++n) {
-      if (text[n] == ' ') {
+      if (text[n] == ' ' || text[n] == '+') {
         x += 3;
         continue;
       }
