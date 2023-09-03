@@ -10,6 +10,7 @@
 
 #include "credentials.h"
 #include "font/font.h"
+#include "time_of_day_brightness.h"
 
 extern "C" {
 #include <jq.h>
@@ -243,19 +244,6 @@ std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_sche
     return nullptr;
   }
   return std::make_unique<SpotifyClientImpl>(main_scheduler, http, led, jq, brightness, verbose);
-}
-
-uint8_t brightnessForTimeOfDay(int hour) {
-  return 32 + (255 - 32) * std::sin(M_PI * ((24 + hour - 3) % 24) / 24);
-}
-
-int getHour() {
-  auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  return std::localtime(&now)->tm_hour;
-}
-
-uint8_t timeOfDayBrightness(uint8_t b, int hour = getHour()) {
-  return (brightnessForTimeOfDay(hour) * b) / 255;
 }
 
 SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
