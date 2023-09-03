@@ -5,7 +5,9 @@
 #include <future>
 #include <iostream>
 #include <string>
+#include <vector>
 
+#include "font/font.h"
 #include "http/http.h"
 #include "server/server.h"
 #include "spotify_client.h"
@@ -61,10 +63,26 @@ int main(int argc, char *argv[]) {
   auto led = SpotiLED::create();
 
   // mode
-  int mode = -1;
+  int mode = 0;
   std::shared_ptr<void> runner;
-  auto next_mode = [&] {
-    mode = (mode + 1) % 2;
+  auto next_mode = [&](ServerRequest req) {
+    if (req.method == "POST" && req.body.find("text") == 0) {
+      auto text = std::string(req.body.substr(req.body.find_first_of("=") + 1));
+
+      std::shared_ptr<font::TextPage> page = font::TextPage::create();
+      std::transform(text.begin(), text.end(), text.begin(), ::toupper);
+      page->setText(text);
+
+      runner = std::make_shared<std::vector<async::Lifetime>>(std::vector<async::Lifetime>{
+          page, RollingPresenter::create(
+                    main_thread->scheduler(), *led, *page, Direction::kHorizontal,
+                    [] { return kWhite; }, [] { return kWhite; })});
+      return;
+    }
+    if (req.path != "/mode") {
+      return;
+    }
+    mode = req.action >= 0 ? req.action : (mode + 1) % 2;
     switch (mode) {
       case 0:
         led->clear();
@@ -75,7 +93,7 @@ int main(int argc, char *argv[]) {
         return;
     }
   };
-  next_mode();
+  next_mode(ServerRequest{});
 
   auto server = makeServer(main_thread->scheduler(), next_mode);
   std::cout << "Listening on port: " << server->port() << std::endl;
