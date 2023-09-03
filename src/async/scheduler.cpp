@@ -44,10 +44,15 @@ class SchedulerImpl final : public Scheduler {
 
   void run() {
     auto lock = std::unique_lock(_mutex);
+    auto stop_waiting = [this] { return !_queue.empty() || _stop; };
+
     for (;;) {
-      auto next_event = _queue.empty() ? std::chrono::system_clock::now() + std::chrono::seconds(10)
-                                       : _queue.begin()->at;
-      _cv->wait_until(lock, next_event, [this] { return !_queue.empty() || _stop; });
+      if (_queue.empty()) {
+        _cv->wait(lock, stop_waiting);
+      } else {
+        _cv->wait_until(lock, _queue.begin()->at, stop_waiting);
+      }
+
       if (_stop && _queue.empty()) {
         break;
       }
