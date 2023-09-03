@@ -474,6 +474,10 @@ struct TextPageImpl final : TextPage {
     _sprites.reserve(text.size());
 
     for (auto x = 0, n = 0; n < text.size(); ++n) {
+      if (text[n] == ' ') {
+        x += 3;
+        continue;
+      }
       auto it = kAlphaMap.find(text[n]);
       if (it == kAlphaMap.end()) {
         continue;
@@ -506,8 +510,7 @@ int run() {
     }
     page->setText(input);
     auto color_provider = [] { return kWhite; };
-    StaticPresenter::create(
-        *led, *page, color_provider, color_provider);
+    StaticPresenter::create(*led, *page, color_provider, color_provider);
   }
 
   return 0;

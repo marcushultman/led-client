@@ -132,8 +132,14 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now() - _started);
 
+      auto width = 0;
+      for (auto &placement : _page.sprites()) {
+        width = std::max(width, placement.pos.x + (placement.sprite ? placement.sprite->width : 0));
+      }
+
       // todo: respect direction
-      auto offset = Coord{23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + 30)), 0};
+      auto offset =
+          Coord{23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + width)), 0};
 
       for (auto &placement : _page.sprites()) {
         if (!placement.sprite) {
