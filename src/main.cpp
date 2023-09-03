@@ -12,6 +12,7 @@
 #include "server/server.h"
 #include "spotify_client.h"
 #include "spotiled.h"
+#include "time_of_day_brightness.h"
 
 struct SignalHandler {
   using Callback = std::function<void(int)>;
@@ -73,10 +74,14 @@ int main(int argc, char *argv[]) {
       std::transform(text.begin(), text.end(), text.begin(), ::toupper);
       page->setText(text);
 
+      auto color = [b = 3 * brightness / 4] {
+        auto c = timeOfDayBrightness(b);
+        return Color{c, c, c};
+      };
+
       runner = std::make_shared<std::vector<async::Lifetime>>(std::vector<async::Lifetime>{
-          page, RollingPresenter::create(
-                    main_thread->scheduler(), *led, *page, Direction::kHorizontal,
-                    [] { return kWhite; }, [] { return kWhite; })});
+          page, RollingPresenter::create(main_thread->scheduler(), *led, *page,
+                                         Direction::kHorizontal, color, color)});
       return;
     }
     if (req.path != "/mode") {
