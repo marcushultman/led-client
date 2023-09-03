@@ -256,14 +256,8 @@ SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
       _http{http},
       _jq{jq},
       _led{led},
-      _logo_brightness{[b = brightness] {
-        auto c = timeOfDayBrightness(b);
-        return Color{c, c, c};
-      }},
-      _brightness{[b = 3 * brightness / 4] {
-        auto c = timeOfDayBrightness(b);
-        return Color{c, c, c};
-      }},
+      _logo_brightness{[b = brightness] { return timeOfDayBrightness(b); }},
+      _brightness{[b = 3 * brightness / 4] { return timeOfDayBrightness(b); }},
       _verbose{verbose} {
   std::cout << "Using logo brightness: " << int(_logo_brightness()[0])
             << ", brightness: " << int(_brightness()[0]) << std::endl;

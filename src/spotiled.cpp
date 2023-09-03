@@ -10,16 +10,16 @@
 Coord operator+(const Coord &lhs, const Coord &rhs) { return {lhs.x + rhs.x, lhs.y + rhs.y}; }
 Coord operator*(const Coord &lhs, const Coord &rhs) { return {lhs.x * rhs.x, lhs.y * rhs.y}; }
 
-Color operator*(const Color &lhs, const Color &rhs) {
-  return {static_cast<uint8_t>(static_cast<int>(lhs[0]) * rhs[0] / 255),
-          static_cast<uint8_t>(static_cast<int>(lhs[1]) * rhs[1] / 255),
-          static_cast<uint8_t>(static_cast<int>(lhs[2]) * rhs[2] / 255)};
+constexpr Color Color::operator*(const Color &rhs) const {
+  return {static_cast<uint8_t>(static_cast<int>(at(0)) * rhs[0] / 255),
+          static_cast<uint8_t>(static_cast<int>(at(1)) * rhs[1] / 255),
+          static_cast<uint8_t>(static_cast<int>(at(2)) * rhs[2] / 255)};
 }
 
-Color operator*(const Color &c, uint8_t s) {
-  return {static_cast<uint8_t>(static_cast<int>(c[0]) * s / 255),
-          static_cast<uint8_t>(static_cast<int>(c[1]) * s / 255),
-          static_cast<uint8_t>(static_cast<int>(c[2]) * s / 255)};
+constexpr Color Color::operator*(uint8_t s) const {
+  return {static_cast<uint8_t>(static_cast<int>(at(0)) * s / 255),
+          static_cast<uint8_t>(static_cast<int>(at(1)) * s / 255),
+          static_cast<uint8_t>(static_cast<int>(at(2)) * s / 255)};
 }
 
 std::unique_ptr<SpotiLED> SpotiLED::create() {
