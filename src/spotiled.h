@@ -7,6 +7,7 @@
 
 #include "apa102.h"
 #include "async/scheduler.h"
+#include "util/color.h"
 
 struct Coord {
   int x = 0;
@@ -16,29 +17,9 @@ struct Coord {
 Coord operator+(const Coord &lhs, const Coord &rhs);
 Coord operator*(const Coord &lhs, const Coord &rhs);
 
-struct Color : public std::array<uint8_t, 3> {
-  using array::array;
-  constexpr Color(uint8_t c) : array({c, c, c}) {}
-  constexpr Color(uint8_t r, uint8_t g, uint8_t b) : array({r, g, b}) {}
+constexpr auto kNormalScale = Coord{1, 1};
 
-  constexpr Color operator*(const Color &) const;
-  constexpr Color operator*(uint8_t) const;
-
-  template <std::size_t I>
-  std::tuple_element_t<I, Color> &get() {
-    return at(I);
-  }
-};
-
-namespace std {
-template <>
-struct tuple_size<Color> : std::integral_constant<std::size_t, 3> {};
-template <size_t Index>
-struct tuple_element<Index, Color> : std::type_identity<uint8_t> {};
-}  // namespace std
-
-constexpr auto kBlack = Color(0);
-constexpr auto kWhite = Color(255);
+//
 
 struct Section {
   Color color;
@@ -51,8 +32,6 @@ struct Sprite {
 };
 
 //
-
-constexpr auto kNormalScale = Coord{1, 1};
 
 struct Page {
   struct SpritePlacement {
@@ -79,14 +58,22 @@ struct SpotiLED {
 
 //
 
-using ColorProvider = std::function<Color()>;
+struct BrightnessProvider {
+  virtual ~BrightnessProvider() = default;
+  virtual Color logoBrightness() const = 0;
+  virtual Color brightness() const = 0;
+
+  static std::unique_ptr<BrightnessProvider> create(uint8_t brightness);
+};
+
+//
 
 struct StaticPresenter {
   virtual ~StaticPresenter() = default;
   static std::unique_ptr<StaticPresenter> create(SpotiLED &,
+                                                 BrightnessProvider &,
                                                  Page &,
-                                                 ColorProvider brightness,
-                                                 ColorProvider logo_brightness);
+                                                 Coord offset);
 };
 
 enum class Direction {
@@ -98,10 +85,10 @@ struct RollingPresenter {
   virtual ~RollingPresenter() = default;
   static std::unique_ptr<RollingPresenter> create(async::Scheduler &scheduler,
                                                   SpotiLED &,
+                                                  BrightnessProvider &,
                                                   Page &,
                                                   Direction,
-                                                  ColorProvider brightness,
-                                                  ColorProvider logo_brightness);
+                                                  Coord offset);
 };
 
 struct PagedPresenter {
