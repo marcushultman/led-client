@@ -6,20 +6,20 @@
 #include <vector>
 
 #include "apa102.h"
+#include "time_of_day_brightness.h"
 
 Coord operator+(const Coord &lhs, const Coord &rhs) { return {lhs.x + rhs.x, lhs.y + rhs.y}; }
 Coord operator*(const Coord &lhs, const Coord &rhs) { return {lhs.x * rhs.x, lhs.y * rhs.y}; }
 
-constexpr Color Color::operator*(const Color &rhs) const {
-  return {static_cast<uint8_t>(static_cast<int>(at(0)) * rhs[0] / 255),
-          static_cast<uint8_t>(static_cast<int>(at(1)) * rhs[1] / 255),
-          static_cast<uint8_t>(static_cast<int>(at(2)) * rhs[2] / 255)};
-}
+std::unique_ptr<BrightnessProvider> BrightnessProvider::create(uint8_t brightness) {
+  struct BrightnessProviderImpl final : public BrightnessProvider {
+    explicit BrightnessProviderImpl(uint8_t brightness) : _brightness{brightness} {}
+    Color logoBrightness() const final { return timeOfDayBrightness(_brightness); }
+    Color brightness() const final { return timeOfDayBrightness(3 * _brightness / 4); }
 
-constexpr Color Color::operator*(uint8_t s) const {
-  return {static_cast<uint8_t>(static_cast<int>(at(0)) * s / 255),
-          static_cast<uint8_t>(static_cast<int>(at(1)) * s / 255),
-          static_cast<uint8_t>(static_cast<int>(at(2)) * s / 255)};
+    uint8_t _brightness = 0;
+  };
+  return std::make_unique<BrightnessProviderImpl>(brightness);
 }
 
 std::unique_ptr<SpotiLED> SpotiLED::create() {
@@ -50,32 +50,27 @@ std::unique_ptr<SpotiLED> SpotiLED::create() {
 // static_presenter.cpp
 
 std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led,
+                                                         BrightnessProvider &brightness,
                                                          Page &page,
-                                                         ColorProvider brightness,
-                                                         ColorProvider logo_brightness) {
+                                                         Coord offset) {
   class StaticPresenterImpl final : public StaticPresenter {
    public:
-    StaticPresenterImpl(SpotiLED &led,
-                        Page &page,
-                        ColorProvider brightness,
-                        ColorProvider logo_brightness)
-        : _led{led},
-          _page{page},
-          _brightness{std::move(brightness)},
-          _logo_brightness{std::move(logo_brightness)} {}
+    StaticPresenterImpl(SpotiLED &led, BrightnessProvider &brightness, Page &page, Coord offset)
+        : _led{led}, _brightness{brightness}, _page{page}, _offset{offset} {}
 
     void present() {
-      auto brightness = _brightness();
-
       _led.clear();
+      _led.setLogo(_brightness.logoBrightness());
+
+      auto brightness = _brightness.brightness();
+
       for (auto &placement : _page.sprites()) {
         if (!placement.sprite) {
           continue;
         }
         for (auto &section : placement.sprite->sections) {
           for (auto pos : section.coords) {
-            auto [r, g, b] = section.color * brightness;
-            _led.set(placement.pos + placement.scale * pos, section.color * brightness);
+            _led.set(_offset + placement.pos + placement.scale * pos, section.color * brightness);
           }
         }
       }
@@ -84,12 +79,11 @@ std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led,
 
    private:
     SpotiLED &_led;
+    BrightnessProvider &_brightness;
     Page &_page;
-    ColorProvider _brightness;
-    ColorProvider _logo_brightness;
+    Coord _offset;
   };
-  return std::make_unique<StaticPresenterImpl>(led, page, std::move(brightness),
-                                               std::move(logo_brightness));
+  return std::make_unique<StaticPresenterImpl>(led, brightness, page, offset);
 };
 
 // rolling_presenter.cpp
@@ -104,31 +98,31 @@ const auto kScrollSpeed = 0.005;
 
 std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &scheduler,
                                                            SpotiLED &led,
+                                                           BrightnessProvider &brightness,
                                                            Page &page,
                                                            Direction direction,
-                                                           ColorProvider brightness,
-                                                           ColorProvider logo_brightness) {
+                                                           Coord offset) {
   class RollingPresenterImpl final : public RollingPresenter {
    public:
     RollingPresenterImpl(async::Scheduler &scheduler,
                          SpotiLED &led,
+                         BrightnessProvider &brightness,
                          Page &page,
                          Direction direction,
-                         ColorProvider brightness,
-                         ColorProvider logo_brightness)
+                         Coord offset)
         : _led{led},
+          _brightness{brightness},
           _page{page},
           _direction{direction},
-          _brightness{std::move(brightness)},
-          _logo_brightness{std::move(logo_brightness)},
+          _offset{offset},
           _started{std::chrono::system_clock::now()},
           _render{scheduler.schedule([this] { present(); }, {.period = 200ms})} {}
 
     void present() {
       _led.clear();
-      _led.setLogo(_logo_brightness());
+      _led.setLogo(_brightness.logoBrightness());
 
-      auto brightness = _brightness();
+      auto brightness = _brightness.brightness();
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now() - _started);
 
@@ -138,7 +132,7 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
       }
 
       // todo: respect direction
-      auto offset =
+      auto scroll_offset =
           Coord{23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + width)), 0};
 
       for (auto &placement : _page.sprites()) {
@@ -147,8 +141,8 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
         }
         for (auto &section : placement.sprite->sections) {
           for (auto pos : section.coords) {
-            auto [r, g, b] = section.color;
-            _led.set(offset + placement.pos + placement.scale * pos, section.color * brightness);
+            _led.set(_offset + scroll_offset + placement.pos + placement.scale * pos,
+                     section.color * brightness);
           }
         }
       }
@@ -157,13 +151,13 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
 
    private:
     SpotiLED &_led;
+    BrightnessProvider &_brightness;
     Page &_page;
     Direction _direction;
-    ColorProvider _brightness;
-    ColorProvider _logo_brightness;
+    Coord _offset;
     std::chrono::system_clock::time_point _started;
     async::Lifetime _render;
   };
-  return std::make_unique<RollingPresenterImpl>(scheduler, led, page, direction,
-                                                std::move(brightness), std::move(logo_brightness));
+  return std::make_unique<RollingPresenterImpl>(scheduler, led, brightness, page, direction,
+                                                offset);
 }

@@ -1,7 +1,6 @@
 #include "server.h"
 
 #include <asio.hpp>
-#include <charconv>
 #include <iostream>
 
 #include "async/scheduler.h"
@@ -30,7 +29,8 @@ struct ServerImpl : Server {
       writeResponse(peer);
       accept();
 
-      std::cout << req.method << " " << req.path << " " << req.action << "\n"
+      std::cout << req.method << " " << req.path << " "
+                << (req.headers.contains("action") ? req.headers["action"] : "") << "\n"
                 << req.body << std::endl;
 
       _main_work = _main_scheduler.schedule([this, req] { _on_request(req); });
@@ -64,9 +64,12 @@ struct ServerImpl : Server {
     buffer.remove_prefix(buffer.find_first_of("\n") + 1);
 
     while (buffer.find('\r') != 0) {
-      if (buffer.find("action") == 0) {
-        std::from_chars(buffer.begin() + 8, buffer.end(), req.action);
+      auto key = buffer.substr(0, buffer.find(":"));
+      auto value = buffer.substr(key.size() + 1);
+      while (value.size() && value.front() == ' ') {
+        value = value.substr(1);
       }
+      req.headers.emplace(key, value);
       buffer.remove_prefix(buffer.find_first_of("\n") + 1);
     }
 

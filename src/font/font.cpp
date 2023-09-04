@@ -509,8 +509,8 @@ int run() {
       return 0;
     }
     page->setText(input);
-    auto color_provider = [] { return kWhite; };
-    StaticPresenter::create(*led, *page, color_provider, color_provider);
+    auto brightness = BrightnessProvider::create(1);
+    StaticPresenter::create(*led, *brightness, *page, {});
   }
 
   return 0;

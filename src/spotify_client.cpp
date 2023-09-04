@@ -10,7 +10,6 @@
 
 #include "credentials.h"
 #include "font/font.h"
-#include "time_of_day_brightness.h"
 
 extern "C" {
 #include <jq.h>
@@ -160,8 +159,8 @@ class SpotifyClientImpl final : public SpotifyClient {
   SpotifyClientImpl(async::Scheduler &main_scheduler,
                     http::Http &http,
                     SpotiLED &led,
+                    BrightnessProvider &brightness,
                     jq_state *jq,
-                    uint8_t brightness,
                     bool verbose);
   ~SpotifyClientImpl();
 
@@ -207,9 +206,8 @@ class SpotifyClientImpl final : public SpotifyClient {
   async::Scheduler &_main_scheduler;
   http::Http &_http;
   SpotiLED &_led;
+  BrightnessProvider &_brightness;
   jq_state *_jq = nullptr;
-  ColorProvider _logo_brightness;
-  ColorProvider _brightness;
   bool _verbose = false;
 
   std::string _access_token;
@@ -237,30 +235,29 @@ class SpotifyClientImpl final : public SpotifyClient {
 std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_scheduler,
                                                      http::Http &http,
                                                      SpotiLED &led,
-                                                     uint8_t brightness,
+                                                     BrightnessProvider &brightness,
                                                      bool verbose) {
   auto jq = jq_init();
   if (!jq) {
     return nullptr;
   }
-  return std::make_unique<SpotifyClientImpl>(main_scheduler, http, led, jq, brightness, verbose);
+  return std::make_unique<SpotifyClientImpl>(main_scheduler, http, led, brightness, jq, verbose);
 }
 
 SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
                                      http::Http &http,
                                      SpotiLED &led,
+                                     BrightnessProvider &brightness,
                                      jq_state *jq,
-                                     uint8_t brightness,
                                      bool verbose)
     : _main_scheduler{main_scheduler},
       _http{http},
-      _jq{jq},
       _led{led},
-      _logo_brightness{[b = brightness] { return timeOfDayBrightness(b); }},
-      _brightness{[b = 3 * brightness / 4] { return timeOfDayBrightness(b); }},
+      _brightness{brightness},
+      _jq{jq},
       _verbose{verbose} {
-  std::cout << "Using logo brightness: " << int(_logo_brightness()[0])
-            << ", brightness: " << int(_brightness()[0]) << std::endl;
+  std::cout << "Using logo brightness: " << int(_brightness.logoBrightness()[0])
+            << ", brightness: " << int(_brightness.brightness()[0]) << std::endl;
   _work = _main_scheduler.schedule([this] { entrypoint(); }, {});
 }
 
@@ -305,8 +302,8 @@ void SpotifyClientImpl::onAuthResponse(http::Response response) {
   std::cerr << "url: " << data.verification_url_prefilled << std::endl;
 
   _text->setText(data.user_code);
-  _text_presenter = RollingPresenter::create(_main_scheduler, _led, *_text, Direction::kHorizontal,
-                                             _brightness, _logo_brightness);
+  _text_presenter = RollingPresenter::create(_main_scheduler, _led, _brightness, *_text,
+                                             Direction::kHorizontal, {});
 
   fetchToken(data.device_code, data.user_code, data.expires_in, data.interval);
 }
@@ -525,8 +522,8 @@ void SpotifyClientImpl::renderScannable() {
 
 void SpotifyClientImpl::displayScannable() {
   _led.clear();
-  _led.setLogo(_logo_brightness());
-  auto brightness = _brightness();
+  _led.setLogo(_brightness.logoBrightness());
+  auto brightness = _brightness.brightness();
 
   for (auto col = 0; col < 23; ++col) {
     auto start = 8 - _lengths0[col];

@@ -12,6 +12,6 @@ struct SpotifyClient {
   static std::unique_ptr<SpotifyClient> create(async::Scheduler &main_scheduler,
                                                http::Http &,
                                                SpotiLED &led,
-                                               uint8_t brightness,
+                                               BrightnessProvider &brightness,
                                                bool verbose);
 };

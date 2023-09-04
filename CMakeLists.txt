@@ -25,6 +25,7 @@ set(SOURCES
   http/http.h
   server/server.cpp
   server/server.h
+  util/color.h
   apa102.cpp
   apa102.h
   main.cpp

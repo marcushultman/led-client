@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include <charconv>
 #include <csignal>
 #include <cstdlib>
 #include <future>
@@ -12,7 +13,6 @@
 #include "server/server.h"
 #include "spotify_client.h"
 #include "spotiled.h"
-#include "time_of_day_brightness.h"
 
 struct SignalHandler {
   using Callback = std::function<void(int)>;
@@ -60,8 +60,13 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  auto brightness_provider = BrightnessProvider::create(brightness);
   auto main_thread = async::Thread::create("main");
   auto led = SpotiLED::create();
+  auto &main_scheduler = main_thread->scheduler();
+
+  // for ad-hoc text rendering
+  auto page = font::TextPage::create();
 
   // mode
   int mode = 0;
@@ -69,39 +74,56 @@ int main(int argc, char *argv[]) {
   auto next_mode = [&](ServerRequest req) {
     if (req.method == "POST" && req.body.find("text") == 0) {
       auto text = std::string(req.body.substr(req.body.find_first_of("=") + 1));
-
-      std::shared_ptr<font::TextPage> page = font::TextPage::create();
       std::transform(text.begin(), text.end(), text.begin(), ::toupper);
       page->setText(text);
 
-      auto color = [b = 3 * brightness / 4] { return Color(timeOfDayBrightness(b)); };
+      std::vector<async::Lifetime> lifetimes;
 
-      runner = std::make_shared<std::vector<async::Lifetime>>(std::vector<async::Lifetime>{
-          page, RollingPresenter::create(main_thread->scheduler(), *led, *page,
-                                         Direction::kHorizontal, color, color)});
+      if (auto it = req.headers.find("delay"); it != req.headers.end()) {
+        int delay_s = 0;
+        std::from_chars(it->second.begin(), it->second.end(), delay_s);
+        lifetimes.push_back(main_scheduler.schedule(
+            [&] {
+              runner.reset();
+              led->clear();
+              led->show();
+            },
+            {.delay = std::chrono::seconds(delay_s)}));
+      }
+
+      lifetimes.push_back(RollingPresenter::create(main_scheduler, *led, *brightness_provider,
+                                                   *page, Direction::kHorizontal, {}));
+
+      runner = std::make_shared<std::vector<async::Lifetime>>(std::move(lifetimes));
       return;
     }
     if (req.path != "/mode") {
       return;
     }
-    mode = req.action >= 0 ? req.action : (mode + 1) % 2;
+
+    if (auto it = req.headers.find("action"); it != req.headers.end()) {
+      std::from_chars(it->second.begin(), it->second.end(), mode);
+    } else {
+      mode = (mode + 1) % 2;
+    }
+
     switch (mode) {
       case 0:
         led->clear();
         led->show();
         return runner.reset();
       case 1:
-        runner = SpotifyClient::create(main_thread->scheduler(), *http, *led, brightness, verbose);
+        runner = SpotifyClient::create(main_scheduler, *http, *led, *brightness_provider, verbose);
         return;
     }
   };
   next_mode(ServerRequest{});
 
-  auto server = makeServer(main_thread->scheduler(), next_mode);
+  auto server = makeServer(main_scheduler, next_mode);
   std::cout << "Listening on port: " << server->port() << std::endl;
 
   auto interrupt = std::promise<int>();
-  auto sig = SignalHandler(main_thread->scheduler(), [&](auto) {
+  auto sig = SignalHandler(main_scheduler, [&](auto) {
     server.reset();
     interrupt.set_value(0);
   });

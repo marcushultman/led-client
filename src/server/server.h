@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <unordered_map>
 
 #include "async/scheduler.h"
 
@@ -13,8 +14,8 @@ struct Server {
 struct ServerRequest {
   std::string_view method;
   std::string_view path;
+  std::unordered_map<std::string, std::string_view> headers;
   std::string_view body;
-  int action = -1;
 };
 
 using OnRequest = std::function<void(ServerRequest)>;
