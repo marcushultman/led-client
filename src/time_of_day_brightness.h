@@ -5,7 +5,7 @@
 #include <cstdint>
 
 inline uint8_t brightnessForTimeOfDay(int hour) {
-  return 32 + (255 - 32) * std::sin(M_PI * ((24 + hour - 3) % 24) / 24);
+  return 32 + (255 - 32) * std::pow(std::sin(M_PI * hour / 24), 3);
 }
 
 inline int getHour() {
