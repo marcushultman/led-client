@@ -70,10 +70,8 @@ struct BrightnessProvider {
 
 struct StaticPresenter {
   virtual ~StaticPresenter() = default;
-  static std::unique_ptr<StaticPresenter> create(SpotiLED &,
-                                                 BrightnessProvider &,
-                                                 Page &,
-                                                 Coord offset);
+  static std::unique_ptr<StaticPresenter> create(
+      SpotiLED &, BrightnessProvider &, Page &, Coord offset = {}, Coord scale = kNormalScale);
 };
 
 enum class Direction {
@@ -88,9 +86,15 @@ struct RollingPresenter {
                                                   BrightnessProvider &,
                                                   Page &,
                                                   Direction,
-                                                  Coord offset);
+                                                  Coord offset = {},
+                                                  Coord scale = kNormalScale);
 };
 
 struct PagedPresenter {
-  static std::unique_ptr<PagedPresenter> create(SpotiLED &);
+  static std::unique_ptr<PagedPresenter> create(async::Scheduler &scheduler,
+                                                SpotiLED &,
+                                                BrightnessProvider &,
+                                                Page &from,
+                                                Page &to,
+                                                Direction);
 };
