@@ -25,6 +25,8 @@ set(SOURCES
   http/http.h
   server/server.cpp
   server/server.h
+  storage/string_set.cpp
+  storage/string_set.h
   util/color.h
   apa102.cpp
   apa102.h
@@ -54,3 +56,13 @@ target_link_libraries(spoticode
 if (PI)
   target_link_libraries(spoticode spidev-lib++)
 endif()
+
+add_executable(string_set_test
+  src/storage/string_set.cpp
+  src/storage/string_set.h
+  src/tests/storage/string_set_test.cpp
+)
+
+target_include_directories(string_set_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
