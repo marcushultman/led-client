@@ -49,14 +49,13 @@ std::unique_ptr<SpotiLED> SpotiLED::create() {
 
 // static_presenter.cpp
 
-std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led,
-                                                         BrightnessProvider &brightness,
-                                                         Page &page,
-                                                         Coord offset) {
+std::unique_ptr<StaticPresenter> StaticPresenter::create(
+    SpotiLED &led, BrightnessProvider &brightness, Page &page, Coord offset, Coord scale) {
   class StaticPresenterImpl final : public StaticPresenter {
    public:
-    StaticPresenterImpl(SpotiLED &led, BrightnessProvider &brightness, Page &page, Coord offset)
-        : _led{led}, _brightness{brightness}, _page{page}, _offset{offset} {}
+    StaticPresenterImpl(
+        SpotiLED &led, BrightnessProvider &brightness, Page &page, Coord offset, Coord scale)
+        : _led{led}, _brightness{brightness}, _page{page}, _offset{offset}, _scale{scale} {}
 
     void present() {
       _led.clear();
@@ -70,7 +69,8 @@ std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led,
         }
         for (auto &section : placement.sprite->sections) {
           for (auto pos : section.coords) {
-            _led.set(_offset + placement.pos + placement.scale * pos, section.color * brightness);
+            _led.set(_offset + _scale * (placement.pos + placement.scale * pos),
+                     section.color * brightness);
           }
         }
       }
@@ -82,8 +82,9 @@ std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led,
     BrightnessProvider &_brightness;
     Page &_page;
     Coord _offset;
+    Coord _scale;
   };
-  return std::make_unique<StaticPresenterImpl>(led, brightness, page, offset);
+  return std::make_unique<StaticPresenterImpl>(led, brightness, page, offset, scale);
 };
 
 // rolling_presenter.cpp
@@ -101,7 +102,8 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
                                                            BrightnessProvider &brightness,
                                                            Page &page,
                                                            Direction direction,
-                                                           Coord offset) {
+                                                           Coord offset,
+                                                           Coord scale) {
   class RollingPresenterImpl final : public RollingPresenter {
    public:
     RollingPresenterImpl(async::Scheduler &scheduler,
@@ -109,12 +111,14 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
                          BrightnessProvider &brightness,
                          Page &page,
                          Direction direction,
-                         Coord offset)
+                         Coord offset,
+                         Coord scale)
         : _led{led},
           _brightness{brightness},
           _page{page},
           _direction{direction},
           _offset{offset},
+          _scale{scale},
           _started{std::chrono::system_clock::now()},
           _render{scheduler.schedule([this] { present(); }, {.period = 200ms})} {}
 
@@ -141,7 +145,7 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
         }
         for (auto &section : placement.sprite->sections) {
           for (auto pos : section.coords) {
-            _led.set(_offset + scroll_offset + placement.pos + placement.scale * pos,
+            _led.set(_offset + _scale * (scroll_offset + placement.pos + placement.scale * pos),
                      section.color * brightness);
           }
         }
@@ -155,9 +159,10 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
     Page &_page;
     Direction _direction;
     Coord _offset;
+    Coord _scale;
     std::chrono::system_clock::time_point _started;
     async::Lifetime _render;
   };
-  return std::make_unique<RollingPresenterImpl>(scheduler, led, brightness, page, direction,
-                                                offset);
+  return std::make_unique<RollingPresenterImpl>(scheduler, led, brightness, page, direction, offset,
+                                                scale);
 }
