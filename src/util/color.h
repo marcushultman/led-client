@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
+#include <type_traits>
 
 struct Color : public std::array<uint8_t, 3> {
   using array::array;
