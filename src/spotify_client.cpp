@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <string>
@@ -10,6 +11,7 @@
 
 #include "credentials.h"
 #include "font/font.h"
+#include "storage/string_set.h"
 
 extern "C" {
 #include <jq.h>
@@ -26,6 +28,7 @@ const auto kXWWWFormUrlencoded = "application/x-www-form-urlencoded";
 const auto kAuthorization = "authorization";
 
 struct NowPlaying {
+  int status = 0;
   std::string track_id;
   std::string context_href;
   std::string context;
@@ -35,6 +38,7 @@ struct NowPlaying {
   std::string uri;
   std::chrono::milliseconds progress;
   std::chrono::milliseconds duration;
+  std::array<uint8_t, 23> lengths0, lengths1;
 };
 
 std::string nextStr(jq_state *jq) {
@@ -120,8 +124,8 @@ NowPlaying parseNowPlaying(jq_state *jq, const std::string &buffer, bool verbose
              ".progress_ms,"
              ".item.duration_ms");
   jq_start(jq, input, 0);
-  return {nextStr(jq), nextStr(jq), "",         nextStr(jq), nextStr(jq),
-          nextStr(jq), nextStr(jq), nextMs(jq), nextMs(jq)};
+  return {0,           nextStr(jq), nextStr(jq), "",         nextStr(jq), nextStr(jq),
+          nextStr(jq), nextStr(jq), nextMs(jq),  nextMs(jq), {},          {}};
 }
 
 std::string parseContext(jq_state *jq, const std::string &buffer) {
@@ -150,6 +154,29 @@ std::pair<int, int> makeRange(int col, int upper, int lower) {
   auto end = odd ? lower : upper;
   auto mid = 16 * col + 8;
   return {mid + start, mid + end};
+}
+
+constexpr auto kTokensFilename = "spotify_token";
+
+std::unordered_map<std::string, std::string> loadTokens() {
+  std::unordered_map<std::string, std::string> tokens;
+
+  std::unordered_set<std::string> set;
+  storage::loadSet(set, std::ifstream(kTokensFilename));
+  for (auto token : set) {
+    auto split = token.find('\n');
+    tokens[token.substr(0, split)] = token.substr(split + 1);
+  }
+  return tokens;
+}
+
+void saveTokens(const std::unordered_map<std::string, std::string> &tokens) {
+  std::unordered_set<std::string> set;
+  for (auto &[access_token, refresh_token] : tokens) {
+    set.insert(access_token + "\n" + refresh_token);
+  }
+  auto out = std::ofstream(kTokensFilename);
+  storage::saveSet(set, out);
 }
 
 }  // namespace
@@ -187,21 +214,22 @@ class SpotifyClientImpl final : public SpotifyClient {
   void onPollTokenResponse(http::Response response);
   void scheduleNextPollToken();
 
-  void refreshToken();
+  void refreshToken(const std::string &refresh_token);
   void onRefreshTokenResponse(http::Response response);
 
   void fetchNowPlaying(bool allow_retry);
-  void onNowPlayingResponse(bool allow_retry, http::Response response);
+  void onNowPlayingResponse(bool allow_retry,
+                            const std::string &access_token,
+                            http::Response response);
 
-  void fetchContext(const std::string &url);
-  void onContext(http::Response response);
+  // void fetchContext(const std::string &url);
+  // void onContext(http::Response response);
 
-  void fetchScannable(const std::string &uri);
-  void onScannable(http::Response response);
+  void fetchScannable(const std::string &access_token, const std::string &uri);
+  void onScannable(const std::string &access_token, http::Response response);
 
-  void renderScannable();
-
-  void displayScannable();
+  void renderScannable(const NowPlaying &now_playing);
+  void displayScannable(const NowPlaying &now_playing);
 
   async::Scheduler &_main_scheduler;
   http::Http &_http;
@@ -210,12 +238,10 @@ class SpotifyClientImpl final : public SpotifyClient {
   jq_state *_jq = nullptr;
   bool _verbose = false;
 
-  std::string _access_token;
-  std::string _refresh_token;
+  std::unordered_map<std::string, std::string> _tokens;
   bool _has_played = false;
 
-  NowPlaying _now_playing;
-  std::array<uint8_t, 23> _lengths0, _lengths1;
+  std::unordered_map<std::string, NowPlaying> _now_playing;
 
   struct AuthState {
     std::chrono::system_clock::time_point expiry;
@@ -264,7 +290,8 @@ SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
 SpotifyClientImpl::~SpotifyClientImpl() { jq_teardown(&_jq); }
 
 void SpotifyClientImpl::entrypoint() {
-  _access_token.empty() ? authenticate() : fetchNowPlaying(true);
+  _tokens = loadTokens();
+  _tokens.empty() ? authenticate() : fetchNowPlaying(true);
 }
 
 void SpotifyClientImpl::scheduleAuthRetry(std::chrono::milliseconds delay) {
@@ -354,8 +381,8 @@ void SpotifyClientImpl::onPollTokenResponse(http::Response response) {
   std::cerr << "access_token: " << data.access_token << std::endl;
   std::cerr << "refresh_token: " << data.refresh_token << std::endl;
 
-  _access_token = data.access_token;
-  _refresh_token = data.refresh_token;
+  _tokens[data.access_token] = data.refresh_token;
+  saveTokens(_tokens);
 
   fetchNowPlaying(true);
 }
@@ -371,10 +398,10 @@ void SpotifyClientImpl::scheduleNextPollToken() {
       {.delay = _auth_state.interval});
 }
 
-void SpotifyClientImpl::refreshToken() {
+void SpotifyClientImpl::refreshToken(const std::string &refresh_token) {
   const auto data = std::string{"client_id="} + credentials::kClientId +
                     "&client_secret=" + credentials::kClientSecret +
-                    "&refresh_token=" + _refresh_token + "&grant_type=refresh_token";
+                    "&refresh_token=" + refresh_token + "&grant_type=refresh_token";
 
   _request = _http.request({
       .method = http::Method::POST,
@@ -395,49 +422,69 @@ void SpotifyClientImpl::onRefreshTokenResponse(http::Response response) {
   auto data = parseTokenData(_jq, response.body);
   std::cerr << "access_token: " << data.access_token << std::endl;
 
-  _access_token = data.access_token;
+  _tokens[data.access_token] = data.refresh_token;
+  saveTokens(_tokens);
 
   fetchNowPlaying(false);
 }
 
 void SpotifyClientImpl::fetchNowPlaying(bool allow_retry) {
-  _request = _http.request(http::RequestInit{
-      .url = kPlayerUrl,
-      .headers = {{kAuthorization, "Bearer " + _access_token}},
-      .post_to = _main_scheduler,
-      .callback = [this, allow_retry](
-                      auto response) { onNowPlayingResponse(allow_retry, std::move(response)); },
-  });
+  for (auto &[access_token, _] : _tokens) {
+    if (_now_playing[access_token].status == 204) {
+      continue;
+    }
+    _request = _http.request(http::RequestInit{
+        .url = kPlayerUrl,
+        .headers = {{kAuthorization, "Bearer " + access_token}},
+        .post_to = _main_scheduler,
+        .callback =
+            [this, allow_retry, access_token = access_token](auto response) {
+              onNowPlayingResponse(allow_retry, access_token, std::move(response));
+            },
+    });
+    return;
+  }
+  // no one is playing
+  authenticate();
 }
 
-void SpotifyClientImpl::onNowPlayingResponse(bool allow_retry, http::Response response) {
+void SpotifyClientImpl::onNowPlayingResponse(bool allow_retry,
+                                             const std::string &access_token,
+                                             http::Response response) {
   if (response.status / 100 != 2) {
     if (!allow_retry) {
       std::cerr << "failed to get player state" << std::endl;
       return scheduleAuthRetry();
     }
-    return refreshToken();
+    return refreshToken(access_token);
   }
 
+  auto &now_playing = _now_playing[access_token];
+
   if (response.status == 204) {
-    if (!_now_playing.track_id.empty()) {
+    if (!now_playing.track_id.empty()) {
       std::cerr << "nothing is playing" << std::endl;
-      _now_playing = {};
     }
-    return renderScannable();
+    now_playing = {};
+    now_playing.status = response.status;
+    return renderScannable(now_playing);
   }
 
   _has_played = true;
-  auto now_playing = parseNowPlaying(_jq, response.body, _verbose);
+  auto new_now_playing = parseNowPlaying(_jq, response.body, _verbose);
 
-  if (now_playing.track_id == _now_playing.track_id) {
-    _now_playing.progress = now_playing.progress;
-    return renderScannable();
+  if (now_playing.track_id == new_now_playing.track_id) {
+    now_playing.progress = new_now_playing.progress;
+    return renderScannable(now_playing);
   }
-  _now_playing = now_playing;
+  now_playing = new_now_playing;
+  now_playing.status = response.status;
 
-  fetchContext(_now_playing.context_href);
+  // fetchContext(_now_playing.context_href);
+  fetchScannable(access_token, now_playing.uri);
 }
+
+#if 0
 
 void SpotifyClientImpl::fetchContext(const std::string &url) {
   if (url.empty()) {
@@ -462,20 +509,25 @@ void SpotifyClientImpl::onContext(http::Response response) {
   fetchScannable(_now_playing.uri);
 }
 
-void SpotifyClientImpl::fetchScannable(const std::string &uri) {
+#endif
+
+void SpotifyClientImpl::fetchScannable(const std::string &access_token, const std::string &uri) {
   _request = _http.request(http::RequestInit{
       .url = credentials::kScannablesCdnUrl + uri + "?format=svg",
       .post_to = _main_scheduler,
-      .callback = [this](auto response) { onScannable(std::move(response)); },
+      .callback = [this,
+                   access_token](auto response) { onScannable(access_token, std::move(response)); },
   });
 }
 
-void SpotifyClientImpl::onScannable(http::Response response) {
+void SpotifyClientImpl::onScannable(const std::string &access_token, http::Response response) {
+  auto &now_playing = _now_playing[access_token];
+
   if (response.status / 100 != 2) {
     std::cerr << "failed to fetch scannable id, status: " << response.status << std::endl;
-    _lengths0.fill(0);
-    _lengths1.fill(0);
-    return renderScannable();
+    now_playing.lengths0.fill(0);
+    now_playing.lengths1.fill(0);
+    return renderScannable(now_playing);
   }
 
   auto sv = std::string_view(response.body);
@@ -490,44 +542,42 @@ void SpotifyClientImpl::onScannable(http::Response response) {
   for (auto i = 0; i < 23; ++i) {
     sv.remove_prefix(sv.find(" y="));
     sv.remove_prefix(4);
-    _lengths0[i] = map[std::atoi(sv.data())];
+    now_playing.lengths0[i] = map[std::atoi(sv.data())];
     sv.remove_prefix(sv.find("height="));
     sv.remove_prefix(8);
-    _lengths1[i] = map[std::atoi(sv.data())];
+    now_playing.lengths1[i] = map[std::atoi(sv.data())];
   }
 
-  std::cerr << "context: " << _now_playing.context << "\n";
-  std::cerr << "title: " << _now_playing.title << "\n";
-  std::cerr << "artist: " << _now_playing.artist << "\n";
-  std::cerr << "image: " << _now_playing.image << "\n";
-  std::cerr << "uri: " << _now_playing.uri << "\n";
-  std::cerr << "duration: " << _now_playing.duration.count() << std::endl;
-
-  renderScannable();
+  renderScannable(now_playing);
 }
 
-void SpotifyClientImpl::renderScannable() {
-  if (_has_played && _now_playing.track_id.empty()) {
+void SpotifyClientImpl::renderScannable(const NowPlaying &now_playing) {
+  if (_has_played && now_playing.track_id.empty()) {
     _led.clear();
-    _access_token = {};
-    _refresh_token = {};
     _has_played = false;
-    return authenticate();
+    return fetchNowPlaying(true);
   }
 
-  displayScannable();
+  std::cerr << "context: " << now_playing.context << "\n";
+  std::cerr << "title: " << now_playing.title << "\n";
+  std::cerr << "artist: " << now_playing.artist << "\n";
+  std::cerr << "image: " << now_playing.image << "\n";
+  std::cerr << "uri: " << now_playing.uri << "\n";
+  std::cerr << "duration: " << now_playing.duration.count() << std::endl;
+
+  displayScannable(now_playing);
   _work = _main_scheduler.schedule([this] { fetchNowPlaying(true); },
                                    {.delay = std::chrono::seconds{5}});
 }
 
-void SpotifyClientImpl::displayScannable() {
+void SpotifyClientImpl::displayScannable(const NowPlaying &now_playing) {
   _led.clear();
   _led.setLogo(_brightness.logoBrightness());
   auto brightness = _brightness.brightness();
 
   for (auto col = 0; col < 23; ++col) {
-    auto start = 8 - _lengths0[col];
-    auto end = 8 + _lengths1[col];
+    auto start = 8 - now_playing.lengths0[col];
+    auto end = 8 + now_playing.lengths1[col];
     for (auto y = start; y < end; ++y) {
       _led.set({.x = col, .y = y}, brightness);
     }
