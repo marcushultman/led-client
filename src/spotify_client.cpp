@@ -254,7 +254,7 @@ class SpotifyClientImpl final : public SpotifyClient {
   std::unique_ptr<font::TextPage> _text = font::TextPage::create();
   std::unique_ptr<RollingPresenter> _text_presenter;
 
-  std::unique_ptr<http::Request> _request;
+  http::Lifetime _request;
   async::Lifetime _work;
 };
 
@@ -308,14 +308,13 @@ void SpotifyClientImpl::authenticate() {
                     "&scope=user-read-playback-state"
                     "&description=Spotify-LED";
 
-  _request = _http.request({
-      .method = http::Method::POST,
-      .url = kAuthDeviceCodeUrl,
-      .headers = {{kContentType, kXWWWFormUrlencoded}},
-      .body = data,
-      .post_to = _main_scheduler,
-      .callback = [this](auto response) { onAuthResponse(std::move(response)); },
-  });
+  _request = _http.request({.method = http::Method::POST,
+                            .url = kAuthDeviceCodeUrl,
+                            .headers = {{kContentType, kXWWWFormUrlencoded}},
+                            .body = data},
+                           {.post_to = _main_scheduler, .callback = [this](auto response) {
+                              onAuthResponse(std::move(response));
+                            }});
 }
 
 void SpotifyClientImpl::onAuthResponse(http::Response response) {
@@ -354,14 +353,13 @@ void SpotifyClientImpl::pollToken() {
                     "&scope=user-read-playback-state"
                     "&grant_type=urn:ietf:params:oauth:grant-type:device_code";
 
-  _request = _http.request({
-      .method = http::Method::POST,
-      .url = kAuthTokenUrl,
-      .headers = {{kContentType, kXWWWFormUrlencoded}},
-      .body = data,
-      .post_to = _main_scheduler,
-      .callback = [this](auto response) { onPollTokenResponse(std::move(response)); },
-  });
+  _request = _http.request({.method = http::Method::POST,
+                            .url = kAuthTokenUrl,
+                            .headers = {{kContentType, kXWWWFormUrlencoded}},
+                            .body = data},
+                           {.post_to = _main_scheduler, .callback = [this](auto response) {
+                              onPollTokenResponse(std::move(response));
+                            }});
 }
 
 void SpotifyClientImpl::onPollTokenResponse(http::Response response) {
@@ -403,14 +401,13 @@ void SpotifyClientImpl::refreshToken(const std::string &refresh_token) {
                     "&client_secret=" + credentials::kClientSecret +
                     "&refresh_token=" + refresh_token + "&grant_type=refresh_token";
 
-  _request = _http.request({
-      .method = http::Method::POST,
-      .url = kAuthTokenUrl,
-      .headers = {{kContentType, kXWWWFormUrlencoded}},
-      .body = data,
-      .post_to = _main_scheduler,
-      .callback = [this](auto response) { onRefreshTokenResponse(std::move(response)); },
-  });
+  _request = _http.request({.method = http::Method::POST,
+                            .url = kAuthTokenUrl,
+                            .headers = {{kContentType, kXWWWFormUrlencoded}},
+                            .body = data},
+                           {.post_to = _main_scheduler, .callback = [this](auto response) {
+                              onRefreshTokenResponse(std::move(response));
+                            }});
 }
 
 void SpotifyClientImpl::onRefreshTokenResponse(http::Response response) {
@@ -433,15 +430,12 @@ void SpotifyClientImpl::fetchNowPlaying(bool allow_retry) {
     if (_now_playing[access_token].status == 204) {
       continue;
     }
-    _request = _http.request(http::RequestInit{
-        .url = kPlayerUrl,
-        .headers = {{kAuthorization, "Bearer " + access_token}},
-        .post_to = _main_scheduler,
-        .callback =
-            [this, allow_retry, access_token = access_token](auto response) {
-              onNowPlayingResponse(allow_retry, access_token, std::move(response));
-            },
-    });
+    _request =
+        _http.request({.url = kPlayerUrl, .headers = {{kAuthorization, "Bearer " + access_token}}},
+                      {.post_to = _main_scheduler,
+                       .callback = [this, allow_retry, access_token = access_token](auto response) {
+                         onNowPlayingResponse(allow_retry, access_token, std::move(response));
+                       }});
     return;
   }
   // no one is playing
@@ -512,12 +506,11 @@ void SpotifyClientImpl::onContext(http::Response response) {
 #endif
 
 void SpotifyClientImpl::fetchScannable(const std::string &access_token, const std::string &uri) {
-  _request = _http.request(http::RequestInit{
-      .url = credentials::kScannablesCdnUrl + uri + "?format=svg",
-      .post_to = _main_scheduler,
-      .callback = [this,
-                   access_token](auto response) { onScannable(access_token, std::move(response)); },
-  });
+  _request =
+      _http.request({.url = credentials::kScannablesCdnUrl + uri + "?format=svg"},
+                    {.post_to = _main_scheduler, .callback = [this, access_token](auto response) {
+                       onScannable(access_token, std::move(response));
+                     }});
 }
 
 void SpotifyClientImpl::onScannable(const std::string &access_token, http::Response response) {
