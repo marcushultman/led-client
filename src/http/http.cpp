@@ -32,58 +32,59 @@ void setMethod(CURL *curl, Method method) {
 }  // namespace
 
 struct RequestState : std::enable_shared_from_this<RequestState> {
-  explicit RequestState(RequestInit init) : init{std::move(init)} {}
+  RequestState(Request req, RequestOptions opts) : req{std::move(req)}, opts{std::move(opts)} {}
 
   void scheduleResponse() {
-    _work.insert(init.post_to.schedule([self = shared_from_this()] { self->onResponse(); }));
+    _work.insert(opts.post_to.schedule([self = shared_from_this()] { self->onResponse(); }));
   }
   void scheduleCancellation() {
-    _work.insert(init.post_to.schedule([self = shared_from_this()] { self->abort(); }));
+    _work.insert(opts.post_to.schedule([self = shared_from_this()] { self->abort(); }));
   }
 
   void onResponse() {
-    if (auto callback = std::exchange(init.callback, {})) {
+    if (auto callback = std::exchange(opts.callback, {})) {
       callback(std::move(response));
     }
   }
   void onTimeout() {
-    if (auto callback = std::exchange(init.callback, {})) {
+    if (auto callback = std::exchange(opts.callback, {})) {
       callback({.status = 408});
     }
   }
-  void abort() { init.callback = {}; }
+  void abort() { opts.callback = {}; }
 
-  RequestInit init;
+  Request req;
+  RequestOptions opts;
   Response response;
 
  private:
   std::set<async::Lifetime> _work;
 };
 
-class RequestImpl final : public Request {
+class RequestExecutor final {
  public:
-  RequestImpl(CURL *curl, async::Scheduler &scheduler, std::shared_ptr<RequestState> state)
+  RequestExecutor(CURL *curl, async::Scheduler &scheduler, std::shared_ptr<RequestState> state)
       : _state{state},
         _work{scheduler.schedule([curl, state] { performRequest(curl, std::move(state)); })},
-        _timeout{state->init.post_to.schedule([state] { state->onTimeout(); },
+        _timeout{state->opts.post_to.schedule([state] { state->onTimeout(); },
                                               {.delay = kDefaultTimeout})} {}
-  ~RequestImpl() { _state->scheduleCancellation(); }
+  ~RequestExecutor() { _state->scheduleCancellation(); }
 
   static void performRequest(CURL *curl, std::shared_ptr<RequestState> state) {
     curl_easy_reset(curl);
-    curl_easy_setopt(curl, CURLOPT_URL, state->init.url.c_str());
+    curl_easy_setopt(curl, CURLOPT_URL, state->req.url.c_str());
 
-    setMethod(curl, state->init.method);
+    setMethod(curl, state->req.method);
 
     curl_slist *headers = nullptr;
-    for (auto &[key, val] : state->init.headers) {
+    for (auto &[key, val] : state->req.headers) {
       auto new_headers = curl_slist_append(headers, (key + ": " + val).c_str());
       headers = new_headers ? new_headers : (curl_slist_free_all(headers), nullptr);
     }
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-    if (!state->init.body.empty()) {
-      curl_easy_setopt(curl, CURLOPT_POSTFIELDS, state->init.body.c_str());
+    if (!state->req.body.empty()) {
+      curl_easy_setopt(curl, CURLOPT_POSTFIELDS, state->req.body.c_str());
     }
 
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, state.get());
@@ -112,9 +113,10 @@ class HttpImpl final : public Http {
   explicit HttpImpl(CURL *curl) : _curl{curl} {}
   ~HttpImpl() { curl_easy_cleanup(_curl); }
 
-  std::unique_ptr<Request> request(RequestInit init) final {
-    return std::make_unique<RequestImpl>(_curl, _thread->scheduler(),
-                                         std::make_shared<RequestState>(std::move(init)));
+  Lifetime request(Request request, RequestOptions opts) final {
+    return std::make_unique<RequestExecutor>(
+        _curl, _thread->scheduler(),
+        std::make_shared<RequestState>(std::move(request), std::move(opts)));
   }
 
  private:

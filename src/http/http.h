@@ -15,28 +15,29 @@ enum class Method {
   DELETE,
 };
 
+struct Request {
+  Method method = Method::GET;
+  std::string url;
+  std::unordered_map<std::string, std::string> headers;
+  std::string body;
+};
+
 struct Response {
   int status = 500;
   std::string body;
 };
 
-struct RequestInit {
+struct RequestOptions {
   using OnResponse = std::function<void(Response)>;
-  Method method = Method::GET;
-  std::string url;
-  std::unordered_map<std::string, std::string> headers;
-  std::string body;
   async::Scheduler &post_to;
   OnResponse callback;
 };
 
-struct Request {
-  virtual ~Request() = default;
-};
+using Lifetime = std::shared_ptr<void>;
 
 struct Http {
   virtual ~Http() = default;
-  virtual std::unique_ptr<Request> request(RequestInit) = 0;
+  virtual Lifetime request(Request, RequestOptions) = 0;
 
   static std::unique_ptr<Http> create();
 };
