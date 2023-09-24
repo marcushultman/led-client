@@ -60,7 +60,8 @@ struct ServerImpl : Server {
                 << (req.headers.contains("action") ? req.headers["action"] : "") << "\n"
                 << req.body << std::endl;
 
-      _main_work = _main_scheduler.schedule([this, req] { _on_request(req); });
+      _main_work =
+          _main_scheduler.schedule([this, req] { asio::post(_ctx, [res = _on_request(req)] {}); });
     });
   }
 

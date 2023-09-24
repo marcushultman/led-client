@@ -25,6 +25,10 @@ struct Request {
 struct Response {
   int status = 500;
   std::string body;
+
+  Response();
+  Response(int status);
+  Response(std::string body);
 };
 
 struct RequestOptions {

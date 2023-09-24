@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
   // mode
   int mode = 0;
   std::shared_ptr<void> runner;
-  auto next_mode = [&](http::Request req) {
+  auto next_mode = [&](http::Request req) -> http::Response {
     if (req.method == http::Method::POST && req.body.find("text") == 0) {
       auto text = std::string(req.body.substr(req.body.find_first_of("=") + 1));
       std::transform(text.begin(), text.end(), text.begin(), ::toupper);
@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
                                                    *page, Direction::kHorizontal, {}));
 
       runner = std::make_shared<std::vector<async::Lifetime>>(std::move(lifetimes));
-      return;
+      return 204;
     }
     auto path = std::string_view(req.url);
     if (path.starts_with("http://")) {
@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
       path = path.substr(end);
     }
     if (path != "/mode") {
-      return;
+      return 204;
     }
 
     if (auto it = req.headers.find("action"); it != req.headers.end()) {
@@ -93,11 +93,13 @@ int main(int argc, char *argv[]) {
       case 0:
         led->clear();
         led->show();
-        return runner.reset();
+        runner.reset();
+        return {};
       case 1:
         runner = SpotifyClient::create(main_scheduler, *http, *led, *brightness_provider, verbose);
-        return;
+        return {};
     }
+    return 500;
   };
   next_mode(http::Request{});
 
