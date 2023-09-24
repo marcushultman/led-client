@@ -62,7 +62,17 @@ add_executable(string_set_test
   src/storage/string_set.h
   src/tests/storage/string_set_test.cpp
 )
-
 target_include_directories(string_set_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+add_executable(service_test
+  src/async/scheduler.cpp
+  src/async/scheduler.h
+  src/service/service_registry.cpp
+  src/service/service_registry.h
+  src/service/test/service_registry_test.cpp
+)
+target_include_directories(service_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
