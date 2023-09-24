@@ -31,6 +31,12 @@ void setMethod(CURL *curl, Method method) {
 
 }  // namespace
 
+Response::Response() = default;
+
+Response::Response(int status) : status{status} {}
+
+Response::Response(std::string body) : status{200}, body{std::move(body)} {}
+
 struct RequestState : std::enable_shared_from_this<RequestState> {
   RequestState(Request req, RequestOptions opts) : req{std::move(req)}, opts{std::move(opts)} {}
 
@@ -48,7 +54,7 @@ struct RequestState : std::enable_shared_from_this<RequestState> {
   }
   void onTimeout() {
     if (auto callback = std::exchange(opts.callback, {})) {
-      callback({.status = 408});
+      callback(Response(408));
     }
   }
   void abort() { opts.callback = {}; }

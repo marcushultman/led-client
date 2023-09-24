@@ -14,7 +14,7 @@ struct Server {
   virtual int port() const = 0;
 };
 
-using OnRequest = std::function<void(Request)>;
+using OnRequest = std::function<Response(Request)>;
 
 std::unique_ptr<Server> makeServer(async::Scheduler &, OnRequest);
 
