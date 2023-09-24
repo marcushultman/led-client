@@ -39,13 +39,17 @@ struct ServerImpl : Server {
       : _main_scheduler{main_scheduler},
         _on_request{std::move(on_request)},
         _thread{async::Thread::create("asio")},
+        _asio_work_guard{_ctx.get_executor()},
         _asio_work{_thread->scheduler().schedule([this] {
           _acceptor.set_option(tcp::acceptor::reuse_address(true));
           _acceptor.listen();
           accept();
           _ctx.run();
         })} {}
-  ~ServerImpl() { _ctx.stop(); }
+  ~ServerImpl() {
+    _asio_work_guard.reset();
+    _ctx.stop();
+  }
 
   void accept() {
     _acceptor.async_accept(_ctx, [this](auto err, tcp::socket peer) {
@@ -53,15 +57,20 @@ struct ServerImpl : Server {
         return;
       }
       auto req = readRequest(peer);
-      writeResponse(peer);
-      accept();
 
       std::cout << int(req.method) << " " << req.url << " "
                 << (req.headers.contains("action") ? req.headers["action"] : "") << "\n"
                 << req.body << std::endl;
 
       _main_work =
-          _main_scheduler.schedule([this, req] { asio::post(_ctx, [res = _on_request(req)] {}); });
+          _main_scheduler.schedule([this, peer = std::make_shared<tcp::socket>(std::move(peer)),
+                                    req = std::move(req)]() mutable {
+            asio::post(_ctx,
+                       [this, peer = std::move(peer), res = _on_request(std::move(req))]() mutable {
+                         writeResponse(*peer, std::move(res));
+                         accept();
+                       });
+          });
     });
   }
 
@@ -115,17 +124,15 @@ struct ServerImpl : Server {
     return req;
   }
 
-  void writeResponse(tcp::socket &peer) {
-    auto body = std::string(
-        "<html><body><form method=\"post\"><input name=\"text\" "
-        "placeholder=\"\"><input type=\"submit\"></form></body></html>");
-    peer.send(
-        asio::buffer("HTTP/1.0 200 OK\r\n"
-                     "content-length: " +
-                     std::to_string(body.size()) +
-                     "\r\n"
-                     "content-type: text/html\r\n\r\n" +
-                     body));
+  void writeResponse(tcp::socket &peer, http::Response res) {
+    peer.send(asio::buffer("HTTP/1.0 " + std::to_string(res.status) + " " +
+                           (res.status == 200 ? "OK" : "") +
+                           "\r\n"
+                           "content-length: " +
+                           std::to_string(res.body.size()) +
+                           "\r\n"
+                           "content-type: text/html\r\n\r\n" +
+                           res.body));
   }
 
   async::Scheduler &_main_scheduler;
@@ -136,6 +143,7 @@ struct ServerImpl : Server {
   std::vector<char> _buffer;
 
   std::unique_ptr<async::Thread> _thread;
+  asio::executor_work_guard<asio::io_context::executor_type> _asio_work_guard;
   async::Lifetime _asio_work;
   async::Lifetime _main_work;
 };
