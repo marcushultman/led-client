@@ -15,6 +15,10 @@
 #include "spotiled.h"
 #include "util/signal_handler.h"
 
+auto kDefaultHttpResponse = http::Response(
+    "<html><body><form method=\"post\"><input name=\"text\" "
+    "placeholder=\"\"><input type=\"submit\"></form></body></html>");
+
 int main(int argc, char *argv[]) {
   auto http = http::Http::create();
   if (!http) {
@@ -69,7 +73,7 @@ int main(int argc, char *argv[]) {
                                                    *page, Direction::kHorizontal, {}));
 
       runner = std::make_shared<std::vector<async::Lifetime>>(std::move(lifetimes));
-      return 204;
+      return kDefaultHttpResponse;
     }
     auto path = std::string_view(req.url);
     if (path.starts_with("http://")) {
@@ -79,7 +83,7 @@ int main(int argc, char *argv[]) {
       path = path.substr(end);
     }
     if (path != "/mode") {
-      return 204;
+      return kDefaultHttpResponse;
     }
 
     if (auto it = req.headers.find("action"); it != req.headers.end()) {
@@ -94,10 +98,10 @@ int main(int argc, char *argv[]) {
         led->clear();
         led->show();
         runner.reset();
-        return {};
+        return kDefaultHttpResponse;
       case 1:
         runner = SpotifyClient::create(main_scheduler, *http, *led, *brightness_provider, verbose);
-        return {};
+        return kDefaultHttpResponse;
     }
     return 500;
   };
