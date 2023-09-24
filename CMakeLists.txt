@@ -28,6 +28,8 @@ set(SOURCES
   storage/string_set.cpp
   storage/string_set.h
   util/color.h
+  util/signal_handler.cpp
+  util/signal_handler.h
   apa102.cpp
   apa102.h
   main.cpp
