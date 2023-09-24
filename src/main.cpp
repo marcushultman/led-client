@@ -13,34 +13,7 @@
 #include "http/server/server.h"
 #include "spotify_client.h"
 #include "spotiled.h"
-
-struct SignalHandler {
-  using Callback = std::function<void(int)>;
-
-  SignalHandler(async::Scheduler &scheduler, Callback callback)
-      : _scheduler{scheduler}, _callback{std::move(callback)} {
-    if (s_handler) {
-      std::terminate();
-    }
-    s_handler = this;
-    std::signal(SIGINT, [](int sig) { s_handler->schedule(sig); });
-  }
-  ~SignalHandler() {
-    std::signal(SIGINT, nullptr);
-    s_handler = nullptr;
-  }
-
-  void schedule(int sig) {
-    _lifetime = _scheduler.schedule([this, sig] { _callback(sig); });
-  }
-
-  static SignalHandler *s_handler;
-  async::Scheduler &_scheduler;
-  Callback _callback;
-  async::Lifetime _lifetime;
-};
-
-SignalHandler *SignalHandler::s_handler = nullptr;
+#include "util/signal_handler.h"
 
 int main(int argc, char *argv[]) {
   auto http = http::Http::create();
@@ -132,7 +105,7 @@ int main(int argc, char *argv[]) {
   std::cout << "Listening on port: " << server->port() << std::endl;
 
   auto interrupt = std::promise<int>();
-  auto sig = SignalHandler(main_scheduler, [&](auto) {
+  auto sig = csignal::SignalHandler(main_scheduler, [&](auto) {
     server.reset();
     interrupt.set_value(0);
   });
