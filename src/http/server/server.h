@@ -6,6 +6,8 @@
 
 #include "async/scheduler.h"
 
+namespace http {
+
 struct Server {
   virtual ~Server() = default;
   virtual int port() const = 0;
@@ -21,3 +23,5 @@ struct ServerRequest {
 using OnRequest = std::function<void(ServerRequest)>;
 
 std::unique_ptr<Server> makeServer(async::Scheduler &, OnRequest);
+
+}  // namespace http

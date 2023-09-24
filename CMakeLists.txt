@@ -23,8 +23,8 @@ set(SOURCES
   font/font.h
   http/http.cpp
   http/http.h
-  server/server.cpp
-  server/server.h
+  http/server/server.cpp
+  http/server/server.h
   storage/string_set.cpp
   storage/string_set.h
   util/color.h

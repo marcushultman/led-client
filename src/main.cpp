@@ -10,7 +10,7 @@
 
 #include "font/font.h"
 #include "http/http.h"
-#include "server/server.h"
+#include "http/server/server.h"
 #include "spotify_client.h"
 #include "spotiled.h"
 
@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
   // mode
   int mode = 0;
   std::shared_ptr<void> runner;
-  auto next_mode = [&](ServerRequest req) {
+  auto next_mode = [&](http::ServerRequest req) {
     if (req.method == "POST" && req.body.find("text") == 0) {
       auto text = std::string(req.body.substr(req.body.find_first_of("=") + 1));
       std::transform(text.begin(), text.end(), text.begin(), ::toupper);
@@ -117,9 +117,9 @@ int main(int argc, char *argv[]) {
         return;
     }
   };
-  next_mode(ServerRequest{});
+  next_mode(http::ServerRequest{});
 
-  auto server = makeServer(main_scheduler, next_mode);
+  auto server = http::makeServer(main_scheduler, next_mode);
   std::cout << "Listening on port: " << server->port() << std::endl;
 
   auto interrupt = std::promise<int>();
