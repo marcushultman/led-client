@@ -71,8 +71,8 @@ int main(int argc, char *argv[]) {
   // mode
   int mode = 0;
   std::shared_ptr<void> runner;
-  auto next_mode = [&](http::ServerRequest req) {
-    if (req.method == "POST" && req.body.find("text") == 0) {
+  auto next_mode = [&](http::Request req) {
+    if (req.method == http::Method::POST && req.body.find("text") == 0) {
       auto text = std::string(req.body.substr(req.body.find_first_of("=") + 1));
       std::transform(text.begin(), text.end(), text.begin(), ::toupper);
       page->setText(text);
@@ -81,7 +81,8 @@ int main(int argc, char *argv[]) {
 
       if (auto it = req.headers.find("delay"); it != req.headers.end()) {
         int delay_s = 0;
-        std::from_chars(it->second.begin(), it->second.end(), delay_s);
+        auto value = std::string_view(it->second);
+        std::from_chars(value.begin(), value.end(), delay_s);
         lifetimes.push_back(main_scheduler.schedule(
             [&] {
               runner.reset();
@@ -97,12 +98,20 @@ int main(int argc, char *argv[]) {
       runner = std::make_shared<std::vector<async::Lifetime>>(std::move(lifetimes));
       return;
     }
-    if (req.path != "/mode") {
+    auto path = std::string_view(req.url);
+    if (path.starts_with("http://")) {
+      path = path.substr(7);
+    }
+    if (auto end = path.find_first_of("/"); end != std::string::npos) {
+      path = path.substr(end);
+    }
+    if (path != "/mode") {
       return;
     }
 
     if (auto it = req.headers.find("action"); it != req.headers.end()) {
-      std::from_chars(it->second.begin(), it->second.end(), mode);
+      auto value = std::string_view(it->second);
+      std::from_chars(value.begin(), value.end(), mode);
     } else {
       mode = (mode + 1) % 2;
     }
@@ -117,7 +126,7 @@ int main(int argc, char *argv[]) {
         return;
     }
   };
-  next_mode(http::ServerRequest{});
+  next_mode(http::Request{});
 
   auto server = http::makeServer(main_scheduler, next_mode);
   std::cout << "Listening on port: " << server->port() << std::endl;
