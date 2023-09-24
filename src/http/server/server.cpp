@@ -5,6 +5,8 @@
 
 #include "async/scheduler.h"
 
+namespace http {
+
 struct ServerImpl : Server {
   using tcp = asio::ip::tcp;
 
@@ -107,3 +109,5 @@ struct ServerImpl : Server {
 std::unique_ptr<Server> makeServer(async::Scheduler &main_scheduler, OnRequest on_request) {
   return std::make_unique<ServerImpl>(main_scheduler, on_request);
 }
+
+}  // namespace http
