@@ -1,11 +1,36 @@
 #include "server.h"
 
+#include <algorithm>
 #include <asio.hpp>
 #include <iostream>
 
 #include "async/scheduler.h"
 
 namespace http {
+namespace {
+
+Method methodFromString(std::string_view str) {
+  auto cmp = [](auto lhs, auto rhs) { return std::toupper(lhs) == rhs; };
+  if (std::equal(str.begin(), str.end(), "POST", cmp)) {
+    return Method::POST;
+  } else if (std::equal(str.begin(), str.end(), "PUT", cmp)) {
+    return Method::PUT;
+  } else if (std::equal(str.begin(), str.end(), "DELETE", cmp)) {
+    return Method::DELETE;
+  } else if (std::equal(str.begin(), str.end(), "HEAD", cmp)) {
+    return Method::HEAD;
+  }
+  return Method::GET;
+}
+
+std::string_view trim(std::string_view value) {
+  while (value.size() && value.front() == ' ') {
+    value = value.substr(1);
+  }
+  return value.substr(0, std::min(value.find_first_of("\r"), value.find_first_of("\n")));
+}
+
+}  // namespace
 
 struct ServerImpl : Server {
   using tcp = asio::ip::tcp;
@@ -31,7 +56,7 @@ struct ServerImpl : Server {
       writeResponse(peer);
       accept();
 
-      std::cout << req.method << " " << req.path << " "
+      std::cout << int(req.method) << " " << req.url << " "
                 << (req.headers.contains("action") ? req.headers["action"] : "") << "\n"
                 << req.body << std::endl;
 
@@ -42,7 +67,7 @@ struct ServerImpl : Server {
   int port() const final { return _acceptor.local_endpoint().port(); }
 
  private:
-  ServerRequest readRequest(tcp::socket &peer) {
+  std::string_view readIntoBuffer(tcp::socket &peer) {
     size_t offset = 0, size = std::max<size_t>(_buffer.size(), 128);
     std::string_view buffer;
     for (;;) {
@@ -50,30 +75,38 @@ struct ServerImpl : Server {
       auto bytes_read =
           peer.read_some(asio::mutable_buffer(_buffer.data() + offset, _buffer.size() - offset));
       if (offset + bytes_read < size) {
-        buffer = std::string_view(_buffer.data(), offset + bytes_read);
-        break;
+        return std::string_view(_buffer.data(), offset + bytes_read);
       }
       offset += size;
       size *= 2;
     }
+  }
 
-    ServerRequest req;
+  Request readRequest(tcp::socket &peer) {
+    std::string_view buffer = readIntoBuffer(peer);
 
-    req.method = buffer.substr(0, buffer.find_first_of(' '));
-    buffer.remove_prefix(req.method.size() + 1);
+    Request req;
 
-    req.path = buffer.substr(0, buffer.find_first_of(' '));
+    auto method = buffer.substr(0, buffer.find_first_of(' '));
+    req.method = methodFromString(method);
+    buffer.remove_prefix(method.size() + 1);
+
+    auto path = buffer.substr(0, buffer.find_first_of(' '));
     buffer.remove_prefix(buffer.find_first_of("\n") + 1);
 
     while (buffer.find('\r') != 0) {
-      auto key = buffer.substr(0, buffer.find(":"));
-      auto value = buffer.substr(key.size() + 1);
-      while (value.size() && value.front() == ' ') {
-        value = value.substr(1);
-      }
-      req.headers.emplace(key, value);
+      auto key = std::string(buffer.substr(0, buffer.find(":")));
+      auto value = std::string(trim(buffer.substr(key.size() + 1)));
+      std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+      std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+      req.headers[std::move(key)] = std::move(value);
       buffer.remove_prefix(buffer.find_first_of("\n") + 1);
     }
+
+    if (auto it = req.headers.find("host"); it != req.headers.end()) {
+      req.url = "http://" + it->second;
+    }
+    req.url += path;
 
     buffer.remove_prefix(buffer.find_first_of("\n") + 1);
     req.body = buffer;
