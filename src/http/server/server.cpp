@@ -58,9 +58,11 @@ struct ServerImpl : Server {
       }
       auto req = readRequest(peer);
 
+#if 0
       std::cout << int(req.method) << " " << req.url << " "
                 << (req.headers.contains("action") ? req.headers["action"] : "") << "\n"
                 << req.body << std::endl;
+#endif
 
       _main_work =
           _main_scheduler.schedule([this, peer = std::make_shared<tcp::socket>(std::move(peer)),
