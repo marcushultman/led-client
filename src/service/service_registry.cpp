@@ -25,8 +25,11 @@ Services::Services(std::unordered_map<std::string, ServiceFactory> factories) {
 
 std::shared_ptr<void> Services::startServiceInner(std::string id) {
   auto keep_alive = std::make_shared<KeepAlive>(*this);
-  return std::shared_ptr<void>(getOrCreateService(*keep_alive, id).get(),
-                               [keep_alive](auto *) mutable { keep_alive.reset(); });
+  if (auto service = getOrCreateService(*keep_alive, id)) {
+    return std::shared_ptr<void>(service.get(),
+                                 [keep_alive](auto *) mutable { keep_alive.reset(); });
+  }
+  return nullptr;
 }
 
 std::shared_ptr<void> Services::getOrCreateService(KeepAlive &keep_alive, std::string id) {
@@ -34,7 +37,11 @@ std::shared_ptr<void> Services::getOrCreateService(KeepAlive &keep_alive, std::s
     keep_alive.insert(service);
     return service;
   }
-  auto service = _factories[id](keep_alive);
+  auto &factory = _factories[id];
+  if (!factory) {
+    return nullptr;
+  }
+  auto service = factory(keep_alive);
   keep_alive.insert(service);
   _services[id] = service;
   return service;

@@ -25,11 +25,17 @@ set(SOURCES
   http/http.h
   http/server/server.cpp
   http/server/server.h
+  service/service_registry.cpp
+  service/service_registry.h
+  service/service_runner.cpp
+  service/service_runner.h
   storage/string_set.cpp
   storage/string_set.h
   util/color.h
   util/signal_handler.cpp
   util/signal_handler.h
+  util/url.cpp
+  util/url.h
   apa102.cpp
   apa102.h
   main.cpp
