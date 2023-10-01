@@ -8,6 +8,7 @@
 #include "apa102.h"
 #include "async/scheduler.h"
 #include "util/color.h"
+#include "util/presenter.h"
 
 struct Coord {
   int x = 0;

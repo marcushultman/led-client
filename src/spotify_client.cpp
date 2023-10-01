@@ -181,15 +181,19 @@ void saveTokens(const std::unordered_map<std::string, std::string> &tokens) {
 
 }  // namespace
 
-class SpotifyClientImpl final : public SpotifyClient {
+class SpotifyClientImpl final : public SpotifyClient, presenter::Presentable {
  public:
   SpotifyClientImpl(async::Scheduler &main_scheduler,
                     http::Http &http,
                     SpotiLED &led,
+                    presenter::PresenterQueue &presenter,
                     BrightnessProvider &brightness,
                     jq_state *jq,
                     bool verbose);
   ~SpotifyClientImpl();
+
+  void start(SpotiLED &, presenter::Callback) final;
+  void stop() final;
 
  private:
   enum PollResult {
@@ -204,11 +208,6 @@ class SpotifyClientImpl final : public SpotifyClient {
   // spotify device code auth flow
   void authenticate();
   void onAuthResponse(http::Response response);
-
-  void fetchToken(const std::string &device_code,
-                  const std::string &user_code,
-                  const std::chrono::seconds &expires_in,
-                  const std::chrono::seconds &interval);
 
   void pollToken();
   void onPollTokenResponse(http::Response response);
@@ -234,6 +233,7 @@ class SpotifyClientImpl final : public SpotifyClient {
   async::Scheduler &_main_scheduler;
   http::Http &_http;
   SpotiLED &_led;
+  presenter::PresenterQueue &_presenter;
   BrightnessProvider &_brightness;
   jq_state *_jq = nullptr;
   bool _verbose = false;
@@ -261,33 +261,53 @@ class SpotifyClientImpl final : public SpotifyClient {
 std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_scheduler,
                                                      http::Http &http,
                                                      SpotiLED &led,
+                                                     presenter::PresenterQueue &presenter,
                                                      BrightnessProvider &brightness,
                                                      bool verbose) {
   auto jq = jq_init();
   if (!jq) {
     return nullptr;
   }
-  return std::make_unique<SpotifyClientImpl>(main_scheduler, http, led, brightness, jq, verbose);
+  return std::make_unique<SpotifyClientImpl>(main_scheduler, http, led, presenter, brightness, jq,
+                                             verbose);
 }
 
 SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
                                      http::Http &http,
                                      SpotiLED &led,
+                                     presenter::PresenterQueue &presenter,
                                      BrightnessProvider &brightness,
                                      jq_state *jq,
                                      bool verbose)
     : _main_scheduler{main_scheduler},
       _http{http},
       _led{led},
+      _presenter{presenter},
       _brightness{brightness},
       _jq{jq},
       _verbose{verbose} {
-  std::cout << "Using logo brightness: " << int(_brightness.logoBrightness()[0])
-            << ", brightness: " << int(_brightness.brightness()[0]) << std::endl;
+  _presenter.add(*this);
+}
+
+SpotifyClientImpl::~SpotifyClientImpl() {
+  _presenter.erase(*this);
+  _led.clear();
+  _led.show();
+  jq_teardown(&_jq);
+}
+
+void SpotifyClientImpl::start(SpotiLED &, presenter::Callback callback) {
+  // todo: abort rendering and callback after some auth timeout
   _work = _main_scheduler.schedule([this] { entrypoint(); }, {});
 }
 
-SpotifyClientImpl::~SpotifyClientImpl() { jq_teardown(&_jq); }
+void SpotifyClientImpl::stop() {
+  _text_presenter.reset();
+  _request.reset();
+  _work.reset();
+  _led.clear();
+  _led.show();
+}
 
 void SpotifyClientImpl::entrypoint() {
   _tokens = loadTokens();
@@ -327,22 +347,15 @@ void SpotifyClientImpl::onAuthResponse(http::Response response) {
   auto data = parseDeviceFlowData(_jq, response.body);
   std::cerr << "url: " << data.verification_url_prefilled << std::endl;
 
-  _text->setText(data.user_code);
+  auto now = std::chrono::system_clock::now();
+  _auth_state.expiry = now + data.expires_in;
+  _auth_state.interval = data.interval;
+  _auth_state.device_code = data.device_code;
+  _auth_state.user_code = data.user_code;
+
+  _text->setText(_auth_state.user_code);
   _text_presenter = RollingPresenter::create(_main_scheduler, _led, _brightness, *_text,
                                              Direction::kHorizontal, {});
-
-  fetchToken(data.device_code, data.user_code, data.expires_in, data.interval);
-}
-
-void SpotifyClientImpl::fetchToken(const std::string &device_code,
-                                   const std::string &user_code,
-                                   const std::chrono::seconds &expires_in,
-                                   const std::chrono::seconds &interval) {
-  auto now = std::chrono::system_clock::now();
-  _auth_state.expiry = now + expires_in;
-  _auth_state.interval = interval;
-  _auth_state.device_code = device_code;
-  _auth_state.user_code = user_code;
 
   pollToken();
 }
@@ -426,8 +439,8 @@ void SpotifyClientImpl::onRefreshTokenResponse(http::Response response) {
 }
 
 void SpotifyClientImpl::fetchNowPlaying(bool allow_retry) {
-  for (auto &[access_token, _] : _tokens) {
-    if (_now_playing[access_token].status == 204) {
+  for (auto &[access_token, now_playing] : _now_playing) {
+    if (now_playing.status == 204) {
       continue;
     }
     _request =

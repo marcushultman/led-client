@@ -32,8 +32,12 @@ set(SOURCES
   storage/string_set.cpp
   storage/string_set.h
   util/color.h
+  util/presenter.cpp
+  util/presenter.h
   util/signal_handler.cpp
   util/signal_handler.h
+  util/text_prompt.cpp
+  util/text_prompt.h
   util/url.cpp
   util/url.h
   apa102.cpp
