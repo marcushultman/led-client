@@ -59,6 +59,7 @@ target_link_libraries(spoticode
   async
   http
   http_server
+  settings
   # 3rd party
   pthread
   ${CURL_LIBRARIES}
