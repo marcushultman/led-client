@@ -25,10 +25,6 @@ set(SOURCES
   http/http.h
   http/server/server.cpp
   http/server/server.h
-  service/service_registry.cpp
-  service/service_registry.h
-  service/service_runner.cpp
-  service/service_runner.h
   storage/string_set.cpp
   storage/string_set.h
   util/color.h
@@ -75,16 +71,5 @@ add_executable(string_set_test
   src/tests/storage/string_set_test.cpp
 )
 target_include_directories(string_set_test PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-add_executable(service_test
-  src/async/scheduler.cpp
-  src/async/scheduler.h
-  src/service/service_registry.cpp
-  src/service/service_registry.h
-  src/service/test/service_registry_test.cpp
-)
-target_include_directories(service_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
