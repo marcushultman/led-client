@@ -11,7 +11,9 @@ namespace {
 
 Method methodFromString(std::string_view str) {
   auto cmp = [](auto lhs, auto rhs) { return std::toupper(lhs) == rhs; };
-  if (std::equal(str.begin(), str.end(), "POST", cmp)) {
+  if (std::equal(str.begin(), str.end(), "GET", cmp)) {
+    return Method::GET;
+  } else if (std::equal(str.begin(), str.end(), "POST", cmp)) {
     return Method::POST;
   } else if (std::equal(str.begin(), str.end(), "PUT", cmp)) {
     return Method::PUT;
@@ -19,8 +21,10 @@ Method methodFromString(std::string_view str) {
     return Method::DELETE;
   } else if (std::equal(str.begin(), str.end(), "HEAD", cmp)) {
     return Method::HEAD;
+  } else if (std::equal(str.begin(), str.end(), "OPTIONS", cmp)) {
+    return Method::OPTIONS;
   }
-  return Method::GET;
+  return Method::UNKNOWN;
 }
 
 std::string_view trim(std::string_view value) {
@@ -57,6 +61,16 @@ struct ServerImpl : Server {
         return;
       }
       auto req = readRequest(peer);
+
+      if (req.method == Method::OPTIONS) {
+        // todo: customize
+        Response res = 204;
+        res.headers["allow"] = "GET, PUT, POST, DELETE";
+        res.headers["access-control-allow-origin"] = "*";
+        writeResponse(peer, res);
+        accept();
+        return;
+      }
 
 #if 0
       std::cout << int(req.method) << " " << req.url << " "
@@ -127,14 +141,21 @@ struct ServerImpl : Server {
   }
 
   void writeResponse(tcp::socket &peer, http::Response res) {
-    peer.send(asio::buffer("HTTP/1.0 " + std::to_string(res.status) + " " +
-                           (res.status == 200 ? "OK" : "") +
-                           "\r\n"
-                           "content-length: " +
-                           std::to_string(res.body.size()) +
-                           "\r\n"
-                           "content-type: text/html\r\n\r\n" +
-                           res.body));
+    auto data = "HTTP/1.0 " + std::to_string(res.status) + " " +
+                (res.status == 200 ? "OK" : "No Content") + "\r\n";
+    if (res.headers["content-length"].empty()) {
+      res.headers["content-length"] = std::to_string(res.body.size());
+    }
+    if (res.headers["content-type"].empty()) {
+      res.headers["content-type"] = "text/html";
+    }
+    // todo: customize
+    res.headers["Access-Control-Allow-Origin"] = "*";
+
+    for (auto &[key, value] : res.headers) {
+      data += key + ": " + value + "\r\n";
+    }
+    peer.send(asio::buffer(data + "\r\n" + res.body));
   }
 
   async::Scheduler &_main_scheduler;

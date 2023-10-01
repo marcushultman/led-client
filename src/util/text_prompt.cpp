@@ -52,9 +52,12 @@ void TextService::start(SpotiLED &, presenter::Callback callback) {
   _page->setText(std::move(text));
 
   _lifetime = _main_scheduler.schedule(
-      [rolling_presenter = std::shared_ptr<RollingPresenter>(RollingPresenter::create(
+      [this,
+       rolling_presenter = std::shared_ptr<RollingPresenter>(RollingPresenter::create(
            _main_scheduler, _led, _brightness_provider, *_page, Direction::kHorizontal, {})),
        callback = std::move(callback)]() mutable {
+        _led.clear();
+        _led.show();
         rolling_presenter.reset();
         callback();
       },

@@ -13,6 +13,8 @@ enum class Method {
   POST,
   PUT,
   DELETE,
+  OPTIONS,
+  UNKNOWN,
 };
 
 struct Request {
@@ -24,6 +26,7 @@ struct Request {
 
 struct Response {
   int status = 500;
+  std::unordered_map<std::string, std::string> headers;
   std::string body;
 
   Response();

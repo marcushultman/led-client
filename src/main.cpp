@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 
+#include "apps/settings/display.h"
 #include "apps/spotify/service.h"
 #include "http/http.h"
 #include "http/server/server.h"
@@ -42,7 +43,7 @@ struct PathMapper {
     if (it != _map.end()) {
       return it->second(std::move(req));
     }
-    return 400;
+    return 404;
   }
 
  private:
@@ -69,10 +70,14 @@ int main(int argc, char *argv[]) {
       std::make_unique<TextService>(main_scheduler, *led, *presenter, *brightness_provider);
   auto spotify_service = std::make_unique<spotify::SpotifyService>(
       main_scheduler, *http, *led, *presenter, *brightness_provider, opts.verbose);
+  auto display_service = settings::DisplayService();
+
+  // todo: proxy and route settings
 
   PathMapper mapper{{
       {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
       {"mode", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
+      {"settings", display_service},
   }};
 
   auto server = http::makeServer(main_scheduler, mapper);
