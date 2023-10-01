@@ -9,6 +9,7 @@ struct LED {
 
   virtual void clear() = 0;
   virtual void set(size_t i, uint8_t r, uint8_t g, uint8_t b) = 0;
+  virtual void blend(size_t i, uint8_t r, uint8_t g, uint8_t b, float blend = .5f) = 0;
   virtual void show() = 0;
 };
 

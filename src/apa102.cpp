@@ -43,6 +43,18 @@ class LEDBase : public LED {
     _buf[4 + 4 * i + 2] = g;
     _buf[4 + 4 * i + 3] = r;
   }
+  void blend(size_t i, uint8_t r, uint8_t g, uint8_t b, float blend) {
+    if (i >= _num_leds) {
+      return;
+    }
+    auto &sb = _buf[4 + 4 * i + 1];
+    auto &sg = _buf[4 + 4 * i + 2];
+    auto &sr = _buf[4 + 4 * i + 3];
+    auto inv_blend = 1 - blend;
+    sb = inv_blend * sb + blend * b;
+    sg = inv_blend * sg + blend * g;
+    sr = inv_blend * sr + blend * r;
+  }
 
  protected:
   size_t _num_leds;
