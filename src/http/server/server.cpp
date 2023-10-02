@@ -67,6 +67,7 @@ struct ServerImpl : Server {
         Response res = 204;
         res.headers["allow"] = "GET, PUT, POST, DELETE";
         res.headers["access-control-allow-origin"] = "*";
+        res.headers["access-control-allow-headers"] = "*";
         writeResponse(peer, res);
         accept();
         return;
