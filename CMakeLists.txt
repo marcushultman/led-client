@@ -10,21 +10,20 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
 list(APPEND CMAKE_SYSTEM_PREFIX_PATH /opt/homebrew)
 
 find_package(CURL REQUIRED)
 find_library(JQ NAMES libjq.dylib REQUIRED)
 find_path(JQ_INCLUDE_DIR jq.h REQUIRED)
+find_path(ASIO_INCLUDE_DIR asio.h REQUIRED)
+
+add_subdirectory(src)
 
 set(SOURCES
-  async/scheduler.cpp
-  async/scheduler.h
   font/font.cpp
   font/font.h
-  http/http.cpp
-  http/http.h
-  http/server/server.cpp
-  http/server/server.h
   storage/string_set.cpp
   storage/string_set.h
   util/color.h
@@ -56,6 +55,11 @@ target_include_directories(spoticode PRIVATE
 )
 
 target_link_libraries(spoticode
+  # 1st party
+  async
+  http
+  http_server
+  # 3rd party
   pthread
   ${CURL_LIBRARIES}
   ${JQ}
