@@ -150,7 +150,7 @@ struct ServerImpl : Server {
       res.headers["content-type"] = "text/html";
     }
     // todo: customize
-    res.headers["Access-Control-Allow-Origin"] = "*";
+    res.headers["access-control-allow-origin"] = "*";
 
     for (auto &[key, value] : res.headers) {
       data += key + ": " + value + "\r\n";
