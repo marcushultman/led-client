@@ -11,4 +11,5 @@ target_include_directories(settings PRIVATE
 )
 target_link_libraries(settings
   http
+  present
 )

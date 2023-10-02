@@ -5,7 +5,6 @@
 
 #include "font/font.h"
 #include "spotiled.h"
-#include "util/presenter.h"
 
 namespace {
 
@@ -26,7 +25,7 @@ std::chrono::milliseconds timeout(const http::Request &req) {
 
 TextService::TextService(async::Scheduler &main_scheduler,
                          SpotiLED &led,
-                         presenter::PresenterQueue &presenter,
+                         present::PresenterQueue &presenter,
                          BrightnessProvider &brightness_provider)
     : _main_scheduler{main_scheduler},
       _led{led},
@@ -38,12 +37,12 @@ http::Response TextService::handleRequest(http::Request req) {
     return 400;
   }
   _requests.push(std::move(req));
-  _presenter.add(*this, {.prio = presenter::Prio::kNotification});
+  _presenter.add(*this, {.prio = present::Prio::kNotification});
 
   return 204;
 }
 
-void TextService::start(SpotiLED &, presenter::Callback callback) {
+void TextService::start(SpotiLED &, present::Callback callback) {
   auto req = std::move(_requests.front());
   _requests.pop();
 

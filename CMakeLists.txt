@@ -27,8 +27,6 @@ set(SOURCES
   storage/string_set.cpp
   storage/string_set.h
   util/color.h
-  util/presenter.cpp
-  util/presenter.h
   util/signal_handler.cpp
   util/signal_handler.h
   util/text_prompt.cpp
@@ -59,6 +57,7 @@ target_link_libraries(spoticode
   async
   http
   http_server
+  present
   settings
   # 3rd party
   pthread

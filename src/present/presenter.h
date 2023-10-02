@@ -5,7 +5,7 @@
 
 struct SpotiLED;
 
-namespace presenter {
+namespace present {
 
 using Callback = std::function<void()>;
 
@@ -32,4 +32,4 @@ struct PresenterQueue {
 
 std::unique_ptr<PresenterQueue> makePresenterQueue(SpotiLED &);
 
-}  // namespace presenter
+}  // namespace present

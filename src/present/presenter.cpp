@@ -3,7 +3,7 @@
 #include <map>
 #include <queue>
 
-namespace presenter {
+namespace present {
 
 struct PresenterQueueImpl final : PresenterQueue {
   explicit PresenterQueueImpl(SpotiLED &led) : _led{led} {}
@@ -64,4 +64,4 @@ std::unique_ptr<PresenterQueue> makePresenterQueue(SpotiLED &led) {
   return std::make_unique<PresenterQueueImpl>(led);
 }
 
-}  // namespace presenter
+}  // namespace present

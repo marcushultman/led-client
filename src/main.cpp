@@ -8,8 +8,8 @@
 #include "apps/spotify/service.h"
 #include "http/http.h"
 #include "http/server/server.h"
+#include "present/presenter.h"
 #include "spotiled.h"
-#include "util/presenter.h"
 #include "util/signal_handler.h"
 #include "util/text_prompt.h"
 
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
   auto main_thread = async::Thread::create("main");
   auto led = SpotiLED::create();
   auto &main_scheduler = main_thread->scheduler();
-  auto presenter = presenter::makePresenterQueue(*led);
+  auto presenter = present::makePresenterQueue(*led);
 
   std::cout << "Using logo brightness: " << int(brightness_provider->logoBrightness()[0])
             << ", brightness: " << int(brightness_provider->brightness()[0]) << std::endl;
@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
       std::make_unique<TextService>(main_scheduler, *led, *presenter, *brightness_provider);
   auto spotify_service = std::make_unique<spotify::SpotifyService>(
       main_scheduler, *http, *led, *presenter, *brightness_provider, opts.verbose);
-  auto display_service = settings::DisplayService();
+  auto display_service = settings::DisplayService(*presenter);
 
   // todo: proxy and route settings
 
