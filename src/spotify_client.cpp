@@ -181,18 +181,18 @@ void saveTokens(const std::unordered_map<std::string, std::string> &tokens) {
 
 }  // namespace
 
-class SpotifyClientImpl final : public SpotifyClient, presenter::Presentable {
+class SpotifyClientImpl final : public SpotifyClient, present::Presentable {
  public:
   SpotifyClientImpl(async::Scheduler &main_scheduler,
                     http::Http &http,
                     SpotiLED &led,
-                    presenter::PresenterQueue &presenter,
+                    present::PresenterQueue &presenter,
                     BrightnessProvider &brightness,
                     jq_state *jq,
                     bool verbose);
   ~SpotifyClientImpl();
 
-  void start(SpotiLED &, presenter::Callback) final;
+  void start(SpotiLED &, present::Callback) final;
   void stop() final;
 
  private:
@@ -233,7 +233,7 @@ class SpotifyClientImpl final : public SpotifyClient, presenter::Presentable {
   async::Scheduler &_main_scheduler;
   http::Http &_http;
   SpotiLED &_led;
-  presenter::PresenterQueue &_presenter;
+  present::PresenterQueue &_presenter;
   BrightnessProvider &_brightness;
   jq_state *_jq = nullptr;
   bool _verbose = false;
@@ -261,7 +261,7 @@ class SpotifyClientImpl final : public SpotifyClient, presenter::Presentable {
 std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_scheduler,
                                                      http::Http &http,
                                                      SpotiLED &led,
-                                                     presenter::PresenterQueue &presenter,
+                                                     present::PresenterQueue &presenter,
                                                      BrightnessProvider &brightness,
                                                      bool verbose) {
   auto jq = jq_init();
@@ -275,7 +275,7 @@ std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_sche
 SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
                                      http::Http &http,
                                      SpotiLED &led,
-                                     presenter::PresenterQueue &presenter,
+                                     present::PresenterQueue &presenter,
                                      BrightnessProvider &brightness,
                                      jq_state *jq,
                                      bool verbose)
@@ -296,7 +296,7 @@ SpotifyClientImpl::~SpotifyClientImpl() {
   jq_teardown(&_jq);
 }
 
-void SpotifyClientImpl::start(SpotiLED &, presenter::Callback callback) {
+void SpotifyClientImpl::start(SpotiLED &, present::Callback callback) {
   // todo: abort rendering and callback after some auth timeout
   _work = _main_scheduler.schedule([this] { entrypoint(); }, {});
 }

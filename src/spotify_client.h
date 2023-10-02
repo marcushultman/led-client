@@ -4,8 +4,8 @@
 
 #include "async/scheduler.h"
 #include "http/http.h"
+#include "present/presenter.h"
 #include "spotiled.h"
-#include "util/presenter.h"
 
 struct SpotifyClient {
   virtual ~SpotifyClient() = default;
@@ -13,7 +13,7 @@ struct SpotifyClient {
   static std::unique_ptr<SpotifyClient> create(async::Scheduler &main_scheduler,
                                                http::Http &,
                                                SpotiLED &led,
-                                               presenter::PresenterQueue &presenter,
+                                               present::PresenterQueue &presenter,
                                                BrightnessProvider &brightness,
                                                bool verbose);
 };
