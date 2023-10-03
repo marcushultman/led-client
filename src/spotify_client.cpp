@@ -437,6 +437,7 @@ void SpotifyClientImpl::onRefreshTokenResponse(http::Response response) {
   std::cerr << "access_token: " << data.access_token << std::endl;
 
   _tokens[data.access_token] = data.refresh_token;
+  _now_playing[data.access_token];
   saveTokens(_tokens);
 
   fetchNowPlaying(false);
@@ -467,7 +468,10 @@ void SpotifyClientImpl::onNowPlayingResponse(bool allow_retry,
       std::cerr << "failed to get player state" << std::endl;
       return scheduleAuthRetry();
     }
-    return refreshToken(access_token);
+    auto refresh_token = std::move(_tokens[access_token]);
+    _tokens.erase(access_token);
+    _now_playing.erase(access_token);
+    return refreshToken(refresh_token);
   }
 
   auto &now_playing = _now_playing[access_token];
