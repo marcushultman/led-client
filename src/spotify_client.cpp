@@ -311,6 +311,10 @@ void SpotifyClientImpl::stop() {
 
 void SpotifyClientImpl::entrypoint() {
   _tokens = loadTokens();
+  for (auto &[access_token, _] : _tokens) {
+    _now_playing[access_token];
+  }
+
   _tokens.empty() ? authenticate() : fetchNowPlaying(true);
 }
 
