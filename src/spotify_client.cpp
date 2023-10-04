@@ -9,6 +9,7 @@
 #include <string>
 #include <thread>
 
+#include "apps/settings/brightness_provider.h"
 #include "credentials.h"
 #include "font/font.h"
 #include "storage/string_set.h"
@@ -187,7 +188,7 @@ class SpotifyClientImpl final : public SpotifyClient, present::Presentable {
                     http::Http &http,
                     SpotiLED &led,
                     present::PresenterQueue &presenter,
-                    BrightnessProvider &brightness,
+                    settings::BrightnessProvider &brightness,
                     jq_state *jq,
                     bool verbose);
   ~SpotifyClientImpl();
@@ -234,7 +235,7 @@ class SpotifyClientImpl final : public SpotifyClient, present::Presentable {
   http::Http &_http;
   SpotiLED &_led;
   present::PresenterQueue &_presenter;
-  BrightnessProvider &_brightness;
+  settings::BrightnessProvider &_brightness;
   jq_state *_jq = nullptr;
   bool _verbose = false;
 
@@ -262,7 +263,7 @@ std::unique_ptr<SpotifyClient> SpotifyClient::create(async::Scheduler &main_sche
                                                      http::Http &http,
                                                      SpotiLED &led,
                                                      present::PresenterQueue &presenter,
-                                                     BrightnessProvider &brightness,
+                                                     settings::BrightnessProvider &brightness,
                                                      bool verbose) {
   auto jq = jq_init();
   if (!jq) {
@@ -276,7 +277,7 @@ SpotifyClientImpl::SpotifyClientImpl(async::Scheduler &main_scheduler,
                                      http::Http &http,
                                      SpotiLED &led,
                                      present::PresenterQueue &presenter,
-                                     BrightnessProvider &brightness,
+                                     settings::BrightnessProvider &brightness,
                                      jq_state *jq,
                                      bool verbose)
     : _main_scheduler{main_scheduler},

@@ -62,17 +62,6 @@ struct ServerImpl : Server {
       }
       auto req = readRequest(peer);
 
-      if (req.method == Method::OPTIONS) {
-        // todo: customize
-        Response res = 204;
-        res.headers["allow"] = "GET, PUT, POST, DELETE";
-        res.headers["access-control-allow-origin"] = "*";
-        res.headers["access-control-allow-headers"] = "*";
-        writeResponse(peer, res);
-        accept();
-        return;
-      }
-
 #if 0
       std::cout << int(req.method) << " " << req.url << " "
                 << (req.headers.contains("action") ? req.headers["action"] : "") << "\n"
@@ -104,7 +93,7 @@ struct ServerImpl : Server {
       if (offset + bytes_read < size) {
         return std::string_view(_buffer.data(), offset + bytes_read);
       }
-      offset += size;
+      offset += bytes_read;
       size *= 2;
     }
   }

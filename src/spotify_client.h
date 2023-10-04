@@ -14,6 +14,6 @@ struct SpotifyClient {
                                                http::Http &,
                                                SpotiLED &led,
                                                present::PresenterQueue &presenter,
-                                               BrightnessProvider &brightness,
+                                               settings::BrightnessProvider &brightness,
                                                bool verbose);
 };

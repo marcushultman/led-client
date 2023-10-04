@@ -6,9 +6,10 @@
 #include <vector>
 
 #include "apa102.h"
+#include "apps/settings/brightness_provider.h"
 #include "async/scheduler.h"
 #include "present/presenter.h"
-#include "util/color.h"
+#include "util/color/color.h"
 
 struct Coord {
   int x = 0;
@@ -59,20 +60,13 @@ struct SpotiLED {
 
 //
 
-struct BrightnessProvider {
-  virtual ~BrightnessProvider() = default;
-  virtual Color logoBrightness() const = 0;
-  virtual Color brightness() const = 0;
-
-  static std::unique_ptr<BrightnessProvider> create(uint8_t brightness);
-};
-
-//
-
 struct StaticPresenter {
   virtual ~StaticPresenter() = default;
-  static std::unique_ptr<StaticPresenter> create(
-      SpotiLED &, BrightnessProvider &, Page &, Coord offset = {}, Coord scale = kNormalScale);
+  static std::unique_ptr<StaticPresenter> create(SpotiLED &,
+                                                 settings::BrightnessProvider &,
+                                                 Page &,
+                                                 Coord offset = {},
+                                                 Coord scale = kNormalScale);
 };
 
 enum class Direction {
@@ -84,7 +78,7 @@ struct RollingPresenter {
   virtual ~RollingPresenter() = default;
   static std::unique_ptr<RollingPresenter> create(async::Scheduler &scheduler,
                                                   SpotiLED &,
-                                                  BrightnessProvider &,
+                                                  settings::BrightnessProvider &,
                                                   Page &,
                                                   Direction,
                                                   Coord offset = {},
@@ -94,7 +88,7 @@ struct RollingPresenter {
 struct PagedPresenter {
   static std::unique_ptr<PagedPresenter> create(async::Scheduler &scheduler,
                                                 SpotiLED &,
-                                                BrightnessProvider &,
+                                                settings::BrightnessProvider &,
                                                 Page &from,
                                                 Page &to,
                                                 Direction);
