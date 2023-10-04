@@ -5,6 +5,7 @@
 #include <map>
 
 #include "apa102.h"
+#include "apps/settings/brightness_provider.h"
 
 namespace font {
 
@@ -509,8 +510,12 @@ int run() {
       return 0;
     }
     page->setText(input);
-    auto brightness = BrightnessProvider::create(1);
-    StaticPresenter::create(*led, *brightness, *page, {});
+    struct BrightnessProviderImpl final : settings::BrightnessProvider {
+      Color logoBrightness() const final { return 1; }
+      Color brightness() const final { return 1; }
+    };
+    BrightnessProviderImpl brightness;
+    StaticPresenter::create(*led, brightness, *page, {});
   }
 
   return 0;

@@ -15,7 +15,6 @@
 
 struct Options {
   bool verbose = false;
-  uint8_t brightness = 1;
 };
 
 Options parseOptions(int argc, char *argv[]) {
@@ -24,9 +23,6 @@ Options parseOptions(int argc, char *argv[]) {
     auto arg = std::string_view(argv[i]);
     if (arg.find("--verbose") == 0) {
       opts.verbose = true;
-    } else if (arg.find("--brightness") == 0) {
-      // max 32 to avoid power brownout
-      opts.brightness = std::clamp(std::atoi(arg.data() + 13), 1, 32);
     }
   }
   return opts;
@@ -39,7 +35,7 @@ struct PathMapper {
 
   http::Response operator()(http::Request req) {
     url::Url url(req.url);
-    auto it = url.path.empty() ? _map.end() : _map.find(std::string(url.path.back()));
+    auto it = url.path.empty() ? _map.end() : _map.find(std::string(url.path.front()));
     if (it != _map.end()) {
       return it->second(std::move(req));
     }
@@ -57,28 +53,27 @@ int main(int argc, char *argv[]) {
   }
 
   auto opts = parseOptions(argc, argv);
-  auto brightness_provider = BrightnessProvider::create(opts.brightness);
   auto main_thread = async::Thread::create("main");
   auto led = SpotiLED::create();
   auto &main_scheduler = main_thread->scheduler();
   auto presenter = present::makePresenterQueue(*led);
 
-  std::cout << "Using logo brightness: " << int(brightness_provider->logoBrightness()[0])
-            << ", brightness: " << int(brightness_provider->brightness()[0]) << std::endl;
-
+  auto display_service = settings::DisplayService(main_scheduler, *presenter);
   auto text_service =
-      std::make_unique<TextService>(main_scheduler, *led, *presenter, *brightness_provider);
+      std::make_unique<TextService>(main_scheduler, *led, *presenter, display_service);
   auto spotify_service = std::make_unique<spotify::SpotifyService>(
-      main_scheduler, *http, *led, *presenter, *brightness_provider, opts.verbose);
-  auto display_service = settings::DisplayService(*presenter);
+      main_scheduler, *http, *led, *presenter, display_service, opts.verbose);
 
   // todo: proxy and route settings
 
   PathMapper mapper{{
       {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
       {"mode", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
-      {"settings", display_service},
+      {"settings", [&](auto req) { return display_service(std::move(req)); }},
   }};
+
+  std::cout << "Using logo brightness: " << int(display_service.logoBrightness()[0])
+            << ", brightness: " << int(display_service.brightness()[0]) << std::endl;
 
   auto server = http::makeServer(main_scheduler, mapper);
   std::cout << "Listening on port: " << server->port() << std::endl;

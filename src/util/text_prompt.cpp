@@ -26,7 +26,7 @@ std::chrono::milliseconds timeout(const http::Request &req) {
 TextService::TextService(async::Scheduler &main_scheduler,
                          SpotiLED &led,
                          present::PresenterQueue &presenter,
-                         BrightnessProvider &brightness_provider)
+                         settings::BrightnessProvider &brightness_provider)
     : _main_scheduler{main_scheduler},
       _led{led},
       _presenter{presenter},

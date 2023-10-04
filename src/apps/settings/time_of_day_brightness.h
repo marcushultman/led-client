@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstdint>
 
+namespace settings {
+
 inline uint8_t brightnessForTimeOfDay(int hour) {
   return 32 + (255 - 32) * std::pow(std::sin(M_PI * hour / 24), 3);
 }
@@ -16,3 +18,5 @@ inline int getHour() {
 inline uint8_t timeOfDayBrightness(uint8_t b, int hour = getHour()) {
   return (brightnessForTimeOfDay(hour) * b) / 255;
 }
+
+}  // namespace settings

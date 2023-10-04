@@ -26,13 +26,10 @@ set(SOURCES
   font/font.h
   storage/string_set.cpp
   storage/string_set.h
-  util/color.h
   util/signal_handler.cpp
   util/signal_handler.h
   util/text_prompt.cpp
   util/text_prompt.h
-  util/url.cpp
-  util/url.h
   apa102.cpp
   apa102.h
   main.cpp
@@ -55,10 +52,12 @@ target_include_directories(spoticode PRIVATE
 target_link_libraries(spoticode
   # 1st party
   async
+  color
   http
   http_server
   present
   settings
+  url
   # 3rd party
   pthread
   ${CURL_LIBRARIES}

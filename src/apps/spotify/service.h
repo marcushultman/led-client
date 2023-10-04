@@ -7,7 +7,7 @@
 #include "present/presenter.h"
 #include "spotify_client.h"
 #include "spotiled.h"
-#include "util/url.h"
+#include "util/url/url.h"
 
 namespace spotify {
 
@@ -16,7 +16,7 @@ struct SpotifyService {
                  http::Http &http,
                  SpotiLED &led,
                  present::PresenterQueue &presenter,
-                 BrightnessProvider &brightness,
+                 settings::BrightnessProvider &brightness,
                  bool verbose)
       : _main_scheduler(main_scheduler),
         _http(http),
@@ -52,7 +52,7 @@ struct SpotifyService {
   http::Http &_http;
   SpotiLED &_led;
   present::PresenterQueue &_presenter;
-  BrightnessProvider &_brightness;
+  settings::BrightnessProvider &_brightness;
   bool _verbose;
 
   int _mode = 0;
