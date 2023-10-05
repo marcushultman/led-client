@@ -4,8 +4,8 @@
 #include <fstream>
 
 #include "brightness_provider.h"
-#include "spotiled.h"
 #include "time_of_day_brightness.h"
+#include "util/spotiled/spotiled.h"
 #include "util/url/url.h"
 
 namespace settings {

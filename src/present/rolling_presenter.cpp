@@ -1,88 +1,14 @@
-#include "spotiled.h"
+#include "rolling_presenter.h"
 
 #include <array>
 #include <iostream>
 #include <iterator>
 #include <vector>
 
-#include "apa102.h"
 #include "apps/settings/brightness_provider.h"
-
-Coord operator+(const Coord &lhs, const Coord &rhs) { return {lhs.x + rhs.x, lhs.y + rhs.y}; }
-Coord operator*(const Coord &lhs, const Coord &rhs) { return {lhs.x * rhs.x, lhs.y * rhs.y}; }
-
-std::unique_ptr<SpotiLED> SpotiLED::create() {
-  struct SpotiLEDImpl final : public SpotiLED {
-    void clear() final { _led->clear(); }
-    void setLogo(Color color) final {
-      auto [r, g, b] = color;
-      for (auto i = 0; i < 19; ++i) {
-        _led->set(i, r, g, b);
-      }
-    }
-    void set(Coord pos, Color color) final {
-      if (pos.x >= 0 && pos.x < 23 && pos.y >= 0 && pos.y < 16) {
-        auto [r, g, b] = color;
-        _led->set(19 + offset(pos), r, g, b);
-      }
-    }
-    void show() final { _led->show(); }
-
-   private:
-    size_t offset(Coord pos) { return 16 * pos.x + 15 - pos.y; }
-
-    std::unique_ptr<apa102::LED> _led = apa102::createLED(19 + 16 * 23);
-  };
-  return std::make_unique<SpotiLEDImpl>();
-}
-
-// static_presenter.cpp
-
-std::unique_ptr<StaticPresenter> StaticPresenter::create(SpotiLED &led,
-                                                         settings::BrightnessProvider &brightness,
-                                                         Page &page,
-                                                         Coord offset,
-                                                         Coord scale) {
-  class StaticPresenterImpl final : public StaticPresenter {
-   public:
-    StaticPresenterImpl(SpotiLED &led,
-                        settings::BrightnessProvider &brightness,
-                        Page &page,
-                        Coord offset,
-                        Coord scale)
-        : _led{led}, _brightness{brightness}, _page{page}, _offset{offset}, _scale{scale} {}
-
-    void present() {
-      _led.clear();
-      _led.setLogo(_brightness.logoBrightness());
-
-      auto brightness = _brightness.brightness();
-
-      for (auto &placement : _page.sprites()) {
-        if (!placement.sprite) {
-          continue;
-        }
-        for (auto &section : placement.sprite->sections) {
-          for (auto pos : section.coords) {
-            _led.set(_offset + _scale * (placement.pos + placement.scale * pos),
-                     section.color * brightness);
-          }
-        }
-      }
-      _led.show();
-    }
-
-   private:
-    SpotiLED &_led;
-    settings::BrightnessProvider &_brightness;
-    Page &_page;
-    Coord _offset;
-    Coord _scale;
-  };
-  return std::make_unique<StaticPresenterImpl>(led, brightness, page, offset, scale);
-};
-
-// rolling_presenter.cpp
+#include "util/apa102/apa102.h"
+#include "util/gfx/gfx.h"
+#include "util/spotiled/spotiled.h"
 
 namespace {
 
@@ -95,7 +21,7 @@ const auto kScrollSpeed = 0.005;
 std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &scheduler,
                                                            SpotiLED &led,
                                                            settings::BrightnessProvider &brightness,
-                                                           Page &page,
+                                                           page::Page &page,
                                                            Direction direction,
                                                            Coord offset,
                                                            Coord scale) {
@@ -104,7 +30,7 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
     RollingPresenterImpl(async::Scheduler &scheduler,
                          SpotiLED &led,
                          settings::BrightnessProvider &brightness,
-                         Page &page,
+                         page::Page &page,
                          Direction direction,
                          Coord offset,
                          Coord scale)
@@ -151,7 +77,7 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
    private:
     SpotiLED &_led;
     settings::BrightnessProvider &_brightness;
-    Page &_page;
+    page::Page &_page;
     Direction _direction;
     Coord _offset;
     Coord _scale;

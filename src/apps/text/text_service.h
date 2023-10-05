@@ -3,10 +3,10 @@
 #include <charconv>
 #include <queue>
 
+#include "apps/settings/brightness_provider.h"
 #include "font/font.h"
 #include "http/http.h"
 #include "present/presenter.h"
-#include "spotiled.h"
 
 struct TextService : present::Presentable {
   TextService(async::Scheduler &main_scheduler,

@@ -4,14 +4,15 @@
 #include <iostream>
 #include <string>
 
+#include "apps/settings/brightness_provider.h"
 #include "apps/settings/display.h"
 #include "apps/spotify/service.h"
+#include "apps/text/text_service.h"
 #include "http/http.h"
 #include "http/server/server.h"
 #include "present/presenter.h"
-#include "spotiled.h"
-#include "util/signal_handler.h"
-#include "util/text_prompt.h"
+#include "util/csignal/signal_handler.h"
+#include "util/spotiled/spotiled.h"
 
 struct Options {
   bool verbose = false;

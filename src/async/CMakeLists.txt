@@ -9,3 +9,5 @@ add_library(async ${SOURCES})
 target_include_directories(async PRIVATE
   ${ROOT_DIR}/src
 )
+
+add_subdirectory(tests)
