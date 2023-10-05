@@ -62,7 +62,7 @@ http::Response DisplayService::operator()(http::Request req) {
   save();
 
   if (!std::exchange(_pending_present, true)) {
-    _presenter.add(*this);
+    _presenter.add(*this, {.prio = present::Prio::kNotification});
   } else if (_led) {
     update();
   }
