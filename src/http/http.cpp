@@ -117,7 +117,10 @@ class RequestExecutor final {
 class HttpImpl final : public Http {
  public:
   explicit HttpImpl(CURL *curl) : _curl{curl} {}
-  ~HttpImpl() { curl_easy_cleanup(_curl); }
+  ~HttpImpl() {
+    _thread.reset();
+    curl_easy_cleanup(_curl);
+  }
 
   Lifetime request(Request request, RequestOptions opts) final {
     return std::make_unique<RequestExecutor>(

@@ -21,25 +21,7 @@ find_path(ASIO_INCLUDE_DIR asio.hpp REQUIRED)
 
 add_subdirectory(src)
 
-set(SOURCES
-  font/font.cpp
-  font/font.h
-  storage/string_set.cpp
-  storage/string_set.h
-  util/signal_handler.cpp
-  util/signal_handler.h
-  util/text_prompt.cpp
-  util/text_prompt.h
-  apa102.cpp
-  apa102.h
-  main.cpp
-  spotiled.cpp
-  spotiled.h
-)
-
-list(TRANSFORM SOURCES PREPEND "src/")
-
-add_executable(spoticode ${SOURCES})
+add_executable(spoticode src/main.cpp)
 
 target_include_directories(spoticode PRIVATE
   ${CURL_INCLUDE_DIR}
@@ -51,11 +33,16 @@ target_link_libraries(spoticode
   # 1st party
   async
   color
+  csignal
+  font
   http
   http_server
+  page
   present
   settings
   spotify
+  spotiled
+  text
   url
   # 3rd party
   pthread
@@ -66,12 +53,3 @@ target_link_libraries(spoticode
 if (PI)
   target_link_libraries(spoticode spidev-lib++)
 endif()
-
-add_executable(string_set_test
-  src/storage/string_set.cpp
-  src/storage/string_set.h
-  src/tests/storage/string_set_test.cpp
-)
-target_include_directories(string_set_test PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/src
-)

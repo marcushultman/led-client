@@ -1,10 +1,13 @@
 #pragma once
 
-#include "spotiled.h"
+#include <memory>
+#include <string>
+
+#include "util/page/page.h"
 
 namespace font {
 
-struct TextPage : Page {
+struct TextPage : page::Page {
   virtual void setText(const std::string &) = 0;
 
   static std::unique_ptr<TextPage> create();

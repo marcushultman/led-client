@@ -16,5 +16,9 @@ target_link_libraries(spotify
   http
   present
   settings
+  storage
   url
+  ${JQ}
 )
+
+add_subdirectory(tests)

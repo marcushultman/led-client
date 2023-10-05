@@ -2,11 +2,11 @@
 
 #include <charconv>
 
+#include "apps/settings/brightness_provider.h"
 #include "font/font.h"
 #include "http/http.h"
 #include "present/presenter.h"
 #include "spotify_client.h"
-#include "spotiled.h"
 #include "util/url/url.h"
 
 namespace spotify {

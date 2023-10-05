@@ -12,7 +12,9 @@
 #include "apps/settings/brightness_provider.h"
 #include "credentials.h"
 #include "font/font.h"
-#include "storage/string_set.h"
+#include "present/rolling_presenter.h"
+#include "util/spotiled/spotiled.h"
+#include "util/storage/string_set.h"
 
 extern "C" {
 #include <jq.h>
@@ -83,7 +85,7 @@ struct DeviceFlowData {
   std::chrono::seconds interval;
 };
 
-void parseDeviceFlowData(jq_state *jq, const std::string &buffer, DeviceFlowData data) {
+void parseDeviceFlowData(jq_state *jq, const std::string &buffer, DeviceFlowData &data) {
   const auto input = jv_parse(buffer.c_str());
   jq_compile(jq,
              ".device_code, .user_code, .expires_in, .verification_url, "
@@ -91,7 +93,6 @@ void parseDeviceFlowData(jq_state *jq, const std::string &buffer, DeviceFlowData
   jq_start(jq, input, 0);
   nextStr(jq, data.device_code);
   nextStr(jq, data.user_code);
-  nextStr(jq, data.device_code);
   nextSeconds(jq, data.expires_in);
   nextStr(jq, data.verification_url);
   nextStr(jq, data.verification_url_prefilled);

@@ -2,10 +2,11 @@
 
 #include <memory>
 
+#include "apps/settings/brightness_provider.h"
 #include "async/scheduler.h"
 #include "http/http.h"
 #include "present/presenter.h"
-#include "spotiled.h"
+#include "util/spotiled/spotiled.h"
 
 struct SpotifyClient {
   virtual ~SpotifyClient() = default;
