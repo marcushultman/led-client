@@ -240,8 +240,6 @@ class SpotifyClientImpl final : public SpotifyClient, present::Presentable {
   bool _verbose = false;
 
   std::unordered_map<std::string, std::string> _tokens;
-  bool _has_played = false;
-
   std::unordered_map<std::string, NowPlaying> _now_playing;
 
   struct AuthState {
@@ -483,10 +481,9 @@ void SpotifyClientImpl::onNowPlayingResponse(bool allow_retry,
     }
     now_playing = {};
     now_playing.status = response.status;
-    return renderScannable(now_playing);
+    return fetchNowPlaying(true);
   }
 
-  _has_played = true;
   auto new_now_playing = parseNowPlaying(_jq, response.body, _verbose);
 
   if (now_playing.track_id == new_now_playing.track_id) {
@@ -567,12 +564,6 @@ void SpotifyClientImpl::onScannable(const std::string &access_token, http::Respo
 }
 
 void SpotifyClientImpl::renderScannable(const NowPlaying &now_playing) {
-  if (_has_played && now_playing.track_id.empty()) {
-    _led.clear();
-    _has_played = false;
-    return fetchNowPlaying(true);
-  }
-
   std::cerr << "context: " << now_playing.context << "\n";
   std::cerr << "title: " << now_playing.title << "\n";
   std::cerr << "artist: " << now_playing.artist << "\n";
