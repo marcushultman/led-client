@@ -33,8 +33,6 @@ set(SOURCES
   apa102.cpp
   apa102.h
   main.cpp
-  spotify_client.cpp
-  spotify_client.h
   spotiled.cpp
   spotiled.h
 )
@@ -57,6 +55,7 @@ target_link_libraries(spoticode
   http_server
   present
   settings
+  spotify
   url
   # 3rd party
   pthread
