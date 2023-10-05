@@ -49,7 +49,3 @@ target_link_libraries(spoticode
   ${CURL_LIBRARIES}
   ${JQ}
 )
-
-if (PI)
-  target_link_libraries(spoticode spidev-lib++)
-endif()
