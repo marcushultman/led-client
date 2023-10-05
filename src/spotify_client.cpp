@@ -42,15 +42,15 @@ struct NowPlaying {
   std::array<uint8_t, 23> lengths0, lengths1;
 };
 
-std::string nextStr(jq_state *jq) {
+void nextStr(jq_state *jq, std::string &value) {
   const auto jv = jq_next(jq);
   if (jv_get_kind(jv) != JV_KIND_STRING) {
     jv_free(jv);
-    return "";
+    value.clear();
+    return;
   }
-  const auto val = std::string{jv_string_value(jv)};
+  value = jv_string_value(jv);
   jv_free(jv);
-  return val;
 }
 
 double nextNumber(jq_state *jq) {
@@ -64,14 +64,14 @@ double nextNumber(jq_state *jq) {
   return val;
 }
 
-std::chrono::seconds nextSeconds(jq_state *jq) {
+void nextSeconds(jq_state *jq, std::chrono::seconds &value) {
   using sec = std::chrono::seconds;
-  return sec{static_cast<sec::rep>(nextNumber(jq))};
+  value = sec{static_cast<sec::rep>(nextNumber(jq))};
 }
 
-std::chrono::milliseconds nextMs(jq_state *jq) {
+void nextMs(jq_state *jq, std::chrono::milliseconds &value) {
   using ms = std::chrono::milliseconds;
-  return ms{static_cast<ms::rep>(nextNumber(jq))};
+  value = ms{static_cast<ms::rep>(nextNumber(jq))};
 }
 
 struct DeviceFlowData {
@@ -83,13 +83,19 @@ struct DeviceFlowData {
   std::chrono::seconds interval;
 };
 
-DeviceFlowData parseDeviceFlowData(jq_state *jq, const std::string &buffer) {
+void parseDeviceFlowData(jq_state *jq, const std::string &buffer, DeviceFlowData data) {
   const auto input = jv_parse(buffer.c_str());
   jq_compile(jq,
              ".device_code, .user_code, .expires_in, .verification_url, "
              ".verification_url_prefilled, .interval");
   jq_start(jq, input, 0);
-  return {nextStr(jq), nextStr(jq), nextSeconds(jq), nextStr(jq), nextStr(jq), nextSeconds(jq)};
+  nextStr(jq, data.device_code);
+  nextStr(jq, data.user_code);
+  nextStr(jq, data.device_code);
+  nextSeconds(jq, data.expires_in);
+  nextStr(jq, data.verification_url);
+  nextStr(jq, data.verification_url_prefilled);
+  nextSeconds(jq, data.interval);
 }
 
 struct TokenData {
@@ -103,17 +109,16 @@ struct TokenData {
   // std::string client_secret;
 };
 
-TokenData parseTokenData(jq_state *jq, const std::string &buffer) {
+void parseTokenData(jq_state *jq, const std::string &buffer, TokenData &data) {
   const auto input = jv_parse(buffer.c_str());
   jq_compile(jq, ".error, .access_token, .refresh_token");
   jq_start(jq, input, 0);
-  return {nextStr(jq), nextStr(jq), nextStr(jq)};
+  nextStr(jq, data.error);
+  nextStr(jq, data.access_token);
+  nextStr(jq, data.refresh_token);
 }
 
-NowPlaying parseNowPlaying(jq_state *jq, const std::string &buffer, bool verbose) {
-  if (verbose) {
-    std::cout << "parseNowPlaying: " << buffer.c_str() << std::endl;
-  }
+void parseNowPlaying(jq_state *jq, const std::string &buffer, NowPlaying &now_playing) {
   const auto input = jv_parse(buffer.c_str());
   jq_compile(jq,
              ".item.id,"
@@ -125,16 +130,26 @@ NowPlaying parseNowPlaying(jq_state *jq, const std::string &buffer, bool verbose
              ".progress_ms,"
              ".item.duration_ms");
   jq_start(jq, input, 0);
-  return {0,           nextStr(jq), nextStr(jq), "",         nextStr(jq), nextStr(jq),
-          nextStr(jq), nextStr(jq), nextMs(jq),  nextMs(jq), {},          {}};
+  nextStr(jq, now_playing.track_id);
+  nextStr(jq, now_playing.context_href);
+  nextStr(jq, now_playing.title);
+  nextStr(jq, now_playing.artist);
+  nextStr(jq, now_playing.image);
+  nextStr(jq, now_playing.uri);
+  nextMs(jq, now_playing.progress);
+  nextMs(jq, now_playing.duration);
 }
 
-std::string parseContext(jq_state *jq, const std::string &buffer) {
+#if 0
+
+void parseContext(jq_state *jq, const std::string &buffer, std::string &value) {
   const auto input = jv_parse(buffer.c_str());
   jq_compile(jq, ".name");
   jq_start(jq, input, 0);
-  return nextStr(jq);
+  nextStr(jq, value);
 }
+
+#endif
 
 size_t bufferString(char *ptr, size_t size, size_t nmemb, void *obj) {
   size *= nmemb;
@@ -347,7 +362,8 @@ void SpotifyClientImpl::onAuthResponse(http::Response response) {
     return;
   }
 
-  auto data = parseDeviceFlowData(_jq, response.body);
+  DeviceFlowData data;
+  parseDeviceFlowData(_jq, response.body, data);
   std::cerr << "url: " << data.verification_url_prefilled << std::endl;
 
   auto now = std::chrono::system_clock::now();
@@ -384,7 +400,8 @@ void SpotifyClientImpl::onPollTokenResponse(http::Response response) {
     return scheduleAuthRetry();
   }
 
-  auto data = parseTokenData(_jq, response.body);
+  TokenData data;
+  parseTokenData(_jq, response.body, data);
   if (!data.error.empty()) {
     std::cerr << "auth_code error: " << data.error << std::endl;
     return data.error == "authorization_pending" ? scheduleNextPollToken() : scheduleAuthRetry();
@@ -429,10 +446,12 @@ void SpotifyClientImpl::refreshToken(const std::string &refresh_token) {
 void SpotifyClientImpl::onRefreshTokenResponse(http::Response response) {
   if (response.status / 100 != 2) {
     std::cerr << "failed to refresh token" << std::endl;
+    saveTokens(_tokens);
     return scheduleAuthRetry();
   }
 
-  auto data = parseTokenData(_jq, response.body);
+  TokenData data;
+  parseTokenData(_jq, response.body, data);
   std::cerr << "access_token: " << data.access_token << std::endl;
 
   _tokens[data.access_token] = data.refresh_token;
@@ -484,13 +503,13 @@ void SpotifyClientImpl::onNowPlayingResponse(bool allow_retry,
     return fetchNowPlaying(true);
   }
 
-  auto new_now_playing = parseNowPlaying(_jq, response.body, _verbose);
+  auto track_id = now_playing.track_id;
 
-  if (now_playing.track_id == new_now_playing.track_id) {
-    now_playing.progress = new_now_playing.progress;
+  parseNowPlaying(_jq, response.body, now_playing);
+
+  if (track_id == now_playing.track_id) {
     return renderScannable(now_playing);
   }
-  now_playing = new_now_playing;
   now_playing.status = response.status;
 
   // fetchContext(_now_playing.context_href);
