@@ -17,6 +17,12 @@ std::unique_ptr<SpotiLED> SpotiLED::create() {
         _buffer.set(19 + offset(pos), r, g, b);
       }
     }
+    void blend(Coord pos, Color color, float blend) final {
+      if (pos.x >= 0 && pos.x < 23 && pos.y >= 0 && pos.y < 16) {
+        auto [r, g, b] = color;
+        _buffer.blend(19 + offset(pos), r, g, b, blend);
+      }
+    }
     void show() final { _led->show(_buffer); }
 
    private:
