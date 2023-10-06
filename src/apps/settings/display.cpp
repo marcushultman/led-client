@@ -61,11 +61,10 @@ http::Response DisplayService::operator()(http::Request req) {
   printf("DisplayService brightness: %d hue: %d\n", _brightness, _hue);
   save();
 
-  if (!std::exchange(_pending_present, true)) {
+  if (!_notified && !_timeout.count()) {
     _presenter.add(*this, {.prio = present::Prio::kNotification});
-  } else if (_led) {
-    update();
   }
+  _notified = true;
   return 204;
 }
 
@@ -74,34 +73,28 @@ Color DisplayService::logoBrightness() const { return timeOfDayBrightness(_brigh
 Color DisplayService::brightness() const { return timeOfDayBrightness(3 * _brightness / 4); }
 
 void DisplayService::start(SpotiLED &led, present::Callback callback) {
-  _led = &led;
-  _callback = std::move(callback);
-  update();
+  led.add([this, callback = std::move(callback)](auto &led, auto elapsed) {
+    if (std::exchange(_notified, false)) {
+      _timeout = elapsed + kTimeout;
+    }
+    if (elapsed >= _timeout) {
+      stop();
+      callback();
+      return false;
+    }
+    led.setLogo(logoBrightness());
+    auto bump = (elapsed.count() / 50) % 23;
+    for (auto i = 0; i < 23; ++i) {
+      led.set({i, i == bump ? 6 : 7}, brightness());
+      led.set({i, i == bump ? 7 : 8}, brightness());
+    }
+    return true;
+  });
 }
 
 void DisplayService::stop() {
-  _led->clear();
-  _led->show();
-  _led = nullptr;
-  _lifetime.reset();
-  _pending_present = false;
-}
-
-void DisplayService::update() {
-  _led->clear();
-  _led->setLogo(_brightness);
-  for (auto i = 0; i < 23; ++i) {
-    _led->set({i, 8}, _brightness);
-    _led->set({i, 9}, _brightness);
-  }
-  _led->show();
-
-  _lifetime = _main_scheduler.schedule(
-      [this] {
-        stop();
-        _callback();
-      },
-      {.delay = kTimeout});
+  _timeout = {};
+  _notified = false;
 }
 
 void DisplayService::save() {

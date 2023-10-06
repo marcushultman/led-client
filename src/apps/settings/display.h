@@ -20,7 +20,6 @@ struct DisplayService : present::Presentable, BrightnessProvider {
   void stop() final;
 
  private:
-  void update();
   void save();
 
   async::Scheduler &_main_scheduler;
@@ -28,11 +27,8 @@ struct DisplayService : present::Presentable, BrightnessProvider {
   uint8_t _brightness = 0;
   uint8_t _hue = 0;
 
-  bool _pending_present = false;
-
-  SpotiLED *_led = nullptr;
-  present::Callback _callback;
-  async::Lifetime _lifetime;
+  std::chrono::milliseconds _timeout{};
+  bool _notified = false;
 };
 
 }  // namespace settings
