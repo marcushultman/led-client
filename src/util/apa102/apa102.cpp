@@ -60,7 +60,7 @@ size_t Buffer::size() const { return _buf.size(); }
 
 #if __arm__
 
-class SPILED final {
+class SPILED final : public LED {
  public:
   explicit SPILED(int hz)
       : _config{
@@ -76,7 +76,7 @@ class SPILED final {
     }
   }
 
-  void show(Buffer &buffer) {
+  void show(Buffer &buffer) final {
     if (_spi) {
       _spi->write(buffer.data(), buffer.size());
     }
@@ -119,7 +119,7 @@ class Simulator final : public LED {
  public:
   Simulator() : _pipe("./simulator_out") {}
 
-  void show(Buffer &buffer) {
+  void show(Buffer &buffer) final {
     assert(buffer.numLeds() == 19 + 16 * 23);
     auto *data = buffer.data();
     _pipe << "\n\n\n\n";
