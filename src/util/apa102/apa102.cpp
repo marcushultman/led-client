@@ -55,7 +55,7 @@ void Buffer::blend(size_t i, uint8_t r, uint8_t g, uint8_t b, float blend) {
 
 size_t Buffer::numLeds() const { return _num_leds; }
 
-const uint8_t *Buffer::data() const { return _buf.data(); }
+uint8_t *Buffer::data() { return _buf.data(); }
 size_t Buffer::size() const { return _buf.size(); }
 
 #if __arm__
@@ -76,7 +76,7 @@ class SPILED final {
     }
   }
 
-  void show(const Buffer &buffer) {
+  void show(Buffer &buffer) {
     if (_spi) {
       _spi->write(buffer.data(), buffer.size());
     }
@@ -119,7 +119,7 @@ class Simulator final : public LED {
  public:
   Simulator() : _pipe("./simulator_out") {}
 
-  void show(const Buffer &buffer) {
+  void show(Buffer &buffer) {
     assert(buffer.numLeds() == 19 + 16 * 23);
     auto *data = buffer.data();
     _pipe << "\n\n\n\n";

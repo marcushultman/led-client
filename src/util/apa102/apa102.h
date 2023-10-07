@@ -15,7 +15,7 @@ struct Buffer {
 
   size_t numLeds() const;
 
-  const uint8_t* data() const;
+  uint8_t* data();
   size_t size() const;
 
  private:
@@ -25,7 +25,7 @@ struct Buffer {
 
 struct LED {
   virtual ~LED() = default;
-  virtual void show(const Buffer&) = 0;
+  virtual void show(Buffer&) = 0;
 };
 
 std::unique_ptr<LED> createLED(int hz = 2000000);
