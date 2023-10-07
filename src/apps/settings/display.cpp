@@ -1,10 +1,12 @@
 #include "display.h"
 
 #include <charconv>
+#include <cmath>
 #include <fstream>
 
 #include "brightness_provider.h"
 #include "time_of_day_brightness.h"
+#include "util/color/color.h"
 #include "util/spotiled/spotiled.h"
 #include "util/url/url.h"
 
@@ -83,11 +85,40 @@ void DisplayService::start(SpotiLED &led, present::Callback callback) {
       return false;
     }
     led.setLogo(logoBrightness());
-    auto bump = (elapsed.count() / 50) % 23;
-    for (auto i = 0; i < 23; ++i) {
-      led.set({i, i == bump ? 6 : 7}, brightness());
-      led.set({i, i == bump ? 7 : 8}, brightness());
+    double bump = elapsed.count();
+    for (auto x = 0; x < 23; ++x) {
+      auto a = 8 + 8 * std::sin(2 * M_PI * (bump / 50 + x) / 20);
+      auto b = 8 + 3 * std::sin(2 * M_PI * (bump / 50 + x) / 20);
+
+      for (auto y = std::min<int>(std::floor(a), std::floor(b)),
+                end = std::max<int>(std::ceil(a), std::ceil(b));
+           y < end; y++) {
+        led.set({x, y}, {brightness()[0], 0, 0});
+      }
     }
+
+    for (auto x = 0; x < 23; ++x) {
+      auto a = 8 + 6 * std::sin(2 * M_PI * (bump / 33 + x) / 25);
+      auto b = 8 + 3 * std::sin(2 * M_PI * (bump / 33 + x) / 25);
+
+      for (auto y = std::min<int>(std::floor(a), std::floor(b)),
+                end = std::max<int>(std::ceil(a), std::ceil(b));
+           y < end; y++) {
+        led.blend({x, y}, {0, 0, brightness()[0]});
+      }
+    }
+
+    for (auto x = 0; x < 23; ++x) {
+      auto a = 8 + 4 * std::sin(2 * M_PI * (bump / 25 + x) / 30);
+      auto b = 8 + 2 * std::sin(2 * M_PI * (bump / 25 + x) / 30);
+
+      for (auto y = std::min<int>(std::floor(a), std::floor(b)),
+                end = std::max<int>(std::ceil(a), std::ceil(b));
+           y < end; y++) {
+        led.blend({x, y}, {0, brightness()[0], 0});
+      }
+    }
+
     return true;
   });
 }
