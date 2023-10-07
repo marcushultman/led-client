@@ -152,27 +152,6 @@ void parseContext(jq_state *jq, const std::string &buffer, std::string &value) {
 
 #endif
 
-size_t bufferString(char *ptr, size_t size, size_t nmemb, void *obj) {
-  size *= nmemb;
-  static_cast<std::string *>(obj)->append(ptr, size);
-  return size;
-}
-
-size_t bufferArray(char *ptr, size_t size, size_t nmemb, void *obj) {
-  size *= nmemb;
-  auto &v = *static_cast<std::vector<unsigned char> *>(obj);
-  v.insert(v.end(), ptr, ptr + size);
-  return size;
-}
-
-std::pair<int, int> makeRange(int col, int upper, int lower) {
-  auto odd = col % 2 == 1;
-  auto start = odd ? -upper : -lower;
-  auto end = odd ? lower : upper;
-  auto mid = 16 * col + 8;
-  return {mid + start, mid + end};
-}
-
 constexpr auto kTokensFilename = "spotify_token";
 
 std::unordered_map<std::string, std::string> loadTokens() {
