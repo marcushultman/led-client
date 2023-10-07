@@ -68,6 +68,7 @@ int main(int argc, char *argv[]) {
   // todo: proxy and route settings
 
   PathMapper mapper{{
+      {"ping", [](auto) { return 200; }},
       {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
       {"mode", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
       {"settings", [&](auto req) { return display_service(std::move(req)); }},
