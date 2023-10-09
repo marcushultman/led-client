@@ -18,6 +18,38 @@ const auto kScrollSpeed = 0.005;
 
 }  // namespace
 
+void renderRolling(SpotiLED &led,
+                   const settings::BrightnessProvider &brightness_provider,
+                   std::chrono::milliseconds elapsed,
+                   page::Page &page,
+                   Coord offset,
+                   Coord scale) {
+  led.setLogo(brightness_provider.logoBrightness());
+
+  auto brightness = brightness_provider.brightness();
+
+  auto width = 0;
+  for (auto &placement : page.sprites()) {
+    width = std::max(width, placement.pos.x + (placement.sprite ? placement.sprite->width : 0));
+  }
+
+  // todo: respect direction
+  auto scroll_offset =
+      Coord{23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + width)), 0};
+
+  for (auto &placement : page.sprites()) {
+    if (!placement.sprite) {
+      continue;
+    }
+    for (auto &section : placement.sprite->sections) {
+      for (auto pos : section.coords) {
+        led.set(offset + scale * (scroll_offset + placement.pos + placement.scale * pos),
+                section.color * brightness);
+      }
+    }
+  }
+}
+
 std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &scheduler,
                                                            SpotiLED &led,
                                                            settings::BrightnessProvider &brightness,
@@ -45,32 +77,9 @@ std::unique_ptr<RollingPresenter> RollingPresenter::create(async::Scheduler &sch
 
     void present() {
       _led.clear();
-      _led.setLogo(_brightness.logoBrightness());
-
-      auto brightness = _brightness.brightness();
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now() - _started);
-
-      auto width = 0;
-      for (auto &placement : _page.sprites()) {
-        width = std::max(width, placement.pos.x + (placement.sprite ? placement.sprite->width : 0));
-      }
-
-      // todo: respect direction
-      auto scroll_offset =
-          Coord{23 - (static_cast<int>(kScrollSpeed * elapsed.count()) % (23 + width)), 0};
-
-      for (auto &placement : _page.sprites()) {
-        if (!placement.sprite) {
-          continue;
-        }
-        for (auto &section : placement.sprite->sections) {
-          for (auto pos : section.coords) {
-            _led.set(_offset + _scale * (scroll_offset + placement.pos + placement.scale * pos),
-                     section.color * brightness);
-          }
-        }
-      }
+      renderRolling(_led, _brightness, elapsed, _page, _offset, _scale);
       _led.show();
     }
 

@@ -2,12 +2,14 @@
 
 #include <curl/curl.h>
 
+#include <array>
 #include <iostream>
 #include <set>
 
 namespace http {
 namespace {
 
+constexpr auto kThreadPoolSize = 4;
 constexpr auto kDefaultTimeout = std::chrono::seconds(5);
 
 void setMethod(CURL *curl, Method method) {
@@ -116,28 +118,41 @@ class RequestExecutor final {
 
 class HttpImpl final : public Http {
  public:
-  explicit HttpImpl(CURL *curl) : _curl{curl} {}
+  explicit HttpImpl(bool &ok) {
+    for (auto &resources : _pool) {
+      auto *curl = curl_easy_init();
+      resources.curl = curl;
+      resources.thread = async::Thread::create("http");
+      ok &= bool(curl);
+    }
+  }
   ~HttpImpl() {
-    _thread.reset();
-    curl_easy_cleanup(_curl);
+    for (auto &resources : _pool) {
+      curl_easy_cleanup(resources.curl);
+      resources.thread.reset();
+    }
   }
 
   Lifetime request(Request request, RequestOptions opts) final {
+    auto &[curl, thread] = _pool[_next_thread.fetch_add(1) % kThreadPoolSize];
     return std::make_unique<RequestExecutor>(
-        _curl, _thread->scheduler(),
+        curl, thread->scheduler(),
         std::make_shared<RequestState>(std::move(request), std::move(opts)));
   }
 
  private:
-  CURL *_curl;
-  std::unique_ptr<async::Thread> _thread = async::Thread::create("http");
+  struct ThreadResources {
+    CURL *curl = nullptr;
+    std::unique_ptr<async::Thread> thread;
+  };
+  std::array<ThreadResources, kThreadPoolSize> _pool;
+  std::atomic_size_t _next_thread = 0;
 };
 
 std::unique_ptr<Http> Http::create() {
-  if (auto *curl = curl_easy_init()) {
-    return std::make_unique<HttpImpl>(curl);
-  }
-  return nullptr;
+  bool ok = true;
+  auto http = std::make_unique<HttpImpl>(ok);
+  return ok ? std::move(http) : nullptr;
 }
 
 }  // namespace http

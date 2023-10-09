@@ -14,3 +14,5 @@ target_link_libraries(http
   async
   ${CURL_LIBRARIES}
 )
+
+add_subdirectory(tests)

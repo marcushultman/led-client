@@ -19,7 +19,17 @@ constexpr auto kDefaultBrightness = 32;
 constexpr auto kDefaultHue = 255;
 
 constexpr auto kFilename = "brightness0";
-constexpr auto kTimeout = 3s;
+constexpr auto kTimeout = 300000s;
+
+std::pair<int, int> waveIndices(
+    double speed, uint8_t brightness, int x, int width, int top, int bottom) {
+  auto f = 11 * x < brightness ? (brightness - 11 * x) / double(brightness) : 0;
+  auto w = f * std::sin(2 * M_PI * (0.002 * speed + x) / width);
+  auto y1 = 8 + top * w;
+  auto y2 = 8 + bottom * w;
+  return {std::min<int>(std::floor(y1), std::floor(y2)),
+          std::max<int>(std::ceil(y1), std::ceil(y2))};
+}
 
 }  // namespace
 
@@ -56,9 +66,9 @@ http::Response DisplayService::operator()(http::Request req) {
   }
 
   if (setting == "brightness") {
-    _brightness = std::stoi(req.body);
+    _brightness = std::clamp(std::stoi(req.body), 0, 255);
   } else if (setting == "hue") {
-    _hue = std::stoi(req.body);
+    _hue = std::clamp(std::stoi(req.body), 0, 255);
   }
   printf("DisplayService brightness: %d hue: %d\n", _brightness, _hue);
   save();
@@ -76,50 +86,41 @@ Color DisplayService::brightness() const { return timeOfDayBrightness(3 * _brigh
 
 void DisplayService::start(SpotiLED &led, present::Callback callback) {
   led.add([this, callback = std::move(callback)](auto &led, auto elapsed) {
+    using namespace std::chrono_literals;
+
     if (std::exchange(_notified, false)) {
       _timeout = elapsed + kTimeout;
     }
     if (elapsed >= _timeout) {
       stop();
       callback();
-      return false;
+      return 0ms;
     }
     led.setLogo(logoBrightness());
-    double bump = elapsed.count();
-    for (auto x = 0; x < 23; ++x) {
-      auto a = 8 + 8 * std::sin(2 * M_PI * (bump / 50 + x) / 20);
-      auto b = 8 + 3 * std::sin(2 * M_PI * (bump / 50 + x) / 20);
 
-      for (auto y = std::min<int>(std::floor(a), std::floor(b)),
-                end = std::max<int>(std::ceil(a), std::ceil(b));
-           y < end; y++) {
-        led.set({x, y}, {brightness()[0], 0, 0});
+    uint8_t c1 = 3 * _brightness / 4;
+    uint8_t c2 = 4 * _brightness / 5;
+
+    for (auto x = 0; x < 23; ++x) {
+      for (auto [y, end] = waveIndices(10 * elapsed.count(), _brightness, x, 20, 8, 3); y < end;
+           y++) {
+        led.blend({x, y}, {c1, c1, _brightness});
+      }
+    }
+    for (auto x = 0; x < 23; ++x) {
+      for (auto [y, end] = waveIndices(15 * elapsed.count(), _brightness, x, 25, 6, 3); y < end;
+           y++) {
+        led.blend({x, y}, {c2, c2, _brightness});
+      }
+    }
+    for (auto x = 0; x < 23; ++x) {
+      for (auto [y, end] = waveIndices(20 * elapsed.count(), _brightness, x, 30, 4, 2); y < end;
+           y++) {
+        led.blend({x, y}, _brightness);
       }
     }
 
-    for (auto x = 0; x < 23; ++x) {
-      auto a = 8 + 6 * std::sin(2 * M_PI * (bump / 33 + x) / 25);
-      auto b = 8 + 3 * std::sin(2 * M_PI * (bump / 33 + x) / 25);
-
-      for (auto y = std::min<int>(std::floor(a), std::floor(b)),
-                end = std::max<int>(std::ceil(a), std::ceil(b));
-           y < end; y++) {
-        led.blend({x, y}, {0, 0, brightness()[0]});
-      }
-    }
-
-    for (auto x = 0; x < 23; ++x) {
-      auto a = 8 + 4 * std::sin(2 * M_PI * (bump / 25 + x) / 30);
-      auto b = 8 + 2 * std::sin(2 * M_PI * (bump / 25 + x) / 30);
-
-      for (auto y = std::min<int>(std::floor(a), std::floor(b)),
-                end = std::max<int>(std::ceil(a), std::ceil(b));
-           y < end; y++) {
-        led.blend({x, y}, {0, brightness()[0], 0});
-      }
-    }
-
-    return true;
+    return 1000ms / 30;
   });
 }
 
