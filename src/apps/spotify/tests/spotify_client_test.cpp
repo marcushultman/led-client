@@ -1,5 +1,7 @@
 #include "apps/spotify/spotify_client.h"
 
+#include <chrono>
+
 #include "util/spotiled/spotiled.h"
 
 struct BrightnessProvider : settings::BrightnessProvider {
@@ -8,19 +10,26 @@ struct BrightnessProvider : settings::BrightnessProvider {
 };
 
 int main() {
-  auto http = http::Http::create();
-  auto thread = async::Thread::create("main");
-  auto led = SpotiLED::create();
-  auto presenter_queue = present::makePresenterQueue(*led);
-  BrightnessProvider brightness;
+  for (size_t i = 0; i < 20; ++i) {
+    auto ms = spotify::requestBackoff(i);
+    auto s = std::chrono::duration_cast<std::chrono::seconds>(ms);
+    printf("%ds\n", int(s.count()));
+  }
 
-  auto client =
-      SpotifyClient::create(thread->scheduler(), *http, *led, *presenter_queue, brightness, false);
+  // auto http = http::Http::create();
+  // auto thread = async::Thread::create("main");
+  // auto led = SpotiLED::create();
+  // auto presenter_queue = present::makePresenterQueue(*led);
+  // BrightnessProvider brightness;
 
-  async::Lifetime lifetime;
-  lifetime = thread->scheduler().schedule([&] {
-    client.reset();
-    http.reset();
-    lifetime.reset();
-  });
+  // auto client =
+  //     SpotifyClient::create(thread->scheduler(), *http, *led, *presenter_queue, brightness,
+  //     false);
+
+  // async::Lifetime lifetime;
+  // lifetime = thread->scheduler().schedule([&] {
+  //   client.reset();
+  //   http.reset();
+  //   lifetime.reset();
+  // });
 }

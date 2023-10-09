@@ -8,6 +8,11 @@
 #endif
 
 namespace apa102 {
+namespace {
+
+inline uint8_t luminance(int r, int g, int b) { return ((299 * r) + (587 * g) + (114 * b)) / 1000; }
+
+}  // namespace
 
 Buffer::Buffer(size_t num_leds) : _num_leds{num_leds} {
   auto trailing = _num_leds / 16;
@@ -44,13 +49,28 @@ void Buffer::blend(size_t i, uint8_t r, uint8_t g, uint8_t b, float blend) {
   if (i >= _num_leds) {
     return;
   }
-  auto &sb = _buf[4 + 4 * i + 1];
-  auto &sg = _buf[4 + 4 * i + 2];
-  auto &sr = _buf[4 + 4 * i + 3];
-  auto inv_blend = 1 - blend;
-  sb = inv_blend * sb + blend * b;
-  sg = inv_blend * sg + blend * g;
-  sr = inv_blend * sr + blend * r;
+  auto &out_b = _buf[4 + 4 * i + 1];
+  auto &out_g = _buf[4 + 4 * i + 2];
+  auto &out_r = _buf[4 + 4 * i + 3];
+
+  auto inv_blend = 2 * (1 - blend);
+  blend *= 2;
+
+  auto sum_b = inv_blend * out_b + blend * b;
+  auto sum_g = inv_blend * out_g + blend * g;
+  auto sum_r = inv_blend * out_r + blend * r;
+
+  auto max_l = std::max(luminance(out_r, out_g, out_b), luminance(r, g, b));
+  auto sum_l = luminance(sum_r, sum_g, sum_b);
+  assert(sum_l >= max_l);
+
+  if (sum_l == 0) {
+    return;
+  }
+  auto lum_ratio = float(max_l) / sum_l;
+  out_b = sum_b * lum_ratio;
+  out_g = sum_g * lum_ratio;
+  out_r = sum_r * lum_ratio;
 }
 
 size_t Buffer::numLeds() const { return _num_leds; }
@@ -96,7 +116,7 @@ std::string_view simLogo(const uint8_t *abgr) {
   } else if (g > b) {
     return (g > r ? "🟢" : r > g ? "🔴" : "🟡");
   } else if (b > r) {
-    return (b > g ? "🔵" : g > b ? "🟢" : "🩵");
+    return (b > g ? "🔵" : g > b ? "🟢" : "🌐");
   } else {
     return (r ? "⚪️" : "⚫️");
   }

@@ -27,7 +27,7 @@ struct DisplayService : present::Presentable, BrightnessProvider {
   uint8_t _brightness = 0;
   uint8_t _hue = 0;
 
-  std::chrono::milliseconds _timeout{};
+  std::chrono::milliseconds _timeout = {};
   bool _notified = false;
 };
 

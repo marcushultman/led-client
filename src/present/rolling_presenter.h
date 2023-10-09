@@ -12,6 +12,13 @@ enum class Direction {
   kHorizontal,
 };
 
+void renderRolling(SpotiLED &led,
+                   const settings::BrightnessProvider &brightness_provider,
+                   std::chrono::milliseconds elapsed,
+                   page::Page &page,
+                   Coord offset = {},
+                   Coord scale = kNormalScale);
+
 struct RollingPresenter {
   virtual ~RollingPresenter() = default;
   static std::unique_ptr<RollingPresenter> create(async::Scheduler &scheduler,

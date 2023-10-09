@@ -1,8 +1,9 @@
 
 set(SOURCES
+  service.cpp
   service.h
-  spotify_client.h
   spotify_client.cpp
+  spotify_client.h
 )
 
 add_library(spotify ${SOURCES})
