@@ -183,7 +183,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
     _now_playing.back()->access_token = std::move(access_token);
     _now_playing.back()->refresh_token = std::move(refresh_token);
     saveTokens(_now_playing);
-    scheduleFetchNowPlaying();
+    scheduleFetchNowPlaying(*_now_playing.back());
   }
 
   const NowPlaying *getSomePlaying() const final {
@@ -202,12 +202,12 @@ class NowPlayingServiceImpl final : public NowPlayingService {
     kPollError,
   };
 
-  void scheduleFetchNowPlaying(std::chrono::milliseconds delay = {});
+  void scheduleFetchNowPlaying(NowPlaying &now_playing);
 
   void refreshToken(NowPlaying &now_playing);
   void onRefreshTokenResponse(NowPlaying &now_playing, http::Response response);
 
-  void fetchNowPlaying(bool allow_retry);
+  void fetchNowPlaying(bool allow_retry, NowPlaying &now_playing);
   void onNowPlayingResponse(bool allow_retry, NowPlaying &now_playing, http::Response response);
 
   // void fetchContext(const std::string &access_token, const std::string &url);
@@ -216,7 +216,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   void fetchScannable(bool started_playing, NowPlaying &now_playing);
   void onScannable(bool started_playing, NowPlaying &now_playing, http::Response response);
 
-  void renderScannable(bool started_playing, const NowPlaying &now_playing);
+  void renderScannable(bool started_playing, NowPlaying &now_playing);
 
   async::Scheduler &_main_scheduler;
   http::Http &_http;
@@ -225,9 +225,6 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   OnPlaying _on_playing;
 
   std::vector<std::unique_ptr<NowPlaying>> _now_playing;
-
-  http::Lifetime _request;
-  async::Lifetime _work;
 };
 
 std::unique_ptr<NowPlayingService> NowPlayingService::create(async::Scheduler &main_scheduler,
@@ -254,13 +251,30 @@ NowPlayingServiceImpl::NowPlayingServiceImpl(async::Scheduler &main_scheduler,
       _on_playing{on_playing},
       _now_playing{loadTokens()} {
   printf("%lu tokens loaded\n", _now_playing.size());
-  scheduleFetchNowPlaying();
+  for (auto &now_playing : _now_playing) {
+    scheduleFetchNowPlaying(*now_playing);
+  }
 }
 
 NowPlayingServiceImpl::~NowPlayingServiceImpl() { jq_teardown(&_jq); }
 
-void NowPlayingServiceImpl::scheduleFetchNowPlaying(std::chrono::milliseconds delay) {
-  _work = _main_scheduler.schedule([this] { fetchNowPlaying(true); }, {.delay = delay});
+void NowPlayingServiceImpl::scheduleFetchNowPlaying(NowPlaying &now_playing) {
+  std::chrono::milliseconds delay;
+
+  using namespace std::chrono_literals;
+  if (now_playing.status == 0) {
+    delay = 0s;
+  } else if (now_playing.status == 200) {
+    delay = 5s;
+  } else {
+    // Backoff for 204, 4xx, 5xx
+    delay = requestBackoff(now_playing.num_request);
+    auto token = std::string_view(now_playing.access_token).substr(0, 8);
+    printf("[%.*s] retry in %llds\n", int(token.size()), token.data(),
+           std::chrono::duration_cast<std::chrono::seconds>(delay).count());
+  }
+  now_playing.work = _main_scheduler.schedule(
+      [this, &now_playing] { fetchNowPlaying(true, now_playing); }, {.delay = delay});
 }
 
 void NowPlayingServiceImpl::refreshToken(NowPlaying &now_playing) {
@@ -268,7 +282,7 @@ void NowPlayingServiceImpl::refreshToken(NowPlaying &now_playing) {
                     "&client_secret=" + credentials::kClientSecret +
                     "&refresh_token=" + now_playing.refresh_token + "&grant_type=refresh_token";
 
-  _request =
+  now_playing.request =
       _http.request({.method = http::Method::POST,
                      .url = kAuthTokenUrl,
                      .headers = {{kContentType, kXWWWFormUrlencoded}},
@@ -282,10 +296,9 @@ void NowPlayingServiceImpl::onRefreshTokenResponse(NowPlaying &now_playing,
                                                    http::Response response) {
   if (response.status / 100 != 2) {
     std::cerr << "failed to refresh token: " << response.body << std::endl;
-    ++now_playing.num_request;
     std::erase_if(_now_playing, [&](auto &ptr) { return ptr.get() == &now_playing; });
     saveTokens(_now_playing);
-    return fetchNowPlaying(true);
+    return;
   }
 
   TokenData data;
@@ -298,52 +311,30 @@ void NowPlayingServiceImpl::onRefreshTokenResponse(NowPlaying &now_playing,
   now_playing.refresh_token = std::move(data.refresh_token);
   saveTokens(_now_playing);
 
-  fetchNowPlaying(false);
+  fetchNowPlaying(false, now_playing);
 }
 
-void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry) {
-  using namespace std::chrono_literals;
-  auto now = std::chrono::system_clock::now();
-  std::optional<std::chrono::milliseconds> min_backoff;
+void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry, NowPlaying &now_playing) {
+  auto token = std::string_view(now_playing.access_token).substr(0, 8);
+  printf("[%.*s] fetch NowPlaying\n", int(token.size()), token.data());
 
-  for (auto &now_playing : _now_playing) {
-    auto &access_token = now_playing->access_token;
-
-    // Backoff for 0, 204, 4xx, 5xx
-    if (now_playing->status != 200) {
-      auto backoff = requestBackoff(now_playing->num_request);
-      if (now - now_playing->requested_at < backoff) {
-        min_backoff = min_backoff ? std::min(backoff, *min_backoff) : backoff;
-        continue;
-      }
-    }
-
-    auto token = std::string_view(access_token).substr(0, 8);
-    printf("fetch NowPlaying %.*s\n", int(token.size()), token.data());
-    now_playing->requested_at = now;
-    now_playing->num_request++;
-    _request =
-        _http.request({.url = kPlayerUrl, .headers = {{kAuthorization, "Bearer " + access_token}}},
-                      {.post_to = _main_scheduler,
-                       .callback = [this, allow_retry, &now_playing = *now_playing](auto response) {
-                         onNowPlayingResponse(allow_retry, now_playing, std::move(response));
-                       }});
-    return;
-  }
-  if (min_backoff) {
-    using namespace std::chrono;
-    printf("retry in %ds\n", int(duration_cast<seconds>(*min_backoff).count()));
-    scheduleFetchNowPlaying(*min_backoff);
-  }
+  now_playing.num_request++;
+  now_playing.request = _http.request(
+      {.url = kPlayerUrl, .headers = {{kAuthorization, "Bearer " + now_playing.access_token}}},
+      {.post_to = _main_scheduler, .callback = [this, allow_retry, &now_playing](auto response) {
+         onNowPlayingResponse(allow_retry, now_playing, std::move(response));
+       }});
 }
 
 void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry,
                                                  NowPlaying &now_playing,
                                                  http::Response response) {
+  now_playing.status = response.status;
+
   if (response.status / 100 != 2) {
     if (!allow_retry) {
       std::cerr << "failed to get player state" << std::endl;
-      return fetchNowPlaying(true);
+      return scheduleFetchNowPlaying(now_playing);
     }
     now_playing.num_request--;
     return refreshToken(now_playing);
@@ -352,8 +343,7 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry,
   if (response.status == 204) {
     std::cerr << "nothing is playing" << std::endl;
     now_playing.track_id.clear();
-    now_playing.status = response.status;
-    return fetchNowPlaying(true);
+    return scheduleFetchNowPlaying(now_playing);
   }
   assert(response.status == 200);
 
@@ -361,7 +351,6 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry,
   auto started_playing = now_playing.status != response.status;
 
   now_playing.num_request = 0;
-  now_playing.status = response.status;
 
   auto track_id = now_playing.track_id;
 
@@ -404,7 +393,7 @@ void NowPlayingServiceImpl::onContext(const std::string &access_token, http::Res
 #endif
 
 void NowPlayingServiceImpl::fetchScannable(bool started_playing, NowPlaying &now_playing) {
-  _request =
+  now_playing.request =
       _http.request({.url = credentials::kScannablesCdnUrl + now_playing.uri + "?format=svg"},
                     {.post_to = _main_scheduler,
                      .callback = [this, started_playing, &now_playing](auto response) {
@@ -443,7 +432,7 @@ void NowPlayingServiceImpl::onScannable(bool started_playing,
   renderScannable(started_playing, now_playing);
 }
 
-void NowPlayingServiceImpl::renderScannable(bool started_playing, const NowPlaying &now_playing) {
+void NowPlayingServiceImpl::renderScannable(bool started_playing, NowPlaying &now_playing) {
   std::cerr << "context: " << now_playing.context << "\n";
   std::cerr << "title: " << now_playing.title << "\n";
   std::cerr << "artist: " << now_playing.artist << "\n";
@@ -455,8 +444,7 @@ void NowPlayingServiceImpl::renderScannable(bool started_playing, const NowPlayi
     _on_playing(now_playing);
   }
 
-  using namespace std::chrono_literals;
-  scheduleFetchNowPlaying(5s);
+  scheduleFetchNowPlaying(now_playing);
 }
 
 // AuthenticatorPresenter
