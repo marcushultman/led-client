@@ -16,8 +16,6 @@ namespace spotify {
 
 struct NowPlaying {
   int status = 0;
-  std::string access_token;
-  std::string refresh_token;
   size_t num_request = 0;
 
   std::string track_id;
@@ -37,17 +35,24 @@ struct NowPlaying {
 
 std::chrono::milliseconds requestBackoff(size_t num_request);
 
-// todo: split this in 1 service instance per user
 struct NowPlayingService {
-  using OnPlaying = std::function<void(const NowPlaying &)>;
+  using OnPlaying = std::function<void(const NowPlayingService &, const NowPlaying &)>;
+  using OnTokenUpdate = std::function<void(const NowPlayingService &)>;
+  using OnLogout = std::function<void(const NowPlayingService &)>;
+
   virtual ~NowPlayingService() = default;
-  virtual void add(std::string access_token, std::string refresh_token) = 0;
-  virtual const NowPlaying *getSomePlaying() const = 0;
+  virtual const NowPlaying *getIfPlaying() const = 0;
+  virtual const std::string &accessToken() const = 0;
+  virtual const std::string &refreshToken() const = 0;
 
   static std::unique_ptr<NowPlayingService> create(async::Scheduler &main_scheduler,
                                                    http::Http &,
                                                    bool verbose,
-                                                   OnPlaying);
+                                                   std::string access_token,
+                                                   std::string refresh_token,
+                                                   OnPlaying,
+                                                   OnTokenUpdate,
+                                                   OnLogout);
 };
 
 struct AuthenticatorPresenter {
@@ -59,7 +64,6 @@ struct AuthenticatorPresenter {
 
   static std::unique_ptr<AuthenticatorPresenter> create(async::Scheduler &main_scheduler,
                                                         http::Http &,
-                                                        SpotiLED &led,
                                                         present::PresenterQueue &presenter,
                                                         settings::BrightnessProvider &brightness,
                                                         bool verbose,

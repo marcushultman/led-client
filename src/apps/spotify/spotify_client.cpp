@@ -15,7 +15,6 @@
 #include "font/font.h"
 #include "present/rolling_presenter.h"
 #include "util/spotiled/spotiled.h"
-#include "util/storage/string_set.h"
 
 extern "C" {
 #include <jq.h>
@@ -140,31 +139,6 @@ void parseContext(jq_state *jq, const std::string &buffer, std::string &value) {
 
 #endif
 
-constexpr auto kTokensFilename = "spotify_token";
-
-std::vector<std::unique_ptr<NowPlaying>> loadTokens() {
-  std::vector<std::unique_ptr<NowPlaying>> now_playing;
-
-  std::unordered_set<std::string> set;
-  storage::loadSet(set, std::ifstream(kTokensFilename));
-  for (auto token : set) {
-    auto split = token.find('\n');
-    now_playing.push_back(std::make_unique<NowPlaying>());
-    now_playing.back()->access_token = token.substr(0, split);
-    now_playing.back()->refresh_token = token.substr(split + 1);
-  }
-  return now_playing;
-}
-
-void saveTokens(const std::vector<std::unique_ptr<NowPlaying>> &now_playing) {
-  std::unordered_set<std::string> set;
-  for (auto &now_playing : now_playing) {
-    set.insert(now_playing->access_token + "\n" + now_playing->refresh_token);
-  }
-  auto out = std::ofstream(kTokensFilename);
-  storage::saveSet(set, out);
-}
-
 }  // namespace
 
 std::chrono::milliseconds requestBackoff(size_t num_request) {
@@ -174,130 +148,134 @@ std::chrono::milliseconds requestBackoff(size_t num_request) {
 
 class NowPlayingServiceImpl final : public NowPlayingService {
  public:
-  NowPlayingServiceImpl(
-      async::Scheduler &main_scheduler, http::Http &http, jq_state *jq, bool verbose, OnPlaying);
+  NowPlayingServiceImpl(async::Scheduler &main_scheduler,
+                        http::Http &http,
+                        jq_state *jq,
+                        bool verbose,
+                        std::string access_token,
+                        std::string refresh_token,
+                        OnPlaying,
+                        OnTokenUpdate,
+                        OnLogout);
   ~NowPlayingServiceImpl();
 
-  void add(std::string access_token, std::string refresh_token) final {
-    _now_playing.push_back(std::make_unique<NowPlaying>());
-    _now_playing.back()->access_token = std::move(access_token);
-    _now_playing.back()->refresh_token = std::move(refresh_token);
-    saveTokens(_now_playing);
-    scheduleFetchNowPlaying(*_now_playing.back());
-  }
+  const std::string &accessToken() const final { return _access_token; }
+  const std::string &refreshToken() const final { return _refresh_token; }
 
-  const NowPlaying *getSomePlaying() const final {
-    for (auto &now_playing : _now_playing) {
-      if (now_playing->status == 200) {
-        return now_playing.get();
-      }
+  const NowPlaying *getIfPlaying() const final {
+    if (_now_playing.status == 200) {
+      return &_now_playing;
     }
     return nullptr;
   }
 
  private:
-  enum PollResult {
-    kPollSuccess = 0,
-    kPollWait,
-    kPollError,
-  };
+  void scheduleFetchNowPlaying();
 
-  void scheduleFetchNowPlaying(NowPlaying &now_playing);
+  void refreshToken();
+  void onRefreshTokenResponse(http::Response response);
 
-  void refreshToken(NowPlaying &now_playing);
-  void onRefreshTokenResponse(NowPlaying &now_playing, http::Response response);
-
-  void fetchNowPlaying(bool allow_retry, NowPlaying &now_playing);
-  void onNowPlayingResponse(bool allow_retry, NowPlaying &now_playing, http::Response response);
+  void fetchNowPlaying(bool allow_retry);
+  void onNowPlayingResponse(bool allow_retry, http::Response response);
 
   // void fetchContext(const std::string &access_token, const std::string &url);
   // void onContext(const std::string &access_token, http::Response response);
 
-  void fetchScannable(bool started_playing, NowPlaying &now_playing);
-  void onScannable(bool started_playing, NowPlaying &now_playing, http::Response response);
+  void fetchScannable(bool started_playing);
+  void onScannable(bool started_playing, http::Response response);
 
-  void renderScannable(bool started_playing, NowPlaying &now_playing);
+  void renderScannable(bool started_playing);
 
   async::Scheduler &_main_scheduler;
   http::Http &_http;
   jq_state *_jq = nullptr;
   bool _verbose = false;
-  OnPlaying _on_playing;
 
-  std::vector<std::unique_ptr<NowPlaying>> _now_playing;
+  std::string _access_token;
+  std::string _refresh_token;
+  NowPlaying _now_playing;
+
+  OnPlaying _on_playing;
+  OnTokenUpdate _on_token_update;
+  OnLogout _on_logout;
 };
 
 std::unique_ptr<NowPlayingService> NowPlayingService::create(async::Scheduler &main_scheduler,
                                                              http::Http &http,
                                                              bool verbose,
-                                                             OnPlaying on_playing) {
+                                                             std::string access_token,
+                                                             std::string refresh_token,
+                                                             OnPlaying on_playing,
+                                                             OnTokenUpdate on_token_update,
+                                                             OnLogout on_logout) {
   auto jq = jq_init();
   if (!jq) {
     return nullptr;
   }
-  return std::make_unique<NowPlayingServiceImpl>(main_scheduler, http, jq, verbose,
-                                                 std::move(on_playing));
+  return std::make_unique<NowPlayingServiceImpl>(
+      main_scheduler, http, jq, verbose, std::move(access_token), std::move(refresh_token),
+      std::move(on_playing), std::move(on_token_update), std::move(on_logout));
 }
 
 NowPlayingServiceImpl::NowPlayingServiceImpl(async::Scheduler &main_scheduler,
                                              http::Http &http,
                                              jq_state *jq,
                                              bool verbose,
-                                             OnPlaying on_playing)
+                                             std::string access_token,
+                                             std::string refresh_token,
+                                             OnPlaying on_playing,
+                                             OnTokenUpdate on_token_update,
+                                             OnLogout on_logout)
     : _main_scheduler{main_scheduler},
       _http{http},
       _jq{jq},
       _verbose{verbose},
-      _on_playing{on_playing},
-      _now_playing{loadTokens()} {
-  printf("%lu tokens loaded\n", _now_playing.size());
-  for (auto &now_playing : _now_playing) {
-    scheduleFetchNowPlaying(*now_playing);
-  }
+      _access_token{std::move(access_token)},
+      _refresh_token{std::move(refresh_token)},
+      _on_playing{std::move(on_playing)},
+      _on_token_update{std::move(on_token_update)},
+      _on_logout{std::move(on_logout)} {
+  scheduleFetchNowPlaying();
 }
 
 NowPlayingServiceImpl::~NowPlayingServiceImpl() { jq_teardown(&_jq); }
 
-void NowPlayingServiceImpl::scheduleFetchNowPlaying(NowPlaying &now_playing) {
+void NowPlayingServiceImpl::scheduleFetchNowPlaying() {
   std::chrono::milliseconds delay;
 
   using namespace std::chrono_literals;
-  if (now_playing.status == 0) {
+  if (_now_playing.status == 0) {
     delay = 0s;
-  } else if (now_playing.status == 200) {
+  } else if (_now_playing.status == 200) {
     delay = 5s;
   } else {
     // Backoff for 204, 4xx, 5xx
-    delay = requestBackoff(now_playing.num_request);
-    auto token = std::string_view(now_playing.access_token).substr(0, 8);
+    delay = requestBackoff(_now_playing.num_request);
+    auto token = std::string_view(_access_token).substr(0, 8);
     printf("[%.*s] retry in %llds\n", int(token.size()), token.data(),
            std::chrono::duration_cast<std::chrono::seconds>(delay).count());
   }
-  now_playing.work = _main_scheduler.schedule(
-      [this, &now_playing] { fetchNowPlaying(true, now_playing); }, {.delay = delay});
+  _now_playing.work = _main_scheduler.schedule([this] { fetchNowPlaying(true); }, {.delay = delay});
 }
 
-void NowPlayingServiceImpl::refreshToken(NowPlaying &now_playing) {
+void NowPlayingServiceImpl::refreshToken() {
   const auto data = std::string{"client_id="} + credentials::kClientId +
                     "&client_secret=" + credentials::kClientSecret +
-                    "&refresh_token=" + now_playing.refresh_token + "&grant_type=refresh_token";
+                    "&refresh_token=" + _refresh_token + "&grant_type=refresh_token";
 
-  now_playing.request =
-      _http.request({.method = http::Method::POST,
-                     .url = kAuthTokenUrl,
-                     .headers = {{kContentType, kXWWWFormUrlencoded}},
-                     .body = data},
-                    {.post_to = _main_scheduler, .callback = [this, &now_playing](auto response) {
-                       onRefreshTokenResponse(now_playing, std::move(response));
-                     }});
+  _now_playing.request = _http.request(
+      {.method = http::Method::POST,
+       .url = kAuthTokenUrl,
+       .headers = {{kContentType, kXWWWFormUrlencoded}},
+       .body = data},
+      {.post_to = _main_scheduler,
+       .callback = [this](auto response) { onRefreshTokenResponse(std::move(response)); }});
 }
 
-void NowPlayingServiceImpl::onRefreshTokenResponse(NowPlaying &now_playing,
-                                                   http::Response response) {
+void NowPlayingServiceImpl::onRefreshTokenResponse(http::Response response) {
   if (response.status / 100 != 2) {
     std::cerr << "failed to refresh token: " << response.body << std::endl;
-    std::erase_if(_now_playing, [&](auto &ptr) { return ptr.get() == &now_playing; });
-    saveTokens(_now_playing);
+    _on_logout(*this);
     return;
   }
 
@@ -307,61 +285,59 @@ void NowPlayingServiceImpl::onRefreshTokenResponse(NowPlaying &now_playing,
             << "access_token: " << std::string_view(data.access_token).substr(0, 8) << ", "
             << "refresh_token: " << std::string_view(data.refresh_token).substr(0, 8) << std::endl;
 
-  now_playing.access_token = std::move(data.access_token);
-  now_playing.refresh_token = std::move(data.refresh_token);
-  saveTokens(_now_playing);
+  _access_token = std::move(data.access_token);
+  _refresh_token = std::move(data.refresh_token);
+  _on_token_update(*this);
 
-  fetchNowPlaying(false, now_playing);
+  fetchNowPlaying(false);
 }
 
-void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry, NowPlaying &now_playing) {
-  auto token = std::string_view(now_playing.access_token).substr(0, 8);
+void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry) {
+  auto token = std::string_view(_access_token).substr(0, 8);
   printf("[%.*s] fetch NowPlaying\n", int(token.size()), token.data());
 
-  now_playing.num_request++;
-  now_playing.request = _http.request(
-      {.url = kPlayerUrl, .headers = {{kAuthorization, "Bearer " + now_playing.access_token}}},
-      {.post_to = _main_scheduler, .callback = [this, allow_retry, &now_playing](auto response) {
-         onNowPlayingResponse(allow_retry, now_playing, std::move(response));
-       }});
+  _now_playing.num_request++;
+  _now_playing.request =
+      _http.request({.url = kPlayerUrl, .headers = {{kAuthorization, "Bearer " + _access_token}}},
+                    {.post_to = _main_scheduler, .callback = [this, allow_retry](auto response) {
+                       onNowPlayingResponse(allow_retry, std::move(response));
+                     }});
 }
 
-void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry,
-                                                 NowPlaying &now_playing,
-                                                 http::Response response) {
-  now_playing.status = response.status;
+void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Response response) {
+  _now_playing.status = response.status;
 
   if (response.status / 100 != 2) {
     if (!allow_retry) {
       std::cerr << "failed to get player state" << std::endl;
-      return scheduleFetchNowPlaying(now_playing);
+      return scheduleFetchNowPlaying();
     }
-    now_playing.num_request--;
-    return refreshToken(now_playing);
+    _now_playing.num_request--;
+    return refreshToken();
   }
 
   if (response.status == 204) {
     std::cerr << "nothing is playing" << std::endl;
-    now_playing.track_id.clear();
-    return scheduleFetchNowPlaying(now_playing);
+    _now_playing.track_id.clear();
+    return scheduleFetchNowPlaying();
   }
   assert(response.status == 200);
 
   // signal that this just started playing
-  auto started_playing = now_playing.status != response.status;
+  auto started_playing = _now_playing.status != response.status;
 
-  now_playing.num_request = 0;
+  _now_playing.num_request = 0;
 
-  auto track_id = now_playing.track_id;
+  auto track_id = _now_playing.track_id;
 
-  parseNowPlaying(_jq, response.body, now_playing);
+  parseNowPlaying(_jq, response.body, _now_playing);
 
-  if (track_id == now_playing.track_id) {
-    return renderScannable(started_playing, now_playing);
+  if (track_id == _now_playing.track_id) {
+    return renderScannable(started_playing);
   }
 
   // fetchContext(_now_playing.context_href);
-  fetchScannable(started_playing, now_playing);
+  fetchScannable(started_playing);
 }
 
 #if 0
@@ -392,23 +368,20 @@ void NowPlayingServiceImpl::onContext(const std::string &access_token, http::Res
 
 #endif
 
-void NowPlayingServiceImpl::fetchScannable(bool started_playing, NowPlaying &now_playing) {
-  now_playing.request =
-      _http.request({.url = credentials::kScannablesCdnUrl + now_playing.uri + "?format=svg"},
-                    {.post_to = _main_scheduler,
-                     .callback = [this, started_playing, &now_playing](auto response) {
-                       onScannable(started_playing, now_playing, std::move(response));
-                     }});
+void NowPlayingServiceImpl::fetchScannable(bool started_playing) {
+  _now_playing.request = _http.request(
+      {.url = credentials::kScannablesCdnUrl + _now_playing.uri + "?format=svg"},
+      {.post_to = _main_scheduler, .callback = [this, started_playing](auto response) {
+         onScannable(started_playing, std::move(response));
+       }});
 }
 
-void NowPlayingServiceImpl::onScannable(bool started_playing,
-                                        NowPlaying &now_playing,
-                                        http::Response response) {
+void NowPlayingServiceImpl::onScannable(bool started_playing, http::Response response) {
   if (response.status / 100 != 2) {
     std::cerr << "failed to fetch scannable id, status: " << response.status << std::endl;
-    now_playing.lengths0.fill(0);
-    now_playing.lengths1.fill(0);
-    return renderScannable(started_playing, now_playing);
+    _now_playing.lengths0.fill(0);
+    _now_playing.lengths1.fill(0);
+    return renderScannable(started_playing);
   }
 
   auto sv = std::string_view(response.body);
@@ -423,28 +396,28 @@ void NowPlayingServiceImpl::onScannable(bool started_playing,
   for (auto i = 0; i < 23; ++i) {
     sv.remove_prefix(sv.find(" y="));
     sv.remove_prefix(4);
-    now_playing.lengths0[i] = map[std::atoi(sv.data())];
+    _now_playing.lengths0[i] = map[std::atoi(sv.data())];
     sv.remove_prefix(sv.find("height="));
     sv.remove_prefix(8);
-    now_playing.lengths1[i] = map[std::atoi(sv.data())];
+    _now_playing.lengths1[i] = map[std::atoi(sv.data())];
   }
 
-  renderScannable(started_playing, now_playing);
+  renderScannable(started_playing);
 }
 
-void NowPlayingServiceImpl::renderScannable(bool started_playing, NowPlaying &now_playing) {
-  std::cerr << "context: " << now_playing.context << "\n";
-  std::cerr << "title: " << now_playing.title << "\n";
-  std::cerr << "artist: " << now_playing.artist << "\n";
-  std::cerr << "image: " << now_playing.image << "\n";
-  std::cerr << "uri: " << now_playing.uri << "\n";
-  std::cerr << "duration: " << now_playing.duration.count() << std::endl;
+void NowPlayingServiceImpl::renderScannable(bool started_playing) {
+  std::cerr << "context: " << _now_playing.context << "\n";
+  std::cerr << "title: " << _now_playing.title << "\n";
+  std::cerr << "artist: " << _now_playing.artist << "\n";
+  std::cerr << "image: " << _now_playing.image << "\n";
+  std::cerr << "uri: " << _now_playing.uri << "\n";
+  std::cerr << "duration: " << _now_playing.duration.count() << std::endl;
 
   if (started_playing) {
-    _on_playing(now_playing);
+    _on_playing(*this, _now_playing);
   }
 
-  scheduleFetchNowPlaying(now_playing);
+  scheduleFetchNowPlaying();
 }
 
 // AuthenticatorPresenter
@@ -453,14 +426,12 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
  public:
   AuthenticatorPresenterImpl(async::Scheduler &main_scheduler,
                              http::Http &http,
-                             SpotiLED &led,
                              present::PresenterQueue &presenter,
                              settings::BrightnessProvider &brightness,
                              jq_state *jq,
                              bool verbose,
                              AccessTokenCallback token_callback)
       : _main_scheduler{main_scheduler},
-        _led{led},
         _http{http},
         _presenter{presenter},
         _brightness{brightness},
@@ -484,7 +455,6 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   void scheduleNextPollToken();
 
   async::Scheduler &_main_scheduler;
-  SpotiLED &_led;
   http::Http &_http;
   present::PresenterQueue &_presenter;
   settings::BrightnessProvider &_brightness;
@@ -510,7 +480,6 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
 std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
     async::Scheduler &main_scheduler,
     http::Http &http,
-    SpotiLED &led,
     present::PresenterQueue &presenter,
     settings::BrightnessProvider &brightness,
     bool verbose,
@@ -519,8 +488,8 @@ std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
   if (!jq) {
     return nullptr;
   }
-  return std::make_unique<AuthenticatorPresenterImpl>(main_scheduler, http, led, presenter,
-                                                      brightness, jq, verbose, callback);
+  return std::make_unique<AuthenticatorPresenterImpl>(main_scheduler, http, presenter, brightness,
+                                                      jq, verbose, callback);
 }
 
 void AuthenticatorPresenterImpl::start(SpotiLED &led, present::Callback callback) {
@@ -534,7 +503,7 @@ void AuthenticatorPresenterImpl::start(SpotiLED &led, present::Callback callback
     }
 
     if (!_auth_state.user_code.empty() && !_text_presenter) {
-      renderRolling(_led, _brightness, elapsed, *_text);
+      renderRolling(led, _brightness, elapsed, *_text);
     }
 
     return 200ms;
