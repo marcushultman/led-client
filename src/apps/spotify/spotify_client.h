@@ -18,7 +18,6 @@ struct NowPlaying {
   int status = 0;
   std::string access_token;
   std::string refresh_token;
-  std::chrono::system_clock::time_point requested_at = {};
   size_t num_request = 0;
 
   std::string track_id;
@@ -31,6 +30,9 @@ struct NowPlaying {
   std::chrono::milliseconds progress = {};
   std::chrono::milliseconds duration = {};
   std::array<uint8_t, 23> lengths0, lengths1;
+
+  http::Lifetime request;
+  async::Lifetime work;
 };
 
 std::chrono::milliseconds requestBackoff(size_t num_request);
