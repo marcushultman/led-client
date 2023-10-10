@@ -13,6 +13,7 @@
 #include "present/presenter.h"
 #include "util/csignal/signal_handler.h"
 #include "util/spotiled/spotiled.h"
+#include "util/url/url.h"
 
 struct Options {
   bool verbose = false;
