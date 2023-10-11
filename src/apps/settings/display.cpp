@@ -98,19 +98,19 @@ void DisplayService::start(SpotiLED &led, present::Callback callback) {
     }
     led.setLogo(logoBrightness());
 
-    uint8_t c1 = 1 * _brightness / 4;
-    uint8_t c2 = 1 * _brightness / 3;
+    uint8_t c1 = _brightness / 4;
+    uint8_t c2 = _brightness / 2;
 
     for (auto x = 0; x < 23; ++x) {
       for (auto [y, end] = waveIndices(10 * elapsed.count(), _brightness, x, 20, 8, 3); y < end;
            y++) {
-        led.blend({x, y}, 16 * Color{c1, c1, _brightness});
+        led.blend({x, y}, 16 * Color{c1, c2, _brightness});
       }
     }
     for (auto x = 0; x < 23; ++x) {
       for (auto [y, end] = waveIndices(15 * elapsed.count(), _brightness, x, 25, 6, 3); y < end;
            y++) {
-        led.blend({x, y}, 16 * Color{c2, c2, _brightness});
+        led.blend({x, y}, 16 * Color{c2, c1, _brightness});
       }
     }
     for (auto x = 0; x < 23; ++x) {
