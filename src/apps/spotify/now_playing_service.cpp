@@ -245,7 +245,7 @@ void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry) {
 }
 
 void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Response response) {
-  _now_playing.status = response.status;
+  auto prev_status = std::exchange(_now_playing.status, response.status);
 
   if (response.status / 100 != 2) {
     if (!allow_retry) {
@@ -264,7 +264,7 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   assert(response.status == 200);
 
   // signal that this just started playing
-  auto started_playing = _now_playing.status != response.status;
+  auto started_playing = _now_playing.status != prev_status;
 
   _now_playing.num_request = 0;
 
