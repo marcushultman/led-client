@@ -7,9 +7,10 @@
 namespace {
 
 struct SpotiLEDImpl final : public SpotiLED {
-  SpotiLEDImpl(async::Scheduler &main_scheduler) : _main_scheduler{main_scheduler} { show(); }
+  SpotiLEDImpl(async::Scheduler &main_scheduler) : _main_scheduler{main_scheduler} {
+    _led->show(_buffer);
+  }
 
-  void clear() final { _buffer.clear(); }
   void setLogo(Color color) final {
     auto [r, g, b] = color;
     for (auto i = 0; i < 19; ++i) {
@@ -28,7 +29,6 @@ struct SpotiLEDImpl final : public SpotiLED {
       _buffer.blend(19 + offset(pos), r, g, b, blend);
     }
   }
-  void show() final { _led->show(_buffer); }
 
   void add(RenderCallback callback) final {
     _pending_callbacks.push(std::move(callback));
@@ -51,7 +51,7 @@ struct SpotiLEDImpl final : public SpotiLED {
 
     auto delay = std::chrono::milliseconds(1min);
 
-    clear();
+    _buffer.clear();
     for (auto it = _callbacks.begin(); it != _callbacks.end();) {
       auto &callback = it->first;
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second);
@@ -63,7 +63,7 @@ struct SpotiLEDImpl final : public SpotiLED {
         it = _callbacks.erase(it);
       }
     }
-    show();
+    _led->show(_buffer);
 
     if (!_callbacks.empty()) {
       _render = _main_scheduler.schedule([this] { renderFrame(); }, {.delay = delay});
