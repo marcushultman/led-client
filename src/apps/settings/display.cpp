@@ -16,7 +16,7 @@ namespace {
 using namespace std::chrono_literals;
 
 constexpr auto kMinBrightness = 1;
-constexpr auto kMaxBrightness = 32 - 1;
+constexpr auto kMaxBrightness = 64 - 1;
 
 constexpr auto kDefaultHue = 255;
 
