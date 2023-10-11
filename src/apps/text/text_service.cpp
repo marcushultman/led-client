@@ -11,6 +11,7 @@ namespace {
 
 constexpr auto kDelayHeader = "delay";
 constexpr auto kDefaultTimeout = std::chrono::seconds{5};
+constexpr auto kSpeedHeader = "speed";
 
 std::chrono::milliseconds timeout(const http::Request &req) {
   if (auto it = req.headers.find(kDelayHeader); it != req.headers.end()) {
@@ -20,6 +21,13 @@ std::chrono::milliseconds timeout(const http::Request &req) {
     return std::chrono::seconds(delay_s);
   }
   return kDefaultTimeout;
+}
+
+double speed(const http::Request &req) {
+  if (auto it = req.headers.find(kSpeedHeader); it != req.headers.end()) {
+    return std::stod(it->second);
+  }
+  return 0.005;
 }
 
 }  // namespace
@@ -43,25 +51,31 @@ http::Response TextService::handleRequest(http::Request req) {
   return 204;
 }
 
-void TextService::start(SpotiLED &, present::Callback callback) {
+void TextService::start(SpotiLED &led, present::Callback callback) {
+  if (_requests.empty()) {
+    return;
+  }
   auto req = std::move(_requests.front());
   _requests.pop();
 
   auto text = std::string(req.body.substr(req.body.find_first_of("=") + 1));
   std::transform(text.begin(), text.end(), text.begin(), ::toupper);
-  _page->setText(std::move(text));
+  _text->setText(std::move(text));
 
-  _lifetime = _main_scheduler.schedule(
-      [this,
-       rolling_presenter = std::shared_ptr<RollingPresenter>(RollingPresenter::create(
-           _main_scheduler, _led, _brightness_provider, *_page, Direction::kHorizontal, {})),
-       callback = std::move(callback)]() mutable {
-        _led.clear();
-        _led.show();
-        rolling_presenter.reset();
-        callback();
-      },
-      {.delay = timeout(req)});
+  _sentinel = std::make_shared<bool>(true);
+  led.add([this, timeout = timeout(req), speed = speed(req), callback = std::move(callback),
+           alive = std::weak_ptr<void>(_sentinel)](auto &led, auto elapsed) {
+    using namespace std::chrono_literals;
+    if (elapsed >= timeout || alive.expired()) {
+      callback();
+      return 0ms;
+    }
+    renderRolling(led, _brightness_provider, elapsed, *_text, {}, kNormalScale, speed);
+    return std::min(timeout - elapsed, 100ms);
+  });
 }
 
-void TextService::stop() { _lifetime.reset(); }
+void TextService::stop() {
+  _sentinel.reset();
+  _presenter.notify();
+}

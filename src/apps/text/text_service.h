@@ -24,8 +24,7 @@ struct TextService : present::Presentable {
   SpotiLED &_led;
   present::PresenterQueue &_presenter;
   settings::BrightnessProvider &_brightness_provider;
-  std::unique_ptr<font::TextPage> _page = font::TextPage::create();
+  std::unique_ptr<font::TextPage> _text = font::TextPage::create();
   std::queue<http::Request> _requests;
-
-  async::Lifetime _lifetime;
+  std::shared_ptr<void> _sentinel;
 };
