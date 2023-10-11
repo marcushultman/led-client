@@ -39,31 +39,19 @@ void Buffer::clear() {
   }
 }
 
-void Buffer::set(size_t i, uint8_t r, uint8_t g, uint8_t b) {
+void Buffer::set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions &options) {
   if (i >= _num_leds) {
     return;
   }
-  _buf[4 + 4 * i + 1] = b;
-  _buf[4 + 4 * i + 2] = g;
-  _buf[4 + 4 * i + 3] = r;
-}
+  auto &dst_b = _buf[4 + 4 * i + 1];
+  auto &dst_g = _buf[4 + 4 * i + 2];
+  auto &dst_r = _buf[4 + 4 * i + 3];
 
-void Buffer::blend(size_t i, uint8_t r, uint8_t g, uint8_t b, float blend) {
-  if (i >= _num_leds) {
-    return;
-  }
-  auto &out_b = _buf[4 + 4 * i + 1];
-  auto &out_g = _buf[4 + 4 * i + 2];
-  auto &out_r = _buf[4 + 4 * i + 3];
+  auto sum_b = options.dst * dst_b + options.src * b;
+  auto sum_g = options.dst * dst_g + options.src * g;
+  auto sum_r = options.dst * dst_r + options.src * r;
 
-  auto inv_blend = std::min(2 * (1 - blend), 1.0F);
-  blend = std::min(2 * blend, 1.0F);
-
-  auto sum_b = inv_blend * out_b + blend * b;
-  auto sum_g = inv_blend * out_g + blend * g;
-  auto sum_r = inv_blend * out_r + blend * r;
-
-  auto max_l = std::max(luminance(out_r, out_g, out_b), luminance(r, g, b));
+  auto max_l = std::max(luminance(dst_r, dst_g, dst_b), luminance(r, g, b));
   auto sum_l = luminance(sum_r, sum_g, sum_b);
   assert(sum_l >= max_l);
 
@@ -71,9 +59,9 @@ void Buffer::blend(size_t i, uint8_t r, uint8_t g, uint8_t b, float blend) {
     return;
   }
   auto lum_ratio = float(max_l) / sum_l;
-  out_b = sum_b * lum_ratio;
-  out_g = sum_g * lum_ratio;
-  out_r = sum_r * lum_ratio;
+  dst_b = sum_b * lum_ratio;
+  dst_g = sum_g * lum_ratio;
+  dst_r = sum_r * lum_ratio;
 }
 
 size_t Buffer::numLeds() const { return _num_leds; }
