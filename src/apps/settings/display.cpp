@@ -120,7 +120,7 @@ void DisplayService::start(SpotiLED &led, present::Callback callback) {
       }
     }
 
-    return 1000ms / 30;
+    return 1000ms / 15;
   });
 }
 
