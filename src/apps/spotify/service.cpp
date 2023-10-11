@@ -101,6 +101,7 @@ void SpotifyService::addNowPlaying(std::string access_token, std::string refresh
       },
       [this](auto &) { saveTokens(); },
       [this](auto &service) {
+        _presenter.reset();
         std::erase_if(_now_playing_service, [&](auto &s) { return s.get() == &service; });
         saveTokens();
       }));
