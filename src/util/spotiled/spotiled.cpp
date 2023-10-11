@@ -32,6 +32,10 @@ struct SpotiLEDImpl final : public SpotiLED {
 
   void add(RenderCallback callback) final {
     _pending_callbacks.push(std::move(callback));
+    notify();
+  }
+
+  void notify() {
     _render = _main_scheduler.schedule([this] { renderFrame(); });
   }
 

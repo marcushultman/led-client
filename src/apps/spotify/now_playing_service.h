@@ -32,9 +32,14 @@ struct NowPlaying {
 std::chrono::milliseconds requestBackoff(size_t num_request);
 
 struct NowPlayingService {
-  using OnPlaying = std::function<void(const NowPlayingService &, const NowPlaying &)>;
-  using OnTokenUpdate = std::function<void(const NowPlayingService &)>;
-  using OnLogout = std::function<void(const NowPlayingService &)>;
+  struct Callbacks {
+    virtual ~Callbacks() = default;
+    virtual void onPlaying(const NowPlayingService &, const NowPlaying &) = 0;
+    virtual void onNewTrack(const NowPlayingService &, const NowPlaying &) = 0;
+    virtual void onStopped(const NowPlayingService &) = 0;
+    virtual void onTokenUpdate(const NowPlayingService &) = 0;
+    virtual void onLogout(const NowPlayingService &) = 0;
+  };
 
   virtual ~NowPlayingService() = default;
   virtual const NowPlaying *getIfPlaying() const = 0;
@@ -46,9 +51,7 @@ struct NowPlayingService {
                                                    bool verbose,
                                                    std::string access_token,
                                                    std::string refresh_token,
-                                                   OnPlaying,
-                                                   OnTokenUpdate,
-                                                   OnLogout);
+                                                   Callbacks &);
 };
 
 }  // namespace spotify

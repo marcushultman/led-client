@@ -19,6 +19,7 @@ struct SpotiLED {
   using RenderCallback =
       std::function<std::chrono::milliseconds(SpotiLED &, std::chrono::milliseconds elapsed)>;
   virtual void add(RenderCallback) = 0;
+  virtual void notify() = 0;
 
   static std::unique_ptr<SpotiLED> create(async::Scheduler &main_scheduler);
 };

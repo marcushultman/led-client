@@ -77,39 +77,69 @@ http::Response SpotifyService::handleRequest(http::Request req) {
           _pending_play = _now_playing_service.back().get();
           saveTokens();
         });
-  } else if (auto *now_playing = getSomePlaying()) {
-    _presenter = NowPlayingPresenter::create(_presenter_queue, _brightness, *now_playing);
   } else {
-    _presenter.reset();
+    displaySomePlaying();
   }
   return 204;
 }
 
-void SpotifyService::addNowPlaying(std::string access_token, std::string refresh_token) {
-  _now_playing_service.push_back(NowPlayingService::create(
-      _main_scheduler, _http, _verbose, std::move(access_token), std::move(refresh_token),
-      [this](auto &service, auto &now_playing) {
-        printf("Spotify: playing '%s'\n", now_playing.title.c_str());
-        if (&service == _pending_play || !_presenter) {
-          _pending_play = nullptr;
-          _presenter = NowPlayingPresenter::create(_presenter_queue, _brightness, now_playing);
-        }
-      },
-      [this](auto &) { saveTokens(); },
-      [this](auto &service) {
-        _presenter.reset();
-        std::erase_if(_now_playing_service, [&](auto &s) { return s.get() == &service; });
-        saveTokens();
-      }));
+void SpotifyService::onPlaying(const NowPlayingService &service, const NowPlaying &now_playing) {
+  printf("Spotify: started playing '%s'\n", now_playing.title.c_str());
+  if (&service == _pending_play || !_presenter) {
+    _pending_play = nullptr;
+    _playing = &service;
+    _presenter = NowPlayingPresenter::create(_presenter_queue, _brightness, now_playing);
+  }
 }
 
-const NowPlaying *SpotifyService::getSomePlaying() const {
-  for (auto &service : _now_playing_service) {
-    if (auto *now_playing = service->getIfPlaying()) {
-      return now_playing;
+void SpotifyService::onNewTrack(const NowPlayingService &, const NowPlaying &) {
+  _presenter_queue.notify();
+}
+
+void SpotifyService::onStopped(const NowPlayingService &service) {
+  printf("Spotify: stopped playing\n");
+  hideIfPlaying(service);
+  displaySomePlaying();
+}
+
+void SpotifyService::onTokenUpdate(const NowPlayingService &) { saveTokens(); }
+
+void SpotifyService::onLogout(const NowPlayingService &service) {
+  hideIfPlaying(service);
+  std::erase_if(_now_playing_service, [&](auto &s) { return s.get() == &service; });
+  saveTokens();
+  displaySomePlaying();
+}
+
+void SpotifyService::addNowPlaying(std::string access_token, std::string refresh_token) {
+  _now_playing_service.push_back(NowPlayingService::create(
+      _main_scheduler, _http, _verbose, std::move(access_token), std::move(refresh_token), *this));
+}
+
+void SpotifyService::displaySomePlaying() {
+  auto get_some_playing = [this]() -> std::pair<const NowPlayingService *, const NowPlaying *> {
+    for (auto &service : _now_playing_service) {
+      if (auto *now_playing = service->getIfPlaying()) {
+        return {service.get(), now_playing};
+      }
     }
+    return {nullptr, nullptr};
+  };
+
+  if (auto [service, now_playing] = get_some_playing(); service) {
+    printf("Spotify: playing '%s'\n", now_playing->title.c_str());
+    _playing = service;
+    _presenter = NowPlayingPresenter::create(_presenter_queue, _brightness, *now_playing);
+  } else {
+    _presenter.reset();
   }
-  return nullptr;
+}
+
+void SpotifyService::hideIfPlaying(const NowPlayingService &service) {
+  if (&service == _playing) {
+    _presenter.reset();
+    _playing = nullptr;
+  }
 }
 
 void SpotifyService::saveTokens() {

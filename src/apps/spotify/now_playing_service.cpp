@@ -94,9 +94,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
                         bool verbose,
                         std::string access_token,
                         std::string refresh_token,
-                        OnPlaying,
-                        OnTokenUpdate,
-                        OnLogout);
+                        Callbacks &);
   ~NowPlayingServiceImpl();
 
   const std::string &accessToken() const final { return _access_token; }
@@ -135,9 +133,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   std::string _refresh_token;
   NowPlaying _now_playing;
 
-  OnPlaying _on_playing;
-  OnTokenUpdate _on_token_update;
-  OnLogout _on_logout;
+  Callbacks &_callbacks;
 };
 
 std::unique_ptr<NowPlayingService> NowPlayingService::create(async::Scheduler &main_scheduler,
@@ -145,16 +141,14 @@ std::unique_ptr<NowPlayingService> NowPlayingService::create(async::Scheduler &m
                                                              bool verbose,
                                                              std::string access_token,
                                                              std::string refresh_token,
-                                                             OnPlaying on_playing,
-                                                             OnTokenUpdate on_token_update,
-                                                             OnLogout on_logout) {
+                                                             Callbacks &callbacks) {
   auto jq = jq_init();
   if (!jq) {
     return nullptr;
   }
-  return std::make_unique<NowPlayingServiceImpl>(
-      main_scheduler, http, jq, verbose, std::move(access_token), std::move(refresh_token),
-      std::move(on_playing), std::move(on_token_update), std::move(on_logout));
+  return std::make_unique<NowPlayingServiceImpl>(main_scheduler, http, jq, verbose,
+                                                 std::move(access_token), std::move(refresh_token),
+                                                 callbacks);
 }
 
 NowPlayingServiceImpl::NowPlayingServiceImpl(async::Scheduler &main_scheduler,
@@ -163,18 +157,14 @@ NowPlayingServiceImpl::NowPlayingServiceImpl(async::Scheduler &main_scheduler,
                                              bool verbose,
                                              std::string access_token,
                                              std::string refresh_token,
-                                             OnPlaying on_playing,
-                                             OnTokenUpdate on_token_update,
-                                             OnLogout on_logout)
+                                             Callbacks &callbacks)
     : _main_scheduler{main_scheduler},
       _http{http},
       _jq{jq},
       _verbose{verbose},
       _access_token{std::move(access_token)},
       _refresh_token{std::move(refresh_token)},
-      _on_playing{std::move(on_playing)},
-      _on_token_update{std::move(on_token_update)},
-      _on_logout{std::move(on_logout)} {
+      _callbacks{callbacks} {
   scheduleFetchNowPlaying();
 }
 
@@ -215,7 +205,7 @@ void NowPlayingServiceImpl::refreshToken() {
 void NowPlayingServiceImpl::onRefreshTokenResponse(http::Response response) {
   if (response.status / 100 != 2) {
     std::cerr << "failed to refresh token: " << response.body << std::endl;
-    _on_logout(*this);
+    _callbacks.onLogout(*this);
     return;
   }
 
@@ -227,7 +217,7 @@ void NowPlayingServiceImpl::onRefreshTokenResponse(http::Response response) {
 
   _access_token = std::move(data.access_token);
   _refresh_token = std::move(data.refresh_token);
-  _on_token_update(*this);
+  _callbacks.onTokenUpdate(*this);
 
   fetchNowPlaying(false);
 }
@@ -259,12 +249,12 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   if (response.status == 204) {
     std::cerr << "nothing is playing" << std::endl;
     _now_playing.track_id.clear();
+    if (prev_status == 200) {
+      _callbacks.onStopped(*this);
+    }
     return scheduleFetchNowPlaying();
   }
   assert(response.status == 200);
-
-  // signal that this just started playing
-  auto started_playing = _now_playing.status != prev_status;
 
   _now_playing.num_request = 0;
 
@@ -273,11 +263,11 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   parseNowPlaying(_jq, response.body, _now_playing);
 
   if (track_id == _now_playing.track_id) {
-    return renderScannable(started_playing);
+    return renderScannable(false);
   }
 
   // fetchContext(_now_playing.context_href);
-  fetchScannable(started_playing);
+  fetchScannable(_now_playing.status != prev_status);
 }
 
 #if 0
@@ -342,6 +332,8 @@ void NowPlayingServiceImpl::onScannable(bool started_playing, http::Response res
     _now_playing.lengths1[i] = map[std::atoi(sv.data())];
   }
 
+  _callbacks.onNewTrack(*this, _now_playing);
+
   renderScannable(started_playing);
 }
 
@@ -354,7 +346,7 @@ void NowPlayingServiceImpl::renderScannable(bool started_playing) {
   std::cerr << "duration: " << _now_playing.duration.count() << std::endl;
 
   if (started_playing) {
-    _on_playing(*this, _now_playing);
+    _callbacks.onPlaying(*this, _now_playing);
   }
 
   scheduleFetchNowPlaying();

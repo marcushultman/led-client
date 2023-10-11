@@ -3,6 +3,8 @@
 #include <map>
 #include <queue>
 
+#include "util/spotiled/spotiled.h"
+
 namespace present {
 
 struct PresenterQueueImpl final : PresenterQueue {
@@ -19,7 +21,7 @@ struct PresenterQueueImpl final : PresenterQueue {
       presentNext();
     }
   }
-  void erase(Presentable &presentable) {
+  void erase(Presentable &presentable) final {
     for (auto &[_, queue] : _queue) {
       std::erase(queue, &presentable);
     }
@@ -27,8 +29,9 @@ struct PresenterQueueImpl final : PresenterQueue {
       presentNext();
     }
   }
+  void notify() final { _led.notify(); }
 
-  void clear() {
+  void clear() final {
     _current.presentable = nullptr;
     _queue.clear();
   }
@@ -50,6 +53,7 @@ struct PresenterQueueImpl final : PresenterQueue {
       return;
     }
     _current.presentable = nullptr;
+    _led.notify();
   }
 
   struct Current {
