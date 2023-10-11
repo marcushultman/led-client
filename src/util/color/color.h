@@ -32,6 +32,8 @@ struct Color : public std::array<uint8_t, 3> {
   }
 };
 
+constexpr Color operator*(uint8_t s, Color c) { return c * s; }
+
 constexpr auto kBlack = Color(0);
 constexpr auto kWhite = Color(255);
 
