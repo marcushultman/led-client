@@ -3,9 +3,10 @@
 #if __arm__
 #include "spidev_lib++.h"
 #else
-#include <cassert>
 #include <fstream>
 #endif
+
+#include <cassert>
 
 namespace apa102 {
 namespace {
