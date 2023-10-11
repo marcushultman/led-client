@@ -3,6 +3,7 @@
 #include <curl/curl.h>
 
 #include <array>
+#include <atomic>
 #include <iostream>
 #include <set>
 
