@@ -123,17 +123,14 @@ std::string_view simLogo(const uint8_t *abgr) {
   }
 }
 
-std::string_view simBrightness(const uint8_t *abgr) {
-  auto b = *(abgr + 1), g = *(abgr + 2), r = *(abgr + 3);
-  if ((r + g + b) == 0) {
-    return " ";
-  } else if ((r + g + b) < 255) {
-    return ".";
-  } else if ((r + g + b) < (255 * 2)) {
-    return "-";
-  } else {
-    return "|";
-  }
+std::string simBrightness(const uint8_t *abgr) {
+  static auto kHex = "0123456789ABCDEF";
+  int b = *(abgr + 1), g = *(abgr + 2), r = *(abgr + 3);
+  auto mean = (r + g + b) / 3;
+  std::string out = "  ";
+  out[0] = kHex[mean >> 4];
+  out[1] = kHex[mean & 0x0F];
+  return out;
 }
 
 class Simulator final : public LED {
@@ -151,10 +148,11 @@ class Simulator final : public LED {
     _pipe << "\n\n";
 
     for (auto y = 0; y < 16; ++y) {
+      _pipe << " ";
       for (auto x = 0; x < 23; ++x) {
         auto i = 19 + x * 16 + 15 - y % 16;
         auto *abgr = &data[(1 + i) * 4];
-        _pipe << " " << simLogo(abgr) << simBrightness(abgr);
+        _pipe << simLogo(abgr) << simBrightness(abgr);
       }
       _pipe << std::endl;
     }
