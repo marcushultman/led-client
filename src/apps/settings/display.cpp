@@ -19,7 +19,7 @@ constexpr auto kDefaultBrightness = 32;
 constexpr auto kDefaultHue = 255;
 
 constexpr auto kFilename = "brightness0";
-constexpr auto kTimeout = 300000s;
+constexpr auto kTimeout = 3s;
 
 std::pair<int, int> waveIndices(
     double speed, uint8_t brightness, int x, int width, int top, int bottom) {
