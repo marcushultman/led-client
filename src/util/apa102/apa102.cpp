@@ -6,6 +6,7 @@
 #include <fstream>
 #endif
 
+#include <algorithm>
 #include <cassert>
 
 namespace apa102 {
@@ -54,8 +55,8 @@ void Buffer::blend(size_t i, uint8_t r, uint8_t g, uint8_t b, float blend) {
   auto &out_g = _buf[4 + 4 * i + 2];
   auto &out_r = _buf[4 + 4 * i + 3];
 
-  auto inv_blend = 2 * (1 - blend);
-  blend *= 2;
+  auto inv_blend = std::min(2 * (1 - blend), 1.0F);
+  blend = std::min(2 * blend, 1.0F);
 
   auto sum_b = inv_blend * out_b + blend * b;
   auto sum_g = inv_blend * out_g + blend * g;
@@ -126,11 +127,8 @@ std::string_view simLogo(const uint8_t *abgr) {
 std::string simBrightness(const uint8_t *abgr) {
   static auto kHex = "0123456789ABCDEF";
   int b = *(abgr + 1), g = *(abgr + 2), r = *(abgr + 3);
-  auto mean = (r + g + b) / 3;
-  std::string out = "  ";
-  out[0] = kHex[mean >> 4];
-  out[1] = kHex[mean & 0x0F];
-  return out;
+  auto m = std::max({r, g, b});
+  return {kHex[m >> 4], kHex[m & 0x0F]};
 }
 
 class Simulator final : public LED {

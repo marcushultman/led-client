@@ -6,6 +6,7 @@
 
 #include "apps/settings/brightness_provider.h"
 #include "apps/settings/display.h"
+#include "apps/settings/time_of_day_brightness.h"
 #include "apps/spotify/service.h"
 #include "apps/text/text_service.h"
 #include "http/http.h"

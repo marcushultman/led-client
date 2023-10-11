@@ -15,7 +15,9 @@ namespace {
 
 using namespace std::chrono_literals;
 
-constexpr auto kDefaultBrightness = 32;
+constexpr auto kMinBrightness = 1;
+constexpr auto kMaxBrightness = 32 - 1;
+
 constexpr auto kDefaultHue = 255;
 
 constexpr auto kFilename = "brightness0";
@@ -23,7 +25,8 @@ constexpr auto kTimeout = 3s;
 
 std::pair<int, int> waveIndices(
     double speed, uint8_t brightness, int x, int width, int top, int bottom) {
-  auto f = 11 * x < brightness ? (brightness - 11 * x) / double(brightness) : 0;
+  auto x_brightness = kMaxBrightness * double(x) / 23;
+  auto f = x_brightness < brightness ? (brightness - x_brightness) / double(brightness) : 0;
   auto w = f * std::sin(2 * M_PI * (0.002 * speed + x) / width);
   auto y1 = 8 + top * w;
   auto y2 = 8 + bottom * w;
@@ -36,7 +39,7 @@ std::pair<int, int> waveIndices(
 DisplayService::DisplayService(async::Scheduler &main_scheduler, present::PresenterQueue &presenter)
     : _main_scheduler{main_scheduler},
       _presenter{presenter},
-      _brightness(kDefaultBrightness),
+      _brightness(kMaxBrightness),
       _hue{kDefaultHue} {
   if (auto stream = std::ifstream(kFilename); stream.good()) {
     std::string line(64, '\0');
@@ -66,9 +69,9 @@ http::Response DisplayService::operator()(http::Request req) {
   }
 
   if (setting == "brightness") {
-    _brightness = std::clamp(std::stoi(req.body), 0, 255);
+    _brightness = std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness);
   } else if (setting == "hue") {
-    _hue = std::clamp(std::stoi(req.body), 0, 255);
+    _hue = std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness);
   }
   printf("DisplayService brightness: %d hue: %d\n", _brightness, _hue);
   save();
@@ -82,7 +85,9 @@ http::Response DisplayService::operator()(http::Request req) {
 
 Color DisplayService::logoBrightness() const { return timeOfDayBrightness(_brightness); }
 
-Color DisplayService::brightness() const { return timeOfDayBrightness(3 * _brightness / 4); }
+Color DisplayService::brightness() const {
+  return timeOfDayBrightness(std::max(kMinBrightness, 3 * _brightness / 4));
+}
 
 void DisplayService::start(SpotiLED &led, present::Callback callback) {
   led.add([this, callback = std::move(callback)](auto &led, auto elapsed) {
@@ -98,25 +103,22 @@ void DisplayService::start(SpotiLED &led, present::Callback callback) {
     }
     led.setLogo(logoBrightness());
 
-    uint8_t c1 = _brightness / 4;
-    uint8_t c2 = _brightness / 2;
-
     for (auto x = 0; x < 23; ++x) {
       for (auto [y, end] = waveIndices(10 * elapsed.count(), _brightness, x, 20, 8, 3); y < end;
            y++) {
-        led.blend({x, y}, 16 * Color{c1, c2, _brightness});
+        led.blend({x, y}, Color(0, 128, 255) * brightness());
       }
     }
     for (auto x = 0; x < 23; ++x) {
       for (auto [y, end] = waveIndices(15 * elapsed.count(), _brightness, x, 25, 6, 3); y < end;
            y++) {
-        led.blend({x, y}, 16 * Color{c2, c1, _brightness});
+        led.blend({x, y}, Color(128, 0, 255) * brightness());
       }
     }
     for (auto x = 0; x < 23; ++x) {
       for (auto [y, end] = waveIndices(20 * elapsed.count(), _brightness, x, 30, 4, 2); y < end;
            y++) {
-        led.blend({x, y}, 16 * Color{_brightness});
+        led.blend({x, y}, brightness());
       }
     }
 
