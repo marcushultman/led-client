@@ -32,7 +32,7 @@ struct SpotifyService {
   bool _verbose;
 
   std::vector<std::unique_ptr<NowPlayingService>> _now_playing_service;
-  int _mode = 0;
+  bool _show_login = false;
   std::shared_ptr<void> _presenter;
   const NowPlayingService *_pending_play = nullptr;
 };

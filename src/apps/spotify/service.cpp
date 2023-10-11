@@ -62,29 +62,25 @@ http::Response SpotifyService::handleRequest(http::Request req) {
   auto url = url::Url(req.url);
 
   if (auto it = req.headers.find("action"); it != req.headers.end()) {
-    auto value = std::string_view(it->second);
-    std::from_chars(value.begin(), value.end(), _mode);
+    int show_login = 0;
+    std::from_chars(it->second.data(), it->second.data() + it->second.size(), show_login);
+    _show_login = show_login;
   } else {
-    _mode = (_mode + 1) % 2;
+    _show_login = !_show_login;
   }
 
-  switch (_mode) {
-    case 0:
-      if (auto *now_playing = getSomePlaying()) {
-        _presenter = NowPlayingPresenter::create(_presenter_queue, _brightness, *now_playing);
-      } else {
-        _presenter.reset();
-      }
-      break;
-    case 1:
-      _presenter = AuthenticatorPresenter::create(
-          _main_scheduler, _http, _presenter_queue, _brightness, _verbose,
-          [this](auto access_token, auto refresh_token) {
-            addNowPlaying(std::move(access_token), std::move(refresh_token));
-            _pending_play = _now_playing_service.back().get();
-            saveTokens();
-          });
-      break;
+  if (_show_login) {
+    _presenter = AuthenticatorPresenter::create(
+        _main_scheduler, _http, _presenter_queue, _brightness, _verbose,
+        [this](auto access_token, auto refresh_token) {
+          addNowPlaying(std::move(access_token), std::move(refresh_token));
+          _pending_play = _now_playing_service.back().get();
+          saveTokens();
+        });
+  } else if (auto *now_playing = getSomePlaying()) {
+    _presenter = NowPlayingPresenter::create(_presenter_queue, _brightness, *now_playing);
+  } else {
+    _presenter.reset();
   }
   return 204;
 }
