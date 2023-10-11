@@ -5,13 +5,17 @@
 
 namespace apa102 {
 
+struct SetOptions {
+  double src = 1.0;
+  double dst = 1.0;
+};
+
 struct Buffer {
  public:
   explicit Buffer(size_t num_leds);
 
   void clear();
-  void set(size_t i, uint8_t r, uint8_t g, uint8_t b);
-  void blend(size_t i, uint8_t r, uint8_t g, uint8_t b, float blend = .5f);
+  void set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions& options = {});
 
   size_t numLeds() const;
 

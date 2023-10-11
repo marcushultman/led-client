@@ -106,19 +106,15 @@ void DisplayService::start(SpotiLED &led, present::Callback callback) {
     for (auto x = 0; x < 23; ++x) {
       for (auto [y, end] = waveIndices(10 * elapsed.count(), _brightness, x, 20, 8, 3); y < end;
            y++) {
-        led.blend({x, y}, Color(0, 128, 255) * brightness());
+        led.set({x, y}, Color(0, 128, 255) * brightness());
       }
-    }
-    for (auto x = 0; x < 23; ++x) {
       for (auto [y, end] = waveIndices(15 * elapsed.count(), _brightness, x, 25, 6, 3); y < end;
            y++) {
-        led.blend({x, y}, Color(128, 0, 255) * brightness());
+        led.set({x, y}, Color(128, 0, 255) * brightness());
       }
-    }
-    for (auto x = 0; x < 23; ++x) {
       for (auto [y, end] = waveIndices(20 * elapsed.count(), _brightness, x, 30, 4, 2); y < end;
            y++) {
-        led.blend({x, y}, brightness());
+        led.set({x, y}, brightness());
       }
     }
 
