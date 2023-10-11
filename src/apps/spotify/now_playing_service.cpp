@@ -1,5 +1,6 @@
 #include "now_playing_service.h"
 
+#include <cassert>
 #include <iostream>
 #include <map>
 
