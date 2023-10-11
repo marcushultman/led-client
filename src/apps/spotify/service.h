@@ -1,9 +1,11 @@
 #pragma once
 
+#include <vector>
+
 #include "apps/settings/brightness_provider.h"
 #include "http/http.h"
+#include "now_playing_service.h"
 #include "present/presenter.h"
-#include "spotify_client.h"
 
 namespace spotify {
 

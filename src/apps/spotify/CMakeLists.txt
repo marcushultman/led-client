@@ -1,9 +1,15 @@
 
 set(SOURCES
+  authenticator_presenter.cpp
+  authenticator_presenter.h
+  jq_util.cpp
+  jq_util.h
+  now_playing_presenter.cpp
+  now_playing_presenter.h
+  now_playing_service.cpp
+  now_playing_service.h
   service.cpp
   service.h
-  spotify_client.cpp
-  spotify_client.h
 )
 
 add_library(spotify ${SOURCES})
