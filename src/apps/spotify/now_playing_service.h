@@ -1,16 +1,12 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
-#include "apps/settings/brightness_provider.h"
 #include "async/scheduler.h"
 #include "http/http.h"
-#include "present/presenter.h"
-#include "util/spotiled/spotiled.h"
 
 namespace spotify {
 
@@ -53,28 +49,6 @@ struct NowPlayingService {
                                                    OnPlaying,
                                                    OnTokenUpdate,
                                                    OnLogout);
-};
-
-struct AuthenticatorPresenter {
-  using AccessTokenCallback =
-      std::function<void(std::string access_token, std::string refresh_token)>;
-  virtual ~AuthenticatorPresenter() = default;
-
-  // API?
-
-  static std::unique_ptr<AuthenticatorPresenter> create(async::Scheduler &main_scheduler,
-                                                        http::Http &,
-                                                        present::PresenterQueue &presenter,
-                                                        settings::BrightnessProvider &brightness,
-                                                        bool verbose,
-                                                        AccessTokenCallback);
-};
-
-struct NowPlayingPresenter {
-  virtual ~NowPlayingPresenter() = default;
-  static std::unique_ptr<NowPlayingPresenter> create(present::PresenterQueue &,
-                                                     settings::BrightnessProvider &,
-                                                     const NowPlaying &);
 };
 
 }  // namespace spotify

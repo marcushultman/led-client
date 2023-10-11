@@ -5,10 +5,11 @@
 #include <unordered_set>
 
 #include "apps/settings/brightness_provider.h"
+#include "authenticator_presenter.h"
 #include "font/font.h"
 #include "http/http.h"
+#include "now_playing_presenter.h"
 #include "present/presenter.h"
-#include "spotify_client.h"
 #include "util/storage/string_set.h"
 #include "util/url/url.h"
 

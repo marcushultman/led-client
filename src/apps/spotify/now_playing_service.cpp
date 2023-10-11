@@ -1,20 +1,10 @@
-#include "spotify_client.h"
+#include "now_playing_service.h"
 
-#include <array>
-#include <chrono>
-#include <cmath>
-#include <fstream>
 #include <iostream>
 #include <map>
-#include <string>
-#include <thread>
-#include <vector>
 
-#include "apps/settings/brightness_provider.h"
 #include "credentials.h"
-#include "font/font.h"
-#include "present/rolling_presenter.h"
-#include "util/spotiled/spotiled.h"
+#include "jq_util.h"
 
 extern "C" {
 #include <jq.h>
@@ -23,7 +13,6 @@ extern "C" {
 namespace spotify {
 namespace {
 
-const auto kAuthDeviceCodeUrl = "https://accounts.spotify.com/api/device/code";
 const auto kAuthTokenUrl = "https://accounts.spotify.com/api/token";
 const auto kPlayerUrl = "https://api.spotify.com/v1/me/player";
 
@@ -31,59 +20,9 @@ const auto kContentType = "content-type";
 const auto kXWWWFormUrlencoded = "application/x-www-form-urlencoded";
 const auto kAuthorization = "authorization";
 
-void nextStr(jq_state *jq, std::string &value) {
-  const auto jv = jq_next(jq);
-  if (jv_get_kind(jv) != JV_KIND_STRING) {
-    jv_free(jv);
-    value.clear();
-    return;
-  }
-  value = jv_string_value(jv);
-  jv_free(jv);
-}
-
-double nextNumber(jq_state *jq) {
-  const auto jv = jq_next(jq);
-  if (jv_get_kind(jv) != JV_KIND_NUMBER) {
-    jv_free(jv);
-    return 0;
-  }
-  const auto val = jv_number_value(jv);
-  jv_free(jv);
-  return val;
-}
-
-void nextSeconds(jq_state *jq, std::chrono::seconds &value) {
-  using sec = std::chrono::seconds;
-  value = sec{static_cast<sec::rep>(nextNumber(jq))};
-}
-
 void nextMs(jq_state *jq, std::chrono::milliseconds &value) {
   using ms = std::chrono::milliseconds;
   value = ms{static_cast<ms::rep>(nextNumber(jq))};
-}
-
-struct DeviceFlowData {
-  std::string device_code;
-  std::string user_code;
-  std::chrono::seconds expires_in;
-  std::string verification_url;
-  std::string verification_url_prefilled;
-  std::chrono::seconds interval;
-};
-
-void parseDeviceFlowData(jq_state *jq, const std::string &buffer, DeviceFlowData &data) {
-  const auto input = jv_parse(buffer.c_str());
-  jq_compile(jq,
-             ".device_code, .user_code, .expires_in, .verification_url, "
-             ".verification_url_prefilled, .interval");
-  jq_start(jq, input, 0);
-  nextStr(jq, data.device_code);
-  nextStr(jq, data.user_code);
-  nextSeconds(jq, data.expires_in);
-  nextStr(jq, data.verification_url);
-  nextStr(jq, data.verification_url_prefilled);
-  nextSeconds(jq, data.interval);
 }
 
 struct TokenData {
@@ -418,244 +357,6 @@ void NowPlayingServiceImpl::renderScannable(bool started_playing) {
   }
 
   scheduleFetchNowPlaying();
-}
-
-// AuthenticatorPresenter
-
-class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present::Presentable {
- public:
-  AuthenticatorPresenterImpl(async::Scheduler &main_scheduler,
-                             http::Http &http,
-                             present::PresenterQueue &presenter,
-                             settings::BrightnessProvider &brightness,
-                             jq_state *jq,
-                             bool verbose,
-                             AccessTokenCallback token_callback)
-      : _main_scheduler{main_scheduler},
-        _http{http},
-        _presenter{presenter},
-        _brightness{brightness},
-        _jq{jq},
-        _token_callback{std::move(token_callback)} {
-    _presenter.add(*this);
-    authenticate();
-  }
-  ~AuthenticatorPresenterImpl() { jq_teardown(&_jq); }
-
-  void start(SpotiLED &led, present::Callback) final;
-  void stop() final;
-
- private:
-  void authenticate();
-  void scheduleAuthRetry(std::chrono::milliseconds delay = {});
-
-  void onAuthResponse(http::Response response);
-  void pollToken();
-  void onPollTokenResponse(http::Response response);
-  void scheduleNextPollToken();
-
-  async::Scheduler &_main_scheduler;
-  http::Http &_http;
-  present::PresenterQueue &_presenter;
-  settings::BrightnessProvider &_brightness;
-  jq_state *_jq;
-  AccessTokenCallback _token_callback;
-  present::Callback _presenter_callback;
-
-  struct AuthState {
-    std::chrono::system_clock::time_point expiry;
-    std::chrono::milliseconds interval;
-    std::string device_code;
-    std::string user_code;
-  };
-  AuthState _auth_state;
-
-  std::unique_ptr<font::TextPage> _text = font::TextPage::create();
-  std::unique_ptr<RollingPresenter> _text_presenter;
-
-  http::Lifetime _request;
-  async::Lifetime _work;
-};
-
-std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
-    async::Scheduler &main_scheduler,
-    http::Http &http,
-    present::PresenterQueue &presenter,
-    settings::BrightnessProvider &brightness,
-    bool verbose,
-    AccessTokenCallback callback) {
-  auto jq = jq_init();
-  if (!jq) {
-    return nullptr;
-  }
-  return std::make_unique<AuthenticatorPresenterImpl>(main_scheduler, http, presenter, brightness,
-                                                      jq, verbose, callback);
-}
-
-void AuthenticatorPresenterImpl::start(SpotiLED &led, present::Callback callback) {
-  _text_presenter.reset();
-  _presenter_callback = callback;
-
-  led.add([this](auto &led, auto elapsed) {
-    using namespace std::chrono_literals;
-    if (!_presenter_callback) {
-      return 0ms;
-    }
-
-    if (!_auth_state.user_code.empty() && !_text_presenter) {
-      renderRolling(led, _brightness, elapsed, *_text);
-    }
-
-    return 200ms;
-  });
-}
-void AuthenticatorPresenterImpl::stop() {
-  _text_presenter.reset();
-  _request.reset();
-}
-
-void AuthenticatorPresenterImpl::authenticate() {
-  const auto data = std::string{"client_id="} + credentials::kClientId +
-                    "&scope=user-read-playback-state"
-                    "&description=Spotify-LED";
-
-  _request = _http.request({.method = http::Method::POST,
-                            .url = kAuthDeviceCodeUrl,
-                            .headers = {{kContentType, kXWWWFormUrlencoded}},
-                            .body = data},
-                           {.post_to = _main_scheduler, .callback = [this](auto response) {
-                              onAuthResponse(std::move(response));
-                            }});
-}
-
-void AuthenticatorPresenterImpl::scheduleAuthRetry(std::chrono::milliseconds delay) {
-  _work = _main_scheduler.schedule([this] { authenticate(); }, {.delay = delay});
-}
-
-void AuthenticatorPresenterImpl::onAuthResponse(http::Response response) {
-  if (response.status / 100 != 2) {
-    std::cerr << "failed to get device_code" << std::endl;
-    scheduleAuthRetry(std::chrono::seconds{5});
-    return;
-  }
-
-  DeviceFlowData data;
-  parseDeviceFlowData(_jq, response.body, data);
-  std::cerr << "url: " << data.verification_url_prefilled << std::endl;
-
-  auto now = std::chrono::system_clock::now();
-  _auth_state.expiry = now + data.expires_in;
-  _auth_state.interval = data.interval;
-  _auth_state.device_code = data.device_code;
-  _auth_state.user_code = data.user_code;
-
-  _text->setText(_auth_state.user_code);
-
-  pollToken();
-}
-
-void AuthenticatorPresenterImpl::pollToken() {
-  const auto data = std::string{"client_id="} + credentials::kClientId +
-                    "&device_code=" + _auth_state.device_code +
-                    "&scope=user-read-playback-state"
-                    "&grant_type=urn:ietf:params:oauth:grant-type:device_code";
-
-  _request = _http.request({.method = http::Method::POST,
-                            .url = kAuthTokenUrl,
-                            .headers = {{kContentType, kXWWWFormUrlencoded}},
-                            .body = data},
-                           {.post_to = _main_scheduler, .callback = [this](auto response) {
-                              onPollTokenResponse(std::move(response));
-                            }});
-}
-
-void AuthenticatorPresenterImpl::onPollTokenResponse(http::Response response) {
-  if (response.status / 100 == 5) {
-    std::cerr << "failed to get auth_code or error" << std::endl;
-    return scheduleAuthRetry();
-  }
-
-  TokenData data;
-  parseTokenData(_jq, response.body, data);
-  if (!data.error.empty()) {
-    std::cerr << "auth_code error: " << data.error << std::endl;
-    return data.error == "authorization_pending" ? scheduleNextPollToken() : scheduleAuthRetry();
-  }
-
-  std::cerr << "access_token: " << std::string_view(data.access_token).substr(0, 8) << ", "
-            << "refresh_token: " << std::string_view(data.refresh_token).substr(0, 8) << std::endl;
-
-  if (auto presenter_callback = std::exchange(_presenter_callback, {})) {
-    presenter_callback();
-  }
-
-  // don't access this after token_callback
-  _token_callback(std::move(data.access_token), std::move(data.refresh_token));
-}
-
-void AuthenticatorPresenterImpl::scheduleNextPollToken() {
-  _work = _main_scheduler.schedule(
-      [this] {
-        if (std::chrono::system_clock::now() >= _auth_state.expiry) {
-          return scheduleAuthRetry();
-        }
-        pollToken();
-      },
-      {.delay = _auth_state.interval});
-}
-
-// NowPlayingPresenter
-
-class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Presentable {
- public:
-  NowPlayingPresenterImpl(present::PresenterQueue &presenter,
-                          settings::BrightnessProvider &brightness,
-                          const NowPlaying &now_playing)
-      : _presenter{presenter}, _brightness{brightness}, _now_playing{now_playing} {
-    _presenter.add(*this);
-  }
-  ~NowPlayingPresenterImpl() { _presenter.erase(*this); }
-
-  void start(SpotiLED &led, present::Callback) {
-    _alive = std::make_shared<bool>(true);
-    led.add([this, sentinel = std::weak_ptr<void>(_alive)](auto &led, auto) {
-      using namespace std::chrono_literals;
-      if (sentinel.expired()) {
-        return 0s;
-      }
-      displayScannable(led);
-      return 5s;
-    });
-  }
-  void stop() { _alive.reset(); }
-
- private:
-  void displayScannable(SpotiLED &led);
-
-  present::PresenterQueue &_presenter;
-  settings::BrightnessProvider &_brightness;
-  const NowPlaying &_now_playing;
-  std::shared_ptr<bool> _alive;
-};
-
-std::unique_ptr<NowPlayingPresenter> NowPlayingPresenter::create(
-    present::PresenterQueue &presenter,
-    settings::BrightnessProvider &brightness,
-    const NowPlaying &now_playing) {
-  return std::make_unique<NowPlayingPresenterImpl>(presenter, brightness, now_playing);
-}
-
-void NowPlayingPresenterImpl::displayScannable(SpotiLED &led) {
-  led.setLogo(_brightness.logoBrightness());
-  auto brightness = _brightness.brightness();
-
-  for (auto col = 0; col < 23; ++col) {
-    auto start = 8 - _now_playing.lengths0[col];
-    auto end = 8 + _now_playing.lengths1[col];
-    for (auto y = start; y < end; ++y) {
-      led.set({.x = col, .y = y}, brightness);
-    }
-  }
 }
 
 }  // namespace spotify
