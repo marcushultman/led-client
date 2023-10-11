@@ -25,7 +25,7 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
         return 0s;
       }
       displayScannable(led);
-      return 5s;
+      return 10000s;
     });
   }
   void stop() { _alive.reset(); }

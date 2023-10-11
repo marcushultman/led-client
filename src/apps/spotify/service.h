@@ -1,5 +1,6 @@
 #pragma once
 
+#include <utility>
 #include <vector>
 
 #include "apps/settings/brightness_provider.h"
@@ -9,7 +10,8 @@
 
 namespace spotify {
 
-struct SpotifyService {
+class SpotifyService : NowPlayingService::Callbacks {
+ public:
   SpotifyService(async::Scheduler &main_scheduler,
                  http::Http &http,
                  SpotiLED &led,
@@ -20,8 +22,17 @@ struct SpotifyService {
   http::Response handleRequest(http::Request req);
 
  private:
+  //  NowPlayingService::Callbacks
+  void onPlaying(const NowPlayingService &, const NowPlaying &) final;
+  void onNewTrack(const NowPlayingService &, const NowPlaying &) final;
+  void onStopped(const NowPlayingService &) final;
+  void onTokenUpdate(const NowPlayingService &) final;
+  void onLogout(const NowPlayingService &) final;
+
   void addNowPlaying(std::string access_token, std::string refresh_token);
-  const NowPlaying *getSomePlaying() const;
+
+  void displaySomePlaying();
+  void hideIfPlaying(const NowPlayingService &);
 
   void saveTokens();
 
@@ -35,6 +46,7 @@ struct SpotifyService {
   bool _show_login = false;
   std::shared_ptr<void> _presenter;
   const NowPlayingService *_pending_play = nullptr;
+  const NowPlayingService *_playing = nullptr;
 };
 
 }  // namespace spotify
