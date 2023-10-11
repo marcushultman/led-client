@@ -4,6 +4,7 @@
 #include "spidev_lib++.h"
 #else
 #include <fstream>
+#include <vector>
 #endif
 
 #include <algorithm>
@@ -138,14 +139,42 @@ class Simulator final : public LED {
   void show(Buffer &buffer) final {
     assert(buffer.numLeds() == 19 + 16 * 23);
     auto *data = buffer.data();
-    _pipe << "\n\n\n\n";
-    for (auto i = 0; i < 19; ++i) {
-      auto *abgr = &data[(1 + i) * 4];
-      _pipe << simLogo(abgr) << simBrightness(abgr);
-    }
-    _pipe << "\n\n";
+    _pipe << "\n\n\n\n\n\n";
+
+    std::vector<std::pair<int, int> > logo = {
+        // clang-format off
+        {4, 5},
+        {3, 5},
+        {0, 10},
+        {1, 13},
+        {3, 15},
+        {4, 15},
+        {5, 15},
+        {7, 13},
+        {8, 8},
+        {8, 7},
+        {7, 2},
+        {5, 0},
+        {4, 0},
+        {3, 0},
+        {0, 3},
+        {1, 8},
+        {2, 8},
+        {5, 8},
+        {6, 8},
+        // clang-format on
+    };
 
     for (auto y = 0; y < 16; ++y) {
+      for (auto x = 0; x < 9; ++x) {
+        if (auto it = std::find(logo.begin(), logo.end(), std::pair{x, y}); it != logo.end()) {
+          auto i = std::distance(logo.begin(), it);
+          auto *abgr = &data[(1 + i) * 4];
+          _pipe << simLogo(abgr) << simBrightness(abgr);
+        } else {
+          _pipe << "    ";
+        }
+      }
       _pipe << " ";
       for (auto x = 0; x < 23; ++x) {
         auto i = 19 + x * 16 + 15 - y % 16;
