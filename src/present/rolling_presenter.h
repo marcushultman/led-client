@@ -17,15 +17,5 @@ void renderRolling(SpotiLED &led,
                    std::chrono::milliseconds elapsed,
                    page::Page &page,
                    Coord offset = {},
-                   Coord scale = kNormalScale);
-
-struct RollingPresenter {
-  virtual ~RollingPresenter() = default;
-  static std::unique_ptr<RollingPresenter> create(async::Scheduler &scheduler,
-                                                  SpotiLED &,
-                                                  settings::BrightnessProvider &,
-                                                  page::Page &,
-                                                  Direction,
-                                                  Coord offset = {},
-                                                  Coord scale = kNormalScale);
-};
+                   Coord scale = kNormalScale,
+                   double speed = 0.005);

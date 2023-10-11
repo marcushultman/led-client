@@ -123,7 +123,6 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   AuthState _auth_state;
 
   std::unique_ptr<font::TextPage> _text = font::TextPage::create();
-  std::unique_ptr<RollingPresenter> _text_presenter;
 
   http::Lifetime _request;
   async::Lifetime _work;
@@ -145,7 +144,6 @@ std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
 }
 
 void AuthenticatorPresenterImpl::start(SpotiLED &led, present::Callback callback) {
-  _text_presenter.reset();
   _presenter_callback = callback;
 
   led.add([this](auto &led, auto elapsed) {
@@ -154,17 +152,14 @@ void AuthenticatorPresenterImpl::start(SpotiLED &led, present::Callback callback
       return 0ms;
     }
 
-    if (!_auth_state.user_code.empty() && !_text_presenter) {
+    if (!_auth_state.user_code.empty()) {
       renderRolling(led, _brightness, elapsed, *_text);
     }
 
     return 200ms;
   });
 }
-void AuthenticatorPresenterImpl::stop() {
-  _text_presenter.reset();
-  _request.reset();
-}
+void AuthenticatorPresenterImpl::stop() { _request.reset(); }
 
 void AuthenticatorPresenterImpl::authenticate() {
   const auto data = std::string{"client_id="} + credentials::kClientId +
