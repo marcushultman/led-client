@@ -19,16 +19,22 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
 
   void start(SpotiLED &led, present::Callback) {
     _alive = std::make_shared<bool>(true);
-    led.add([this, sentinel = std::weak_ptr<void>(_alive)](auto &led, auto) {
+    _start = std::chrono::system_clock::now();
+    led.add([this, sentinel = std::weak_ptr<void>(_alive)](auto &led, auto elapsed) {
       using namespace std::chrono_literals;
-      if (sentinel.expired()) {
+      if (sentinel.expired() || (_stop.time_since_epoch().count() && _start + elapsed < _stop)) {
         return 0s;
       }
       displayScannable(led);
-      return 10000s;
+      return 1s;
     });
   }
-  void stop() { _alive.reset(); }
+  void stop() {
+    using namespace std::chrono_literals;
+    // _alive.reset();
+    printf("NowPlayingPresenter::stop()\n");
+    _stop = std::chrono::system_clock::now() + 1s;
+  }
 
  private:
   void displayScannable(SpotiLED &led);
@@ -37,6 +43,7 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
   settings::BrightnessProvider &_brightness;
   const NowPlaying &_now_playing;
   std::shared_ptr<bool> _alive;
+  std::chrono::system_clock::time_point _start, _stop;
 };
 
 std::unique_ptr<NowPlayingPresenter> NowPlayingPresenter::create(
