@@ -247,7 +247,8 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   }
 
   if (response.status == 204) {
-    std::cerr << "nothing is playing" << std::endl;
+    std::cout << "cout-nothing is playing" << std::endl;
+    std::cerr << "cerr-nothing is playing" << std::endl;
     _now_playing.track_id.clear();
     if (prev_status == 200) {
       _callbacks.onStopped(*this);
