@@ -15,6 +15,6 @@ cd ~/spoticode-apa102/build
 cmake -DPI=1 ..
 make spoticode
 
-nohup ./spoticode --brightness=32 >/dev/null 2>&1 &
+nohup bash -c './spoticode > >(/usr/bin/logger -t spoticode) 2> >(/usr/bin/logger -t spotcode-err)' 1>/dev/null 2>/dev/null &
 
 echo "Done!"
