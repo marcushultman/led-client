@@ -44,6 +44,7 @@ target_link_libraries(spoticode
   spotiled
   text
   url
+  web_proxy
   # 3rd party
   pthread
   ${CURL_LIBRARIES}

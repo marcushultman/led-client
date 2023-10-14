@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <variant>
 
 #include "async/scheduler.h"
 #include "http/http.h"
@@ -14,8 +15,11 @@ struct Server {
   virtual int port() const = 0;
 };
 
-using OnRequest = std::function<Response(Request)>;
+using SyncHandler = std::function<Response(Request)>;
+using AsyncHandler = std::function<Lifetime(Request, RequestOptions::OnResponse)>;
 
-std::unique_ptr<Server> makeServer(async::Scheduler &, OnRequest);
+using RequestHandler = std::variant<SyncHandler, AsyncHandler>;
+
+std::unique_ptr<Server> makeServer(async::Scheduler &, RequestHandler);
 
 }  // namespace http
