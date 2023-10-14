@@ -9,6 +9,7 @@
 #include "apps/settings/time_of_day_brightness.h"
 #include "apps/spotify/service.h"
 #include "apps/text/text_service.h"
+#include "apps/web_proxy/web_proxy.h"
 #include "http/http.h"
 #include "http/server/server.h"
 #include "present/presenter.h"
@@ -32,21 +33,24 @@ Options parseOptions(int argc, char *argv[]) {
 }
 
 struct PathMapper {
-  using Map = std::unordered_map<std::string, std::function<http::Response(http::Request)>>;
+  using Map = std::unordered_map<std::string, http::SyncHandler>;
 
-  PathMapper(Map map) : _map{std::move(map)} {}
+  PathMapper(Map map, http::AsyncHandler index = {})
+      : _map{std::move(map)}, _index{std::move(index)} {}
 
-  http::Response operator()(http::Request req) {
+  http::Lifetime operator()(http::Request req, http::RequestOptions::OnResponse callback) {
     url::Url url(req.url);
     auto it = url.path.empty() ? _map.end() : _map.find(std::string(url.path.front()));
     if (it != _map.end()) {
-      return it->second(std::move(req));
+      callback(it->second(std::move(req)));
+      return {};
     }
-    return 404;
+    return _index(req, [callback = std::move(callback)](auto res) mutable { callback(res); });
   }
 
  private:
   Map _map;
+  http::AsyncHandler _index;
 };
 
 int main(int argc, char *argv[]) {
@@ -66,15 +70,19 @@ int main(int argc, char *argv[]) {
       std::make_unique<TextService>(main_scheduler, *led, *presenter, display_service);
   auto spotify_service = std::make_unique<spotify::SpotifyService>(
       main_scheduler, *http, *led, *presenter, display_service, opts.verbose);
+  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http);
 
   // todo: proxy and route settings
 
-  PathMapper mapper{{
-      {"ping", [](auto) { return 200; }},
-      {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
-      {"mode", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
-      {"settings", [&](auto req) { return display_service(std::move(req)); }},
-  }};
+  PathMapper mapper{
+      {{"ping", [](auto) { return 200; }},
+       {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
+       {"mode", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
+       {"settings", [&](auto req) { return display_service(std::move(req)); }}},
+      [&](auto req, auto callback) {
+        return web_proxy.handleRequest(std::move(req), std::move(callback));
+      },
+  };
 
   std::cout << "Using logo brightness: " << int(display_service.logoBrightness()[0])
             << ", brightness: " << int(display_service.brightness()[0]) << std::endl;

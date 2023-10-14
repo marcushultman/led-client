@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "async/scheduler.h"
+#include "http/util.h"
 
 namespace http {
 namespace {
@@ -27,21 +28,14 @@ Method methodFromString(std::string_view str) {
   return Method::UNKNOWN;
 }
 
-std::string_view trim(std::string_view value) {
-  while (value.size() && value.front() == ' ') {
-    value = value.substr(1);
-  }
-  return value.substr(0, std::min(value.find_first_of("\r"), value.find_first_of("\n")));
-}
-
 }  // namespace
 
 struct ServerImpl : Server {
   using tcp = asio::ip::tcp;
 
-  ServerImpl(async::Scheduler &main_scheduler, OnRequest on_request)
+  ServerImpl(async::Scheduler &main_scheduler, RequestHandler handler)
       : _main_scheduler{main_scheduler},
-        _on_request{std::move(on_request)},
+        _handler{std::move(handler)},
         _thread{async::Thread::create("asio")},
         _asio_work_guard{_ctx.get_executor()},
         _asio_work{_thread->scheduler().schedule([this] {
@@ -75,15 +69,26 @@ struct ServerImpl : Server {
                 << req.body << std::endl;
 #endif
 
-      _main_work =
-          _main_scheduler.schedule([this, peer = std::make_shared<tcp::socket>(std::move(peer)),
-                                    req = std::move(req)]() mutable {
-            asio::post(_ctx,
-                       [this, peer = std::move(peer), res = _on_request(std::move(req))]() mutable {
-                         writeResponse(*peer, std::move(res));
-                         accept();
-                       });
+      _main_work = _main_scheduler.schedule([this,
+                                             peer = std::make_shared<tcp::socket>(std::move(peer)),
+                                             req = std::move(req)]() mutable {
+        if (auto *sync_handler = std::get_if<SyncHandler>(&_handler)) {
+          asio::post(_ctx, [this, peer = std::move(peer),
+                            res = (*sync_handler)(std::move(req))]() mutable {
+            writeResponse(*peer, std::move(res));
+            accept();
           });
+        } else if (auto *async_handler = std::get_if<AsyncHandler>(&_handler)) {
+          _async_work =
+              (*async_handler)(std::move(req), [this, peer = std::move(peer)](auto res) mutable {
+                _async_work.reset();
+                asio::post(_ctx, [this, peer = std::move(peer), res = std::move(res)]() mutable {
+                  writeResponse(*peer, std::move(res));
+                  accept();
+                });
+              });
+        }
+      });
     });
   }
 
@@ -125,7 +130,6 @@ struct ServerImpl : Server {
       auto key = std::string(buffer.substr(0, buffer.find(":")));
       auto value = std::string(trim(buffer.substr(key.size() + 1)));
       std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-      std::transform(value.begin(), value.end(), value.begin(), ::tolower);
       req.headers[std::move(key)] = std::move(value);
       buffer.remove_prefix(buffer.find_first_of("\n") + 1);
     }
@@ -160,7 +164,7 @@ struct ServerImpl : Server {
   }
 
   async::Scheduler &_main_scheduler;
-  OnRequest _on_request;
+  RequestHandler _handler;
 
   asio::io_context _ctx;
   tcp::acceptor _acceptor{_ctx, tcp::endpoint(tcp::v4(), 8080)};
@@ -170,10 +174,11 @@ struct ServerImpl : Server {
   asio::executor_work_guard<asio::io_context::executor_type> _asio_work_guard;
   async::Lifetime _asio_work;
   async::Lifetime _main_work;
+  http::Lifetime _async_work;
 };
 
-std::unique_ptr<Server> makeServer(async::Scheduler &main_scheduler, OnRequest on_request) {
-  return std::make_unique<ServerImpl>(main_scheduler, on_request);
+std::unique_ptr<Server> makeServer(async::Scheduler &main_scheduler, RequestHandler handler) {
+  return std::make_unique<ServerImpl>(main_scheduler, handler);
 }
 
 }  // namespace http

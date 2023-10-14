@@ -1,8 +1,10 @@
 add_subdirectory(server)
 
 set(SOURCES
-  http.h
   http.cpp
+  http.h
+  util.cpp
+  util.h
 )
 
 add_library(http ${SOURCES})

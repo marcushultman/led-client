@@ -7,6 +7,8 @@
 #include <iostream>
 #include <set>
 
+#include "http/util.h"
+
 namespace http {
 namespace {
 
@@ -96,6 +98,9 @@ class RequestExecutor final {
       curl_easy_setopt(curl, CURLOPT_POSTFIELDS, state->req.body.c_str());
     }
 
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, state.get());
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, onHeader);
+
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, state.get());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, onBytes);
 
@@ -103,6 +108,20 @@ class RequestExecutor final {
       curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &state->response.status);
     }
     state->scheduleResponse();
+  }
+
+  static size_t onHeader(char *ptr, size_t size, size_t nmemb, void *request) {
+    size *= nmemb;
+    auto buffer = std::string_view(ptr, size);
+    if (buffer.starts_with("HTTP") || buffer.find('\r') == 0) {
+      return size;
+    }
+    auto &res = static_cast<RequestState *>(request)->response;
+    auto key = std::string(buffer.substr(0, buffer.find(":")));
+    auto value = std::string(trim(buffer.substr(key.size() + 1)));
+    std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+    res.headers[std::move(key)] = std::move(value);
+    return size;
   }
 
   static size_t onBytes(char *ptr, size_t size, size_t nmemb, void *request) {
