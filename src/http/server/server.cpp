@@ -58,9 +58,16 @@ struct ServerImpl : Server {
   void accept() {
     _acceptor.async_accept(_ctx, [this](auto err, tcp::socket peer) {
       if (err) {
+        std::cerr << "Failed to accept connection: " << err << std::endl;
         return;
       }
-      auto req = readRequest(peer);
+      auto req = readRequest(peer, err);
+
+      if (err) {
+        std::cerr << "Failed to read request: " << err << std::endl;
+        asio::post(_ctx, [this] { accept(); });
+        return;
+      }
 
 #if 0
       std::cout << int(req.method) << " " << req.url << " "
@@ -83,14 +90,14 @@ struct ServerImpl : Server {
   int port() const final { return _acceptor.local_endpoint().port(); }
 
  private:
-  std::string_view readIntoBuffer(tcp::socket &peer) {
+  std::string_view readIntoBuffer(tcp::socket &peer, asio::error_code &err) {
     size_t offset = 0, size = std::max<size_t>(_buffer.size(), 128);
     std::string_view buffer;
     for (;;) {
       _buffer.resize(size);
-      auto bytes_read =
-          peer.read_some(asio::mutable_buffer(_buffer.data() + offset, _buffer.size() - offset));
-      if (offset + bytes_read < size) {
+      auto bytes_read = peer.read_some(
+          asio::mutable_buffer(_buffer.data() + offset, _buffer.size() - offset), err);
+      if (offset + bytes_read < size || err) {
         return std::string_view(_buffer.data(), offset + bytes_read);
       }
       offset += bytes_read;
@@ -98,10 +105,14 @@ struct ServerImpl : Server {
     }
   }
 
-  Request readRequest(tcp::socket &peer) {
-    std::string_view buffer = readIntoBuffer(peer);
+  Request readRequest(tcp::socket &peer, asio::error_code &err) {
+    std::string_view buffer = readIntoBuffer(peer, err);
 
     Request req;
+
+    if (err) {
+      return req;
+    }
 
     auto method = buffer.substr(0, buffer.find_first_of(' '));
     req.method = methodFromString(method);
