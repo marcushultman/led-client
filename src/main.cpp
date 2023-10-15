@@ -19,6 +19,7 @@
 
 struct Options {
   bool verbose = false;
+  std::string base_url;
 };
 
 Options parseOptions(int argc, char *argv[]) {
@@ -27,6 +28,8 @@ Options parseOptions(int argc, char *argv[]) {
     auto arg = std::string_view(argv[i]);
     if (arg.find("--verbose") == 0) {
       opts.verbose = true;
+    } else if (arg.find("--base-url") == 0) {
+      opts.base_url = arg.substr(11);
     }
   }
   return opts;
@@ -70,7 +73,7 @@ int main(int argc, char *argv[]) {
       std::make_unique<TextService>(main_scheduler, *led, *presenter, display_service);
   auto spotify_service = std::make_unique<spotify::SpotifyService>(
       main_scheduler, *http, *led, *presenter, display_service, opts.verbose);
-  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http);
+  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, opts.base_url);
 
   // todo: proxy and route settings
 
