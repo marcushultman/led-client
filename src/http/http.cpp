@@ -34,6 +34,11 @@ void setMethod(CURL *curl, Method method) {
   }
 }
 
+bool shouldUseTimeout(const Request &req) {
+  auto it = req.headers.find("connection");
+  return it == req.headers.end() || it->second != "keep-alive";
+}
+
 }  // namespace
 
 Response::Response() = default;
@@ -77,8 +82,10 @@ class RequestExecutor final {
   RequestExecutor(CURL *curl, async::Scheduler &scheduler, std::shared_ptr<RequestState> state)
       : _state{state},
         _work{scheduler.schedule([curl, state] { performRequest(curl, std::move(state)); })},
-        _timeout{state->opts.post_to.schedule([state] { state->onTimeout(); },
-                                              {.delay = kDefaultTimeout})} {}
+        _timeout{shouldUseTimeout(state->req)
+                     ? state->opts.post_to.schedule([state] { state->onTimeout(); },
+                                                    {.delay = kDefaultTimeout})
+                     : nullptr} {}
   ~RequestExecutor() { _state->scheduleCancellation(); }
 
   static void performRequest(CURL *curl, std::shared_ptr<RequestState> state) {
