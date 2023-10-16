@@ -79,11 +79,26 @@ void parseContext(jq_state *jq, const std::string &buffer, std::string &value) {
 
 #endif
 
+bool isLikelyToPlay() {
+  auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  auto &lt = *std::localtime(&now);
+  auto wday = lt.tm_wday + 6 % 7;  // days since Monday [0-6]
+  auto hour = lt.tm_hour;
+
+  if (wday < 5) {
+    // Mon - Fri
+    return (hour >= 6 && hour <= 9) || (hour > 15 && hour <= 22);
+  }
+  // Weekend
+  return (hour >= 6 && hour <= 23);
+}
+
 }  // namespace
 
 std::chrono::milliseconds requestBackoff(size_t num_request) {
   using namespace std::chrono_literals;
-  return num_request > 0 ? 30s * std::min(1 << (num_request - 1), 128) : 0s;
+  auto max_factor = isLikelyToPlay() ? 32 : 128;
+  return num_request > 0 ? 30s * std::min(1 << (num_request - 1), max_factor) : 0s;
 }
 
 class NowPlayingServiceImpl final : public NowPlayingService {
