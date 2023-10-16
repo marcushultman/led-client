@@ -1,6 +1,7 @@
 #include "now_playing_service.h"
 
 #include <cassert>
+#include <cstdio>
 #include <iostream>
 #include <map>
 
@@ -196,9 +197,9 @@ void NowPlayingServiceImpl::scheduleFetchNowPlaying() {
   } else {
     // Backoff for 204, 4xx, 5xx
     delay = requestBackoff(_now_playing.num_request);
-    auto token = std::string_view(_access_token).substr(0, 8);
-    printf("[%.*s] retry in %llds\n", int(token.size()), token.data(),
-           std::chrono::duration_cast<std::chrono::seconds>(delay).count());
+    std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "]"
+              << " retry in " << std::chrono::duration_cast<std::chrono::seconds>(delay).count()
+              << std::endl;
   }
   _now_playing.work = _main_scheduler.schedule([this] { fetchNowPlaying(true); }, {.delay = delay});
 }
@@ -238,8 +239,8 @@ void NowPlayingServiceImpl::onRefreshTokenResponse(http::Response response) {
 }
 
 void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry) {
-  auto token = std::string_view(_access_token).substr(0, 8);
-  printf("[%.*s] fetch NowPlaying\n", int(token.size()), token.data());
+  std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "]"
+            << " fetch NowPlaying" << std::endl;
 
   _now_playing.num_request++;
   _now_playing.request =

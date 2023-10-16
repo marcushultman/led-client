@@ -1,6 +1,7 @@
 #include "now_playing_presenter.h"
 
 #include <chrono>
+#include <iostream>
 
 #include "now_playing_service.h"
 #include "util/spotiled/spotiled.h"
@@ -31,8 +32,7 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
   }
   void stop() {
     using namespace std::chrono_literals;
-    // _alive.reset();
-    printf("NowPlayingPresenter::stop()\n");
+    std::cout << "NowPlayingPresenter::stop()" << std::endl;
     _stop = std::chrono::system_clock::now() + 1s;
   }
 
