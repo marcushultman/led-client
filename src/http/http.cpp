@@ -75,7 +75,6 @@ struct RequestExecutor : std::enable_shared_from_this<RequestExecutor> {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &_response);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, onBytes);
 
-    std::cout << "http " << _req.url << ": curl perform" << std::endl;
     curl_multi_add_handle(_mcurl, curl);
 
     auto err = CURLM_OK;
@@ -86,13 +85,9 @@ struct RequestExecutor : std::enable_shared_from_this<RequestExecutor> {
       }
     } while (!err && still_running && !_aborted);
 
-    if (err) {
-      std::cout << "http " << _req.url << ": ERRROR: " << err << std::endl;
-    }
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &_response.status);
-    scheduleResponse();
+    scheduleResponse(err);
 
-    std::cout << "http " << _req.url << ": " << (_aborted ? "aborted" : "done") << std::endl;
     curl_multi_remove_handle(_mcurl, curl);
   }
 
@@ -121,10 +116,14 @@ struct RequestExecutor : std::enable_shared_from_this<RequestExecutor> {
     return size;
   }
 
-  void scheduleResponse() {
-    _work = _opts.post_to.schedule([this, self = shared_from_this()] {
+  void scheduleResponse(CURLMcode err) {
+    _work = _opts.post_to.schedule([this, self = shared_from_this(), err] {
       if (!_aborted) {
-        _opts.callback(std::move(_response));
+        if (err) {
+          _opts.callback(500);
+        } else {
+          _opts.callback(std::move(_response));
+        }
       }
     });
   }
