@@ -3,6 +3,7 @@
 #include <charconv>
 #include <cmath>
 #include <fstream>
+#include <iostream>
 
 #include "brightness_provider.h"
 #include "time_of_day_brightness.h"
@@ -48,7 +49,7 @@ DisplayService::DisplayService(async::Scheduler &main_scheduler, present::Presen
     stream.getline(line.data(), line.size());
     _hue = std::stoi(line);
   }
-  printf("DisplayService brightness: %d hue: %d\n", _brightness, _hue);
+  std::cout << "DisplayService brightness: " << _brightness << " hue: " << _hue << std::endl;
 }
 
 DisplayService::~DisplayService() { save(); }
@@ -73,7 +74,7 @@ http::Response DisplayService::operator()(http::Request req) {
   } else if (setting == "hue") {
     _hue = std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness);
   }
-  printf("DisplayService brightness: %d hue: %d\n", _brightness, _hue);
+  std::cout << "DisplayService brightness: " << _brightness << " hue: " << _hue << std::endl;
   save();
 
   if (!_notified && !_timeout.count()) {
