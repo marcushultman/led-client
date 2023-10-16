@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <asio.hpp>
 #include <iostream>
+#include <set>
 
 #include "async/scheduler.h"
 #include "http/util.h"
@@ -28,40 +29,32 @@ Method methodFromString(std::string_view str) {
   return Method::UNKNOWN;
 }
 
-}  // namespace
-
-struct ServerImpl : Server {
+struct Connection : public std::enable_shared_from_this<Connection> {
   using tcp = asio::ip::tcp;
+  using OnDone = std::function<void(std::shared_ptr<Connection>)>;
 
-  ServerImpl(async::Scheduler &main_scheduler, RequestHandler handler)
+  Connection(async::Scheduler &main_scheduler,
+             RequestHandler &handler,
+             asio::io_context &ctx,
+             tcp::socket &&peer,
+             OnDone on_done)
       : _main_scheduler{main_scheduler},
-        _handler{std::move(handler)},
-        _thread{async::Thread::create("asio")},
-        _asio_work_guard{_ctx.get_executor()},
-        _asio_work{_thread->scheduler().schedule([this] {
-          _acceptor.set_option(tcp::acceptor::reuse_address(true));
-          _acceptor.listen();
-          accept();
-          _ctx.run();
-        })} {}
-  ~ServerImpl() {
-    _asio_work_guard.reset();
-    _ctx.stop();
-  }
+        _handler{handler},
+        _ctx{ctx},
+        _peer{std::move(peer)},
+        _on_done{std::move(on_done)} {}
 
-  void accept() {
-    _acceptor.async_accept(_ctx, [this](auto err, tcp::socket peer) {
-      if (err) {
-        std::cerr << "Failed to accept connection: " << err << std::endl;
-        return;
+  void start() {
+    asio::error_code err;
+    auto req = readRequest(err);
+    if (err) {
+      std::cerr << "Failed to read request: " << err << std::endl;
+      if (err != asio::error::operation_aborted) {
+        _on_done(shared_from_this());
+        _peer.close();
       }
-      auto req = readRequest(peer, err);
-
-      if (err) {
-        std::cerr << "Failed to read request: " << err << std::endl;
-        asio::post(_ctx, [this] { accept(); });
-        return;
-      }
+      return;
+    }
 
 #if 0
       std::cout << int(req.method) << " " << req.url << " "
@@ -69,38 +62,51 @@ struct ServerImpl : Server {
                 << req.body << std::endl;
 #endif
 
-      _main_work = _main_scheduler.schedule([this,
-                                             peer = std::make_shared<tcp::socket>(std::move(peer)),
-                                             req = std::move(req)]() mutable {
-        if (auto *sync_handler = std::get_if<SyncHandler>(&_handler)) {
-          asio::post(_ctx, [this, peer = std::move(peer),
-                            res = (*sync_handler)(std::move(req))]() mutable {
-            writeResponse(*peer, std::move(res));
-            accept();
-          });
-        } else if (auto *async_handler = std::get_if<AsyncHandler>(&_handler)) {
-          _async_work =
-              (*async_handler)(std::move(req), [this, peer = std::move(peer)](auto res) mutable {
-                _async_work.reset();
-                asio::post(_ctx, [this, peer = std::move(peer), res = std::move(res)]() mutable {
-                  writeResponse(*peer, std::move(res));
-                  accept();
-                });
-              });
-        }
-      });
+    _handler_work = _main_scheduler.schedule([this, req = std::move(req)]() mutable {
+      if (auto *sync_handler = std::get_if<SyncHandler>(&_handler)) {
+        auto res = (*sync_handler)(std::move(req));
+        postResponse(std::move(res));
+      } else if (auto *async_handler = std::get_if<AsyncHandler>(&_handler)) {
+        _handler_work = (*async_handler)(
+            std::move(req), [this](auto res) mutable { postResponse(std::move(res)); });
+      }
+    });
+
+    pollSocket();
+  }
+
+  void pollSocket() {
+    _peer.async_read_some(asio::buffer(_buffer), [this, self = shared_from_this()](auto err, auto) {
+      if (!_peer.is_open()) {
+        return;
+      }
+      if (!err) {
+        pollSocket();
+        return;
+      }
+      if (err == asio::error::eof) {
+        _handler_work.reset();
+        asio::error_code ignored_err;
+        _peer.shutdown(tcp::socket::shutdown_both, ignored_err);
+      }
+      if (err != asio::error::operation_aborted) {
+        _on_done(shared_from_this());
+        _peer.close(err);
+      }
     });
   }
 
-  int port() const final { return _acceptor.local_endpoint().port(); }
+  void postResponse(http::Response res) {
+    asio::post(_ctx, [this, res = std::move(res)]() mutable { writeResponse(std::move(res)); });
+  }
 
  private:
-  std::string_view readIntoBuffer(tcp::socket &peer, asio::error_code &err) {
+  std::string_view readIntoBuffer(asio::error_code &err) {
     size_t offset = 0, size = std::max<size_t>(_buffer.size(), 128);
     std::string_view buffer;
     for (;;) {
       _buffer.resize(size);
-      auto bytes_read = peer.read_some(
+      auto bytes_read = _peer.read_some(
           asio::mutable_buffer(_buffer.data() + offset, _buffer.size() - offset), err);
       if (offset + bytes_read < size || err) {
         return std::string_view(_buffer.data(), offset + bytes_read);
@@ -110,8 +116,8 @@ struct ServerImpl : Server {
     }
   }
 
-  Request readRequest(tcp::socket &peer, asio::error_code &err) {
-    std::string_view buffer = readIntoBuffer(peer, err);
+  Request readRequest(asio::error_code &err) {
+    std::string_view buffer = readIntoBuffer(err);
 
     Request req;
 
@@ -145,7 +151,7 @@ struct ServerImpl : Server {
     return req;
   }
 
-  void writeResponse(tcp::socket &peer, http::Response res) {
+  void writeResponse(http::Response res) {
     auto data = "HTTP/1.0 " + std::to_string(res.status) + " " +
                 (res.status == 200 ? "OK" : "No Content") + "\r\n";
     if (res.headers["content-length"].empty()) {
@@ -154,13 +160,67 @@ struct ServerImpl : Server {
     if (res.headers["content-type"].empty()) {
       res.headers["content-type"] = "text/html";
     }
-    // todo: customize
-    res.headers["access-control-allow-origin"] = "*";
-
     for (auto &[key, value] : res.headers) {
       data += key + ": " + value + "\r\n";
     }
-    peer.send(asio::buffer(data + "\r\n" + res.body));
+    _peer.async_send(asio::buffer(data + "\r\n" + res.body), [this](auto err, auto) {
+      if (!err) {
+        asio::error_code ignored_err;
+        _peer.shutdown(tcp::socket::shutdown_both, ignored_err);
+      }
+      if (err != asio::error::operation_aborted) {
+        _on_done(shared_from_this());
+        _peer.close(err);
+      }
+    });
+  }
+
+  async::Scheduler &_main_scheduler;
+  RequestHandler &_handler;
+  asio::io_context &_ctx;
+  tcp::socket _peer;
+  OnDone _on_done;
+  std::vector<char> _buffer;
+  async::Lifetime _handler_work;
+};
+
+struct ServerImpl : Server {
+  using tcp = asio::ip::tcp;
+
+  ServerImpl(async::Scheduler &main_scheduler, RequestHandler handler)
+      : _main_scheduler{main_scheduler},
+        _handler{std::move(handler)},
+        _thread{async::Thread::create("asio")} {
+    _acceptor.set_option(tcp::acceptor::reuse_address(true));
+    _acceptor.listen();
+    accept();
+    _asio_work = _thread->scheduler().schedule([this] { _ctx.run(); });
+  }
+  ~ServerImpl() {
+    _acceptor.close();
+    _ctx.stop();
+  }
+
+  int port() const final { return _acceptor.local_endpoint().port(); }
+
+ private:
+  void accept() {
+    _acceptor.async_accept(_ctx, [this](auto err, tcp::socket peer) {
+      if (!_acceptor.is_open()) {
+        return;
+      }
+      if (!err) {
+        auto connection =
+            std::make_shared<Connection>(_main_scheduler, _handler, _ctx, std::move(peer),
+                                         [this](auto conn) { _connections.erase(conn); });
+        _connections.insert(connection);
+        connection->start();
+      } else {
+        std::cerr << "Failed to accept connection: " << err << std::endl;
+      }
+
+      accept();
+    });
   }
 
   async::Scheduler &_main_scheduler;
@@ -168,14 +228,14 @@ struct ServerImpl : Server {
 
   asio::io_context _ctx;
   tcp::acceptor _acceptor{_ctx, tcp::endpoint(tcp::v4(), 8080)};
-  std::vector<char> _buffer;
 
   std::unique_ptr<async::Thread> _thread;
-  asio::executor_work_guard<asio::io_context::executor_type> _asio_work_guard;
   async::Lifetime _asio_work;
-  async::Lifetime _main_work;
-  http::Lifetime _async_work;
+
+  std::set<std::shared_ptr<Connection>> _connections;
 };
+
+}  // namespace
 
 std::unique_ptr<Server> makeServer(async::Scheduler &main_scheduler, RequestHandler handler) {
   return std::make_unique<ServerImpl>(main_scheduler, handler);
