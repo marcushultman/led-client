@@ -49,7 +49,8 @@ DisplayService::DisplayService(async::Scheduler &main_scheduler, present::Presen
     stream.getline(line.data(), line.size());
     _hue = std::stoi(line);
   }
-  std::cout << "DisplayService brightness: " << _brightness << " hue: " << _hue << std::endl;
+  std::cout << "DisplayService brightness: " << int(_brightness) << " hue: " << int(_hue)
+            << std::endl;
 }
 
 DisplayService::~DisplayService() { save(); }
