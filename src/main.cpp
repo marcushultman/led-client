@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
   auto opts = parseOptions(argc, argv);
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
-  auto led = SpotiLED::create(main_scheduler);
+  auto led = spotiled::LED::create(main_scheduler);
   auto presenter = present::makePresenterQueue(*led);
 
   auto display_service = settings::DisplayService(main_scheduler, *presenter);

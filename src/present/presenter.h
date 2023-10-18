@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 
-struct SpotiLED;
+#include "util/spotiled/spotiled.h"
 
 namespace present {
 
@@ -11,7 +11,7 @@ using Callback = std::function<void()>;
 
 struct Presentable {
   virtual ~Presentable() = default;
-  virtual void start(SpotiLED &, Callback) = 0;
+  virtual void start(spotiled::LED &, Callback) = 0;
   virtual void stop() = 0;
 };
 
@@ -31,6 +31,6 @@ struct PresenterQueue {
   virtual void clear() = 0;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(SpotiLED &);
+std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::LED &);
 
 }  // namespace present

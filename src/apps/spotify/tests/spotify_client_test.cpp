@@ -18,7 +18,7 @@ int main() {
 
   // auto http = http::Http::create();
   // auto thread = async::Thread::create("main");
-  // auto led = SpotiLED::create();
+  // auto led = spotiled::LED::create();
   // auto presenter_queue = present::makePresenterQueue(*led);
   // BrightnessProvider brightness;
 

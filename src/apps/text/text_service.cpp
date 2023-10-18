@@ -33,7 +33,7 @@ double speed(const http::Request &req) {
 }  // namespace
 
 TextService::TextService(async::Scheduler &main_scheduler,
-                         SpotiLED &led,
+                         spotiled::LED &led,
                          present::PresenterQueue &presenter,
                          settings::BrightnessProvider &brightness_provider)
     : _main_scheduler{main_scheduler},
@@ -51,7 +51,7 @@ http::Response TextService::handleRequest(http::Request req) {
   return 204;
 }
 
-void TextService::start(SpotiLED &led, present::Callback callback) {
+void TextService::start(spotiled::LED &led, present::Callback callback) {
   if (_requests.empty()) {
     return;
   }
