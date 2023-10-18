@@ -25,7 +25,7 @@ struct DisplayService : present::Presentable, BrightnessProvider, Settings {
   Color logoBrightness() const final;
   Color brightness() const final;
 
-  void start(SpotiLED &, present::Callback) final;
+  void start(spotiled::LED &, present::Callback) final;
   void stop() final;
 
  private:

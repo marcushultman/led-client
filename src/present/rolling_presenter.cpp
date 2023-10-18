@@ -10,7 +10,7 @@
 #include "util/gfx/gfx.h"
 #include "util/spotiled/spotiled.h"
 
-void renderRolling(SpotiLED &led,
+void renderRolling(spotiled::LED &led,
                    const settings::BrightnessProvider &brightness_provider,
                    std::chrono::milliseconds elapsed,
                    page::Page &page,

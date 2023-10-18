@@ -8,7 +8,7 @@
 namespace present {
 
 struct PresenterQueueImpl final : PresenterQueue {
-  explicit PresenterQueueImpl(SpotiLED &led) : _led{led} {}
+  explicit PresenterQueueImpl(spotiled::LED &led) : _led{led} {}
 
   void add(Presentable &presentable, const Options &options = {}) final {
     if (_current.presentable && _current.prio < options.prio) {
@@ -60,12 +60,12 @@ struct PresenterQueueImpl final : PresenterQueue {
     Prio prio;
     Presentable *presentable = nullptr;
   };
-  SpotiLED &_led;
+  spotiled::LED &_led;
   std::map<Prio, std::deque<Presentable *>, std::greater<Prio>> _queue;
   Current _current;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(SpotiLED &led) {
+std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::LED &led) {
   return std::make_unique<PresenterQueueImpl>(led);
 }
 

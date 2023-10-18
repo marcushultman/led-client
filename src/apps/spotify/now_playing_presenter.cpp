@@ -18,7 +18,7 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
   }
   ~NowPlayingPresenterImpl() { _presenter.erase(*this); }
 
-  void start(SpotiLED &led, present::Callback) {
+  void start(spotiled::LED &led, present::Callback) {
     _alive = std::make_shared<bool>(true);
     _start = std::chrono::system_clock::now();
     led.add([this, sentinel = std::weak_ptr<void>(_alive)](auto &led, auto elapsed) {
@@ -37,7 +37,7 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
   }
 
  private:
-  void displayScannable(SpotiLED &led);
+  void displayScannable(spotiled::LED &led);
 
   present::PresenterQueue &_presenter;
   settings::BrightnessProvider &_brightness;
@@ -53,7 +53,7 @@ std::unique_ptr<NowPlayingPresenter> NowPlayingPresenter::create(
   return std::make_unique<NowPlayingPresenterImpl>(presenter, brightness, now_playing);
 }
 
-void NowPlayingPresenterImpl::displayScannable(SpotiLED &led) {
+void NowPlayingPresenterImpl::displayScannable(spotiled::LED &led) {
   led.setLogo(_brightness.logoBrightness());
   auto brightness = _brightness.brightness();
 

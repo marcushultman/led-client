@@ -14,7 +14,7 @@ class SpotifyService : NowPlayingService::Callbacks {
  public:
   SpotifyService(async::Scheduler &main_scheduler,
                  http::Http &http,
-                 SpotiLED &led,
+                 spotiled::LED &led,
                  present::PresenterQueue &presenter_queue,
                  settings::BrightnessProvider &brightness,
                  bool verbose);

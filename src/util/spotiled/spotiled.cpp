@@ -2,9 +2,10 @@
 
 #include <queue>
 
+namespace spotiled {
 namespace {
 
-struct SpotiLEDImpl final : public SpotiLED {
+struct SpotiLEDImpl final : public LED {
   SpotiLEDImpl(async::Scheduler &main_scheduler) : _main_scheduler{main_scheduler} {
     _led->show(_buffer);
   }
@@ -74,6 +75,8 @@ struct SpotiLEDImpl final : public SpotiLED {
 
 }  // namespace
 
-std::unique_ptr<SpotiLED> SpotiLED::create(async::Scheduler &main_scheduler) {
+std::unique_ptr<LED> LED::create(async::Scheduler &main_scheduler) {
   return std::make_unique<SpotiLEDImpl>(main_scheduler);
 }
+
+}  // namespace spotiled
