@@ -10,18 +10,16 @@
 
 struct TextService : present::Presentable {
   TextService(async::Scheduler &main_scheduler,
-              spotiled::LED &led,
               present::PresenterQueue &presenter,
               settings::BrightnessProvider &brightness_provider);
 
   http::Response handleRequest(http::Request req);
 
-  void start(spotiled::LED &, present::Callback callback) final;
+  void start(spotiled::Renderer &, present::Callback callback) final;
   void stop() final;
 
  private:
   async::Scheduler &_main_scheduler;
-  spotiled::LED &_led;
   present::PresenterQueue &_presenter;
   settings::BrightnessProvider &_brightness_provider;
   std::unique_ptr<font::TextPage> _text = font::TextPage::create();

@@ -5,8 +5,8 @@
 namespace spotiled {
 namespace {
 
-struct SpotiLEDImpl final : public LED {
-  SpotiLEDImpl(async::Scheduler &main_scheduler) : _main_scheduler{main_scheduler} {
+struct RendererImpl final : public Renderer, LED {
+  RendererImpl(async::Scheduler &main_scheduler) : _main_scheduler{main_scheduler} {
     _led->show(_buffer);
   }
 
@@ -75,8 +75,8 @@ struct SpotiLEDImpl final : public LED {
 
 }  // namespace
 
-std::unique_ptr<LED> LED::create(async::Scheduler &main_scheduler) {
-  return std::make_unique<SpotiLEDImpl>(main_scheduler);
+std::unique_ptr<Renderer> Renderer::create(async::Scheduler &main_scheduler) {
+  return std::make_unique<RendererImpl>(main_scheduler);
 }
 
 }  // namespace spotiled

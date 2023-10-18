@@ -18,10 +18,10 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
   }
   ~NowPlayingPresenterImpl() { _presenter.erase(*this); }
 
-  void start(spotiled::LED &led, present::Callback) {
+  void start(spotiled::Renderer &renderer, present::Callback) {
     _alive = std::make_shared<bool>(true);
     _start = std::chrono::system_clock::now();
-    led.add([this, sentinel = std::weak_ptr<void>(_alive)](auto &led, auto elapsed) {
+    renderer.add([this, sentinel = std::weak_ptr<void>(_alive)](auto &led, auto elapsed) {
       using namespace std::chrono_literals;
       if (sentinel.expired() || (_stop.time_since_epoch().count() && _start + elapsed < _stop)) {
         return 0s;

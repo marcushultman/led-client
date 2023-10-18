@@ -94,8 +94,8 @@ Color DisplayService::brightness() const {
   return timeOfDayBrightness(std::max(kMinBrightness, 3 * _brightness / 4));
 }
 
-void DisplayService::start(spotiled::LED &led, present::Callback callback) {
-  led.add([this, callback = std::move(callback)](auto &led, auto elapsed) {
+void DisplayService::start(spotiled::Renderer &renderer, present::Callback callback) {
+  renderer.add([this, callback = std::move(callback)](auto &led, auto elapsed) {
     using namespace std::chrono_literals;
 
     if (std::exchange(_notified, false)) {

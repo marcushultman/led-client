@@ -13,17 +13,20 @@ namespace spotiled {
 
 struct LED {
   using Options = apa102::SetOptions;
-
   virtual ~LED() = default;
   virtual void setLogo(Color, const Options &options = {}) = 0;
   virtual void set(Coord pos, Color, const Options &options = {}) = 0;
+};
 
+struct Renderer {
   using RenderCallback =
       std::function<std::chrono::milliseconds(LED &, std::chrono::milliseconds elapsed)>;
+
+  virtual ~Renderer() = default;
   virtual void add(RenderCallback) = 0;
   virtual void notify() = 0;
 
-  static std::unique_ptr<LED> create(async::Scheduler &main_scheduler);
+  static std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler);
 };
 
 }  // namespace spotiled

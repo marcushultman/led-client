@@ -65,14 +65,13 @@ int main(int argc, char *argv[]) {
   auto opts = parseOptions(argc, argv);
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
-  auto led = spotiled::LED::create(main_scheduler);
+  auto led = spotiled::Renderer::create(main_scheduler);
   auto presenter = present::makePresenterQueue(*led);
 
   auto display_service = settings::DisplayService(main_scheduler, *presenter);
-  auto text_service =
-      std::make_unique<TextService>(main_scheduler, *led, *presenter, display_service);
+  auto text_service = std::make_unique<TextService>(main_scheduler, *presenter, display_service);
   auto spotify_service = std::make_unique<spotify::SpotifyService>(
-      main_scheduler, *http, *led, *presenter, display_service, opts.verbose);
+      main_scheduler, *http, *presenter, display_service, opts.verbose);
   auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, display_service, opts.base_url);
 
   // todo: proxy and route settings
