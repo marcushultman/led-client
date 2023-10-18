@@ -87,9 +87,6 @@ int main(int argc, char *argv[]) {
       },
   };
 
-  std::cout << "Using logo brightness: " << int(display_service.logoBrightness()[0])
-            << ", brightness: " << int(display_service.brightness()[0]) << std::endl;
-
   auto server = http::makeServer(main_scheduler, mapper);
   std::cout << "Listening on port: " << server->port() << std::endl;
 
