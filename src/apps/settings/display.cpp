@@ -84,6 +84,10 @@ http::Response DisplayService::operator()(http::Request req) {
   return 204;
 }
 
+uint8_t DisplayService::raw_brightness() const { return _brightness; }
+
+uint8_t DisplayService::hue() const { return _hue; }
+
 Color DisplayService::logoBrightness() const { return timeOfDayBrightness(_brightness); }
 
 Color DisplayService::brightness() const {

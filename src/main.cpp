@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
       std::make_unique<TextService>(main_scheduler, *led, *presenter, display_service);
   auto spotify_service = std::make_unique<spotify::SpotifyService>(
       main_scheduler, *http, *led, *presenter, display_service, opts.verbose);
-  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, opts.base_url);
+  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, display_service, opts.base_url);
 
   // todo: proxy and route settings
 

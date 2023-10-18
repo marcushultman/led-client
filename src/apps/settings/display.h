@@ -7,11 +7,20 @@
 
 namespace settings {
 
-struct DisplayService : present::Presentable, BrightnessProvider {
+struct Settings {
+  virtual ~Settings() = default;
+  virtual uint8_t raw_brightness() const = 0;
+  virtual uint8_t hue() const = 0;
+};
+
+struct DisplayService : present::Presentable, BrightnessProvider, Settings {
   DisplayService(async::Scheduler &, present::PresenterQueue &);
   ~DisplayService();
 
   http::Response operator()(http::Request);
+
+  uint8_t raw_brightness() const final;
+  uint8_t hue() const final;
 
   Color logoBrightness() const final;
   Color brightness() const final;
