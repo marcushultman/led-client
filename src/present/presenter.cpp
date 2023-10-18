@@ -8,7 +8,7 @@
 namespace present {
 
 struct PresenterQueueImpl final : PresenterQueue {
-  explicit PresenterQueueImpl(spotiled::LED &led) : _led{led} {}
+  explicit PresenterQueueImpl(spotiled::Renderer &renderer) : _renderer{renderer} {}
 
   void add(Presentable &presentable, const Options &options = {}) final {
     if (_current.presentable && _current.prio < options.prio) {
@@ -29,7 +29,7 @@ struct PresenterQueueImpl final : PresenterQueue {
       presentNext();
     }
   }
-  void notify() final { _led.notify(); }
+  void notify() final { _renderer.notify(); }
 
   void clear() final {
     _current.presentable = nullptr;
@@ -45,7 +45,7 @@ struct PresenterQueueImpl final : PresenterQueue {
       _current.prio = prio;
       _current.presentable = queue.front();
       queue.pop_front();
-      _current.presentable->start(_led, [this, presentable = _current.presentable] {
+      _current.presentable->start(_renderer, [this, presentable = _current.presentable] {
         if (_current.presentable == presentable) {
           presentNext();
         }
@@ -53,20 +53,20 @@ struct PresenterQueueImpl final : PresenterQueue {
       return;
     }
     _current.presentable = nullptr;
-    _led.notify();
+    _renderer.notify();
   }
 
   struct Current {
     Prio prio;
     Presentable *presentable = nullptr;
   };
-  spotiled::LED &_led;
+  spotiled::Renderer &_renderer;
   std::map<Prio, std::deque<Presentable *>, std::greater<Prio>> _queue;
   Current _current;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::LED &led) {
-  return std::make_unique<PresenterQueueImpl>(led);
+std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::Renderer &renderer) {
+  return std::make_unique<PresenterQueueImpl>(renderer);
 }
 
 }  // namespace present

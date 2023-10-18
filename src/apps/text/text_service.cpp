@@ -33,11 +33,9 @@ double speed(const http::Request &req) {
 }  // namespace
 
 TextService::TextService(async::Scheduler &main_scheduler,
-                         spotiled::LED &led,
                          present::PresenterQueue &presenter,
                          settings::BrightnessProvider &brightness_provider)
     : _main_scheduler{main_scheduler},
-      _led{led},
       _presenter{presenter},
       _brightness_provider{brightness_provider} {}
 
@@ -51,7 +49,7 @@ http::Response TextService::handleRequest(http::Request req) {
   return 204;
 }
 
-void TextService::start(spotiled::LED &led, present::Callback callback) {
+void TextService::start(spotiled::Renderer &renderer, present::Callback callback) {
   if (_requests.empty()) {
     return;
   }
@@ -63,8 +61,8 @@ void TextService::start(spotiled::LED &led, present::Callback callback) {
   _text->setText(std::move(text));
 
   _sentinel = std::make_shared<bool>(true);
-  led.add([this, timeout = timeout(req), speed = speed(req), callback = std::move(callback),
-           alive = std::weak_ptr<void>(_sentinel)](auto &led, auto elapsed) {
+  renderer.add([this, timeout = timeout(req), speed = speed(req), callback = std::move(callback),
+                alive = std::weak_ptr<void>(_sentinel)](auto &led, auto elapsed) {
     using namespace std::chrono_literals;
     if (elapsed >= timeout || alive.expired()) {
       callback();

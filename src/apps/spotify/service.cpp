@@ -43,7 +43,6 @@ void saveTokens(const std::unordered_map<std::string, std::string> &now_playing)
 
 SpotifyService::SpotifyService(async::Scheduler &main_scheduler,
                                http::Http &http,
-                               spotiled::LED &led,
                                present::PresenterQueue &presenter_queue,
                                settings::BrightnessProvider &brightness,
                                bool verbose)

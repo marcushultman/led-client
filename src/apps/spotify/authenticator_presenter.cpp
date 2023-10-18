@@ -94,7 +94,7 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   }
   ~AuthenticatorPresenterImpl() { jq_teardown(&_jq); }
 
-  void start(spotiled::LED &led, present::Callback) final;
+  void start(spotiled::Renderer &, present::Callback) final;
   void stop() final;
 
  private:
@@ -143,10 +143,10 @@ std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
                                                       jq, verbose, callback);
 }
 
-void AuthenticatorPresenterImpl::start(spotiled::LED &led, present::Callback callback) {
+void AuthenticatorPresenterImpl::start(spotiled::Renderer &renderer, present::Callback callback) {
   _presenter_callback = callback;
 
-  led.add([this](auto &led, auto elapsed) {
+  renderer.add([this](auto &led, auto elapsed) {
     using namespace std::chrono_literals;
     if (!_presenter_callback) {
       return 0ms;
