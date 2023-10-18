@@ -10,9 +10,13 @@ const auto kHostHeader = "host";
 
 }  // namespace
 
-WebProxy::WebProxy(async::Scheduler &main_scheduler, http::Http &http, std::string base_url)
+WebProxy::WebProxy(async::Scheduler &main_scheduler,
+                   http::Http &http,
+                   settings::Settings &settings,
+                   std::string base_url)
     : _main_scheduler{main_scheduler},
       _http{http},
+      _settings{settings},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)} {}
 
 http::Lifetime WebProxy::handleRequest(http::Request req,
@@ -22,6 +26,9 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
   if (auto it = req.headers.find(kHostHeader); it != req.headers.end()) {
     it->second = url::Url(req.url).host;
   }
+
+  req.headers["x-spotiled-brightness"] = std::to_string(_settings.raw_brightness());
+  req.headers["x-spotiled-hue"] = std::to_string(_settings.hue());
   return _http.request(std::move(req),
                        {.post_to = _main_scheduler, .callback = std::move(callback)});
 }
