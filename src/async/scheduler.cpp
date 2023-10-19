@@ -12,7 +12,7 @@ struct Entry {
   Fn fn;
   std::weak_ptr<void> sentinel;
   std::chrono::system_clock::time_point at;
-  std::chrono::milliseconds period;
+  std::chrono::microseconds period;
 
   bool operator<(const Entry &rhs) const { return at < rhs.at; }
 };
