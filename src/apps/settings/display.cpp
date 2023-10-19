@@ -5,8 +5,6 @@
 #include <fstream>
 #include <iostream>
 
-#include "brightness_provider.h"
-#include "time_of_day_brightness.h"
 #include "util/color/color.h"
 #include "util/spotiled/spotiled.h"
 #include "util/url/url.h"
@@ -25,9 +23,9 @@ constexpr auto kFilename = "brightness0";
 constexpr auto kTimeout = 3s;
 
 std::pair<int, int> waveIndices(
-    double speed, uint8_t brightness, int x, int width, int top, int bottom) {
-  auto x_brightness = kMaxBrightness * double(x) / 23;
-  auto f = x_brightness < brightness ? (brightness - x_brightness) / double(brightness) : 0;
+    double speed, uint8_t percent, int x, int width, int top, int bottom) {
+  auto x_percent = 100 * double(x) / 23;
+  auto f = x_percent < percent ? (percent - x_percent) / double(percent) : 0;
   auto w = f * std::sin(2 * M_PI * (0.002 * speed + x) / width);
   auto y1 = 8 + top * w;
   auto y2 = 8 + bottom * w;
@@ -37,20 +35,22 @@ std::pair<int, int> waveIndices(
 
 }  // namespace
 
-DisplayService::DisplayService(async::Scheduler &main_scheduler, present::PresenterQueue &presenter)
-    : _main_scheduler{main_scheduler},
-      _presenter{presenter},
-      _brightness(kMaxBrightness),
-      _hue{kDefaultHue} {
+DisplayService::DisplayService(async::Scheduler &main_scheduler,
+                               spotiled::BrightnessProvider &brightness,
+                               present::PresenterQueue &presenter)
+    : _main_scheduler{main_scheduler}, _presenter{presenter}, _brightness(brightness) {
   if (auto stream = std::ifstream(kFilename); stream.good()) {
     std::string line(64, '\0');
     stream.getline(line.data(), line.size());
-    _brightness = std::stoi(line);
+    _brightness.setBrightness(std::stoi(line));
     stream.getline(line.data(), line.size());
-    _hue = std::stoi(line);
+    _brightness.setHue(std::stoi(line));
+  } else {
+    _brightness.setBrightness(kMaxBrightness);
+    _brightness.setHue(kDefaultHue);
   }
-  std::cout << "DisplayService brightness: " << int(_brightness) << " hue: " << int(_hue)
-            << std::endl;
+  std::cout << "DisplayService brightness: " << int(_brightness.brightness())
+            << " hue: " << int(_brightness.hue()) << std::endl;
 }
 
 DisplayService::~DisplayService() { save(); }
@@ -61,9 +61,9 @@ http::Response DisplayService::operator()(http::Request req) {
 
   if (req.method == http::Method::GET) {
     if (setting == "brightness") {
-      return std::to_string(_brightness);
+      return std::to_string(_brightness.brightness());
     } else if (setting == "hue") {
-      return std::to_string(_hue);
+      return std::to_string(_brightness.hue());
     }
   }
   if (req.method != http::Method::POST || req.body.empty()) {
@@ -71,11 +71,12 @@ http::Response DisplayService::operator()(http::Request req) {
   }
 
   if (setting == "brightness") {
-    _brightness = std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness);
+    _brightness.setBrightness(std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness));
   } else if (setting == "hue") {
-    _hue = std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness);
+    _brightness.setHue(std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness));
   }
-  std::cout << "DisplayService brightness: " << _brightness << " hue: " << _hue << std::endl;
+  std::cout << "DisplayService brightness: " << int(_brightness.brightness())
+            << " hue: " << int(_brightness.hue()) << std::endl;
   save();
 
   if (!_notified && !_timeout.count()) {
@@ -83,16 +84,6 @@ http::Response DisplayService::operator()(http::Request req) {
   }
   _notified = true;
   return 204;
-}
-
-uint8_t DisplayService::raw_brightness() const { return _brightness; }
-
-uint8_t DisplayService::hue() const { return _hue; }
-
-Color DisplayService::logoBrightness() const { return timeOfDayBrightness(_brightness); }
-
-Color DisplayService::brightness() const {
-  return timeOfDayBrightness(std::max(kMinBrightness, 3 * _brightness / 4));
 }
 
 void DisplayService::start(spotiled::Renderer &renderer, present::Callback callback) {
@@ -107,20 +98,19 @@ void DisplayService::start(spotiled::Renderer &renderer, present::Callback callb
       callback();
       return 0ms;
     }
-    led.setLogo(logoBrightness());
+    led.setLogo(color::kWhite);
+
+    auto percent = 100 * _brightness.brightness() / kMaxBrightness;
 
     for (auto x = 0; x < 23; ++x) {
-      for (auto [y, end] = waveIndices(10 * elapsed.count(), _brightness, x, 20, 8, 3); y < end;
-           y++) {
-        led.set({x, y}, Color(0, 128, 255) * brightness());
+      for (auto [y, end] = waveIndices(10 * elapsed.count(), percent, x, 20, 8, 3); y < end; y++) {
+        led.set({x, y}, Color(0, 128, 255));
       }
-      for (auto [y, end] = waveIndices(15 * elapsed.count(), _brightness, x, 25, 6, 3); y < end;
-           y++) {
-        led.set({x, y}, Color(128, 0, 255) * brightness());
+      for (auto [y, end] = waveIndices(15 * elapsed.count(), percent, x, 25, 6, 3); y < end; y++) {
+        led.set({x, y}, Color(128, 0, 255));
       }
-      for (auto [y, end] = waveIndices(20 * elapsed.count(), _brightness, x, 30, 4, 2); y < end;
-           y++) {
-        led.set({x, y}, brightness());
+      for (auto [y, end] = waveIndices(20 * elapsed.count(), percent, x, 30, 4, 2); y < end; y++) {
+        led.set({x, y}, color::kWhite);
       }
     }
 
@@ -134,7 +124,8 @@ void DisplayService::stop() {
 }
 
 void DisplayService::save() {
-  auto line = std::to_string(_brightness) + "\n" + std::to_string(_hue) + "\n";
+  auto line =
+      std::to_string(_brightness.brightness()) + "\n" + std::to_string(_brightness.hue()) + "\n";
   std::ofstream(kFilename).write(line.data(), line.size());
 }
 

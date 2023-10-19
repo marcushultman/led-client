@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace settings {
+namespace spotiled {
 
 inline double brightnessForTimeOfDay(int hour) { return std::pow(std::sin(M_PI * hour / 24), 3); }
 
@@ -18,7 +18,7 @@ inline uint8_t timeOfDayBrightness(uint8_t b, int hour = getHour()) {
   return b ? std::min<uint8_t>(b * brightnessForTimeOfDay(hour) + 1, b) : 0;
 }
 
-}  // namespace settings
+}  // namespace spotiled
 
 #if 0
 

@@ -3,7 +3,6 @@
 #include <chrono>
 #include <iostream>
 
-#include "apps/settings/brightness_provider.h"
 #include "credentials.h"
 #include "font/font.h"
 #include "jq_util.h"
@@ -79,14 +78,12 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   AuthenticatorPresenterImpl(async::Scheduler &main_scheduler,
                              http::Http &http,
                              present::PresenterQueue &presenter,
-                             settings::BrightnessProvider &brightness,
                              jq_state *jq,
                              bool verbose,
                              AccessTokenCallback token_callback)
       : _main_scheduler{main_scheduler},
         _http{http},
         _presenter{presenter},
-        _brightness{brightness},
         _jq{jq},
         _token_callback{std::move(token_callback)} {
     _presenter.add(*this);
@@ -109,7 +106,6 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   async::Scheduler &_main_scheduler;
   http::Http &_http;
   present::PresenterQueue &_presenter;
-  settings::BrightnessProvider &_brightness;
   jq_state *_jq;
   AccessTokenCallback _token_callback;
   present::Callback _presenter_callback;
@@ -132,15 +128,14 @@ std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
     async::Scheduler &main_scheduler,
     http::Http &http,
     present::PresenterQueue &presenter,
-    settings::BrightnessProvider &brightness,
     bool verbose,
     AccessTokenCallback callback) {
   auto jq = jq_init();
   if (!jq) {
     return nullptr;
   }
-  return std::make_unique<AuthenticatorPresenterImpl>(main_scheduler, http, presenter, brightness,
-                                                      jq, verbose, callback);
+  return std::make_unique<AuthenticatorPresenterImpl>(main_scheduler, http, presenter, jq, verbose,
+                                                      callback);
 }
 
 void AuthenticatorPresenterImpl::start(spotiled::Renderer &renderer, present::Callback callback) {
@@ -153,7 +148,7 @@ void AuthenticatorPresenterImpl::start(spotiled::Renderer &renderer, present::Ca
     }
 
     if (!_auth_state.user_code.empty()) {
-      renderRolling(led, _brightness, elapsed, *_text);
+      renderRolling(led, elapsed, *_text);
     }
 
     return 200ms;

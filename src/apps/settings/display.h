@@ -1,29 +1,17 @@
 #pragma once
 
 #include "async/scheduler.h"
-#include "brightness_provider.h"
 #include "http/http.h"
 #include "present/presenter.h"
+#include "util/spotiled/brightness_provider.h"
 
 namespace settings {
 
-struct Settings {
-  virtual ~Settings() = default;
-  virtual uint8_t raw_brightness() const = 0;
-  virtual uint8_t hue() const = 0;
-};
-
-struct DisplayService : present::Presentable, BrightnessProvider, Settings {
-  DisplayService(async::Scheduler &, present::PresenterQueue &);
+struct DisplayService : present::Presentable {
+  DisplayService(async::Scheduler &, spotiled::BrightnessProvider &, present::PresenterQueue &);
   ~DisplayService();
 
   http::Response operator()(http::Request);
-
-  uint8_t raw_brightness() const final;
-  uint8_t hue() const final;
-
-  Color logoBrightness() const final;
-  Color brightness() const final;
 
   void start(spotiled::Renderer &, present::Callback) final;
   void stop() final;
@@ -32,9 +20,8 @@ struct DisplayService : present::Presentable, BrightnessProvider, Settings {
   void save();
 
   async::Scheduler &_main_scheduler;
+  spotiled::BrightnessProvider &_brightness;
   present::PresenterQueue &_presenter;
-  uint8_t _brightness = 0;
-  uint8_t _hue = 0;
 
   std::chrono::milliseconds _timeout = {};
   bool _notified = false;

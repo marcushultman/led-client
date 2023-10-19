@@ -12,11 +12,11 @@ const auto kHostHeader = "host";
 
 WebProxy::WebProxy(async::Scheduler &main_scheduler,
                    http::Http &http,
-                   settings::Settings &settings,
+                   spotiled::BrightnessProvider &brightness,
                    std::string base_url)
     : _main_scheduler{main_scheduler},
       _http{http},
-      _settings{settings},
+      _brightness{brightness},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)} {}
 
 http::Lifetime WebProxy::handleRequest(http::Request req,
@@ -27,8 +27,8 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
     it->second = url::Url(req.url).host;
   }
 
-  req.headers["x-spotiled-brightness"] = std::to_string(_settings.raw_brightness());
-  req.headers["x-spotiled-hue"] = std::to_string(_settings.hue());
+  req.headers["x-spotiled-brightness"] = std::to_string(_brightness.brightness());
+  req.headers["x-spotiled-hue"] = std::to_string(_brightness.hue());
   return _http.request(std::move(req),
                        {.post_to = _main_scheduler, .callback = std::move(callback)});
 }

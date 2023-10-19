@@ -4,9 +4,7 @@
 #include <iostream>
 #include <string>
 
-#include "apps/settings/brightness_provider.h"
 #include "apps/settings/display.h"
-#include "apps/settings/time_of_day_brightness.h"
 #include "apps/spotify/service.h"
 #include "apps/text/text_service.h"
 #include "apps/web_proxy/web_proxy.h"
@@ -14,6 +12,7 @@
 #include "http/server/server.h"
 #include "present/presenter.h"
 #include "util/csignal/signal_handler.h"
+#include "util/spotiled/brightness_provider.h"
 #include "util/spotiled/spotiled.h"
 #include "util/url/url.h"
 
@@ -65,14 +64,15 @@ int main(int argc, char *argv[]) {
   auto opts = parseOptions(argc, argv);
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
-  auto led = spotiled::Renderer::create(main_scheduler);
+  auto brightness = spotiled::BrightnessProvider();
+  auto led = spotiled::Renderer::create(main_scheduler, brightness);
   auto presenter = present::makePresenterQueue(*led);
 
-  auto display_service = settings::DisplayService(main_scheduler, *presenter);
-  auto text_service = std::make_unique<TextService>(main_scheduler, *presenter, display_service);
-  auto spotify_service = std::make_unique<spotify::SpotifyService>(
-      main_scheduler, *http, *presenter, display_service, opts.verbose);
-  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, display_service, opts.base_url);
+  auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
+  auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
+  auto spotify_service =
+      std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
+  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, brightness, opts.base_url);
 
   // todo: proxy and route settings
 

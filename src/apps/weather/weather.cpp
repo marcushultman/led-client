@@ -2,11 +2,12 @@
 #include <iostream>
 #include <map>
 
-#include "apps/settings/brightness_provider.h"
 #include "font/font.h"
 #include "util/apa102/apa102.h"
+#include "util/spotiled/brightness_provider.h"
 
 namespace weather {
+using namespace color;
 
 // todo: access from weather
 const auto kAlphaMap = std::map<char, Sprite>{};
