@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <ctime>
 #include <iostream>
 #include <map>
 
@@ -124,6 +125,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   }
 
  private:
+  void scheduleResetBackoff();
   void scheduleFetchNowPlaying();
 
   void refreshToken();
@@ -144,6 +146,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   http::Http &_http;
   jq_state *_jq = nullptr;
   bool _verbose = false;
+  async::Lifetime _backoff_reset;
 
   std::string _access_token;
   std::string _refresh_token;
@@ -182,9 +185,38 @@ NowPlayingServiceImpl::NowPlayingServiceImpl(async::Scheduler &main_scheduler,
       _refresh_token{std::move(refresh_token)},
       _callbacks{callbacks} {
   scheduleFetchNowPlaying();
+  scheduleResetBackoff();
 }
 
 NowPlayingServiceImpl::~NowPlayingServiceImpl() { jq_teardown(&_jq); }
+
+void NowPlayingServiceImpl::scheduleResetBackoff() {
+  auto delay = [] {
+    using namespace std::chrono_literals;
+    auto now = std::chrono::system_clock::now();
+    auto now_t = std::chrono::system_clock::to_time_t(now);
+    auto *midnight_t = std::localtime(&now_t);
+    midnight_t->tm_hour = midnight_t->tm_min = midnight_t->tm_sec = 0;
+    auto midnight = std::chrono::system_clock::from_time_t(std::mktime(midnight_t));
+
+    for (auto h = now - midnight;; h -= 24h) {
+      for (auto d : {6h, 9h, 16h, 18h, 20h}) {
+        if (h < d) return d - h;
+      }
+    }
+  }();
+
+  _backoff_reset = _main_scheduler.schedule(
+      [this] {
+        _now_playing.num_request = 0;
+        scheduleFetchNowPlaying();
+      },
+      {.delay = delay});
+
+  std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "]"
+            << " reset backoff in "
+            << std::chrono::duration_cast<std::chrono::seconds>(delay).count() << std::endl;
+}
 
 void NowPlayingServiceImpl::scheduleFetchNowPlaying() {
   std::chrono::milliseconds delay;
