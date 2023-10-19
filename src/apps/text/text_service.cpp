@@ -32,12 +32,8 @@ double speed(const http::Request &req) {
 
 }  // namespace
 
-TextService::TextService(async::Scheduler &main_scheduler,
-                         present::PresenterQueue &presenter,
-                         settings::BrightnessProvider &brightness_provider)
-    : _main_scheduler{main_scheduler},
-      _presenter{presenter},
-      _brightness_provider{brightness_provider} {}
+TextService::TextService(async::Scheduler &main_scheduler, present::PresenterQueue &presenter)
+    : _main_scheduler{main_scheduler}, _presenter{presenter} {}
 
 http::Response TextService::handleRequest(http::Request req) {
   if (req.method != http::Method::POST) {
@@ -68,7 +64,7 @@ void TextService::start(spotiled::Renderer &renderer, present::Callback callback
       callback();
       return 0ms;
     }
-    renderRolling(led, _brightness_provider, elapsed, *_text, {}, kNormalScale, speed);
+    renderRolling(led, elapsed, *_text, {}, kNormalScale, speed);
     return std::min(timeout - elapsed, 100ms);
   });
 }

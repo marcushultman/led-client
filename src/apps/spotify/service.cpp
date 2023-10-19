@@ -4,7 +4,6 @@
 #include <fstream>
 #include <unordered_set>
 
-#include "apps/settings/brightness_provider.h"
 #include "authenticator_presenter.h"
 #include "font/font.h"
 #include "http/http.h"
@@ -44,12 +43,10 @@ void saveTokens(const std::unordered_map<std::string, std::string> &now_playing)
 SpotifyService::SpotifyService(async::Scheduler &main_scheduler,
                                http::Http &http,
                                present::PresenterQueue &presenter_queue,
-                               settings::BrightnessProvider &brightness,
                                bool verbose)
     : _main_scheduler(main_scheduler),
       _http(http),
       _presenter_queue(presenter_queue),
-      _brightness{brightness},
       _verbose(verbose) {
   for (auto &[access_token, refresh_token] : loadTokens()) {
     addNowPlaying(std::move(access_token), std::move(refresh_token));
@@ -69,13 +66,13 @@ http::Response SpotifyService::handleRequest(http::Request req) {
   }
 
   if (_show_login) {
-    _presenter = AuthenticatorPresenter::create(
-        _main_scheduler, _http, _presenter_queue, _brightness, _verbose,
-        [this](auto access_token, auto refresh_token) {
-          addNowPlaying(std::move(access_token), std::move(refresh_token));
-          _pending_play = _now_playing_service.back().get();
-          saveTokens();
-        });
+    _presenter = AuthenticatorPresenter::create(_main_scheduler, _http, _presenter_queue, _verbose,
+                                                [this](auto access_token, auto refresh_token) {
+                                                  addNowPlaying(std::move(access_token),
+                                                                std::move(refresh_token));
+                                                  _pending_play = _now_playing_service.back().get();
+                                                  saveTokens();
+                                                });
   } else {
     displaySomePlaying();
   }
@@ -87,7 +84,7 @@ void SpotifyService::onPlaying(const NowPlayingService &service, const NowPlayin
   if (&service == _pending_play || !_presenter) {
     _pending_play = nullptr;
     _playing = &service;
-    _presenter = NowPlayingPresenter::create(_presenter_queue, _brightness, now_playing);
+    _presenter = NowPlayingPresenter::create(_presenter_queue, now_playing);
   }
 }
 
@@ -128,7 +125,7 @@ void SpotifyService::displaySomePlaying() {
   if (auto [service, now_playing] = get_some_playing(); service) {
     std::cout << "Spotify: playing '" << now_playing->title << "'" << std::endl;
     _playing = service;
-    _presenter = NowPlayingPresenter::create(_presenter_queue, _brightness, *now_playing);
+    _presenter = NowPlayingPresenter::create(_presenter_queue, *now_playing);
   } else {
     _presenter.reset();
   }

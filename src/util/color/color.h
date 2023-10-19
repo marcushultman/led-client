@@ -34,12 +34,16 @@ struct Color : public std::array<uint8_t, 3> {
 
 constexpr Color operator*(uint8_t s, Color c) { return c * s; }
 
+namespace color {
+
 constexpr auto kBlack = Color(0);
 constexpr auto kWhite = Color(255);
 
 inline uint8_t luminance(const Color &c) {
   return ((299 * c.r()) + (587 * c.g()) + (114 * c.b())) / 1000;
 }
+
+}  // namespace color
 
 namespace std {
 

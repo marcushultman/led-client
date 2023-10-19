@@ -3,7 +3,6 @@
 #include <utility>
 #include <vector>
 
-#include "apps/settings/brightness_provider.h"
 #include "http/http.h"
 #include "now_playing_service.h"
 #include "present/presenter.h"
@@ -15,7 +14,6 @@ class SpotifyService : NowPlayingService::Callbacks {
   SpotifyService(async::Scheduler &main_scheduler,
                  http::Http &http,
                  present::PresenterQueue &presenter_queue,
-                 settings::BrightnessProvider &brightness,
                  bool verbose);
 
   http::Response handleRequest(http::Request req);
@@ -38,7 +36,6 @@ class SpotifyService : NowPlayingService::Callbacks {
   async::Scheduler &_main_scheduler;
   http::Http &_http;
   present::PresenterQueue &_presenter_queue;
-  settings::BrightnessProvider &_brightness;
   bool _verbose;
 
   std::vector<std::unique_ptr<NowPlayingService>> _now_playing_service;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "apps/settings/brightness_provider.h"
 #include "async/scheduler.h"
 #include "util/color/color.h"
 #include "util/gfx/gfx.h"
@@ -13,7 +12,6 @@ enum class Direction {
 };
 
 void renderRolling(spotiled::LED &led,
-                   const settings::BrightnessProvider &brightness_provider,
                    std::chrono::milliseconds elapsed,
                    page::Page &page,
                    Coord offset = {},

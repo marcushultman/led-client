@@ -5,6 +5,7 @@
 #include "util/gfx/gfx.h"
 
 namespace font {
+using namespace color;
 
 const auto kAlphaMap = std::map<char, Sprite>{
     {'A',

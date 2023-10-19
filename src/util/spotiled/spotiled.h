@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "async/scheduler.h"
+#include "brightness_provider.h"
 #include "util/apa102/apa102.h"
 #include "util/color/color.h"
 #include "util/gfx/gfx.h"
@@ -26,7 +27,7 @@ struct Renderer {
   virtual void add(RenderCallback) = 0;
   virtual void notify() = 0;
 
-  static std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler);
+  static std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler, BrightnessProvider &);
 };
 
 }  // namespace spotiled

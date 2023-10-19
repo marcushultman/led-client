@@ -2,25 +2,15 @@
 
 #include <queue>
 
+#include "time_of_day_brightness.h"
+
 namespace spotiled {
 namespace {
 
 struct RendererImpl final : public Renderer, LED {
-  RendererImpl(async::Scheduler &main_scheduler) : _main_scheduler{main_scheduler} {
+  RendererImpl(async::Scheduler &main_scheduler, BrightnessProvider &brightness)
+      : _main_scheduler{main_scheduler}, _brightness{brightness} {
     _led->show(_buffer);
-  }
-
-  void setLogo(Color color, const Options &options) final {
-    auto [r, g, b] = color;
-    for (auto i = 0; i < 19; ++i) {
-      _buffer.set(i, r, g, b, options);
-    }
-  }
-  void set(Coord pos, Color color, const Options &options) final {
-    if (pos.x >= 0 && pos.x < 23 && pos.y >= 0 && pos.y < 16) {
-      auto [r, g, b] = color;
-      _buffer.set(19 + offset(pos), r, g, b, options);
-    }
   }
 
   void add(RenderCallback callback) final {
@@ -33,6 +23,19 @@ struct RendererImpl final : public Renderer, LED {
   }
 
  private:
+  void setLogo(Color color, const Options &options) final {
+    auto [r, g, b] = color * timeOfDayBrightness(_brightness.brightness());
+    for (auto i = 0; i < 19; ++i) {
+      _buffer.set(i, r, g, b, options);
+    }
+  }
+  void set(Coord pos, Color color, const Options &options) final {
+    if (pos.x >= 0 && pos.x < 23 && pos.y >= 0 && pos.y < 16) {
+      auto [r, g, b] = color * timeOfDayBrightness(std::max(1, 3 * _brightness.brightness() / 4));
+      _buffer.set(19 + offset(pos), r, g, b, options);
+    }
+  }
+
   void renderFrame() {
     using namespace std::chrono_literals;
     auto now = std::chrono::system_clock::now();
@@ -66,6 +69,7 @@ struct RendererImpl final : public Renderer, LED {
   size_t offset(Coord pos) { return 16 * pos.x + 15 - pos.y; }
 
   async::Scheduler &_main_scheduler;
+  BrightnessProvider &_brightness;
   apa102::Buffer _buffer{19 + 16 * 23};
   std::unique_ptr<apa102::LED> _led = apa102::createLED();
   std::vector<std::pair<RenderCallback, std::chrono::system_clock::time_point>> _callbacks;
@@ -75,8 +79,15 @@ struct RendererImpl final : public Renderer, LED {
 
 }  // namespace
 
-std::unique_ptr<Renderer> Renderer::create(async::Scheduler &main_scheduler) {
-  return std::make_unique<RendererImpl>(main_scheduler);
+uint8_t BrightnessProvider::brightness() const { return _brightness; }
+uint8_t BrightnessProvider::hue() const { return _hue; }
+
+void BrightnessProvider::setBrightness(uint8_t brightness) { _brightness = brightness; }
+void BrightnessProvider::setHue(uint8_t hue) { _hue = hue; }
+
+std::unique_ptr<Renderer> Renderer::create(async::Scheduler &main_scheduler,
+                                           BrightnessProvider &brightness) {
+  return std::make_unique<RendererImpl>(main_scheduler, brightness);
 }
 
 }  // namespace spotiled
