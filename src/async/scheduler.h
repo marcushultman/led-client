@@ -12,8 +12,8 @@ using Fn = std::function<void()>;
 
 struct Scheduler {
   struct Options {
-    std::chrono::milliseconds delay;
-    std::chrono::milliseconds period;
+    std::chrono::microseconds delay;
+    std::chrono::microseconds period;
   };
 
   virtual ~Scheduler() = default;
