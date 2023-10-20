@@ -201,7 +201,7 @@ void NowPlayingServiceImpl::scheduleResetBackoff() {
 
     for (auto h = now - midnight;; h -= 24h) {
       for (auto d : {6h, 9h, 16h, 18h, 20h}) {
-        if (h < d) return d - h;
+        if (h < d) return std::chrono::duration_cast<std::chrono::milliseconds>(d - h);
       }
     }
   }();
