@@ -87,20 +87,17 @@ bool isLikelyToPlay() {
   auto wday = lt.tm_wday + 6 % 7;  // days since Monday [0-6]
   auto hour = lt.tm_hour;
 
-  if (wday < 5) {
-    // Mon - Fri
-    return (hour >= 6 && hour <= 9) || (hour > 15 && hour <= 22);
-  }
-  // Weekend
-  return (hour >= 6 && hour <= 23);
+  return wday < 5 ? (hour >= 6 && hour <= 9) || (hour > 15 && hour <= 22)  // Mon - Fri
+                  : (hour >= 8 && hour <= 23);                             // Weekend
 }
 
 }  // namespace
 
+// backoff 10s -> ~5min
 std::chrono::milliseconds requestBackoff(size_t num_request) {
   using namespace std::chrono_literals;
-  auto max_factor = isLikelyToPlay() ? 32 : 128;
-  return num_request > 0 ? 30s * std::min(1 << (num_request - 1), max_factor) : 0s;
+  auto max_factor = isLikelyToPlay() ? 1 : 32;
+  return num_request > 0 ? 10s * std::min(1 << (num_request - 1), max_factor) : 0s;
 }
 
 class NowPlayingServiceImpl final : public NowPlayingService {
@@ -125,7 +122,6 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   }
 
  private:
-  void scheduleResetBackoff();
   void scheduleFetchNowPlaying();
 
   void refreshToken();
@@ -146,7 +142,6 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   http::Http &_http;
   jq_state *_jq = nullptr;
   bool _verbose = false;
-  async::Lifetime _backoff_reset;
 
   std::string _access_token;
   std::string _refresh_token;
@@ -185,38 +180,9 @@ NowPlayingServiceImpl::NowPlayingServiceImpl(async::Scheduler &main_scheduler,
       _refresh_token{std::move(refresh_token)},
       _callbacks{callbacks} {
   scheduleFetchNowPlaying();
-  scheduleResetBackoff();
 }
 
 NowPlayingServiceImpl::~NowPlayingServiceImpl() { jq_teardown(&_jq); }
-
-void NowPlayingServiceImpl::scheduleResetBackoff() {
-  auto delay = [] {
-    using namespace std::chrono_literals;
-    auto now = std::chrono::system_clock::now();
-    auto now_t = std::chrono::system_clock::to_time_t(now);
-    auto *midnight_t = std::localtime(&now_t);
-    midnight_t->tm_hour = midnight_t->tm_min = midnight_t->tm_sec = 0;
-    auto midnight = std::chrono::system_clock::from_time_t(std::mktime(midnight_t));
-
-    for (auto h = now - midnight;; h -= 24h) {
-      for (auto d : {6h, 9h, 16h, 18h, 20h}) {
-        if (h < d) return std::chrono::duration_cast<std::chrono::milliseconds>(d - h);
-      }
-    }
-  }();
-
-  _backoff_reset = _main_scheduler.schedule(
-      [this] {
-        _now_playing.num_request = 0;
-        scheduleFetchNowPlaying();
-      },
-      {.delay = delay});
-
-  std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "]"
-            << " reset backoff in "
-            << std::chrono::duration_cast<std::chrono::seconds>(delay).count() << std::endl;
-}
 
 void NowPlayingServiceImpl::scheduleFetchNowPlaying() {
   std::chrono::milliseconds delay;
@@ -231,7 +197,7 @@ void NowPlayingServiceImpl::scheduleFetchNowPlaying() {
     delay = requestBackoff(_now_playing.num_request);
     std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "]"
               << " retry in " << std::chrono::duration_cast<std::chrono::seconds>(delay).count()
-              << std::endl;
+              << "s" << std::endl;
   }
   _now_playing.work = _main_scheduler.schedule([this] { fetchNowPlaying(true); }, {.delay = delay});
 }
@@ -296,7 +262,6 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
 
   if (response.status == 204) {
     std::cout << "cout-nothing is playing" << std::endl;
-    std::cerr << "cerr-nothing is playing" << std::endl;
     _now_playing.track_id.clear();
     if (prev_status == 200) {
       _callbacks.onStopped(*this);
