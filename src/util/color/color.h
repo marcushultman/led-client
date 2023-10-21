@@ -22,9 +22,9 @@ struct Color : public std::array<uint8_t, 3> {
             static_cast<uint8_t>(static_cast<int>(at(2)) * s / 255)};
   }
 
-  uint8_t r() const { return at(0); }
-  uint8_t g() const { return at(1); }
-  uint8_t b() const { return at(2); }
+  constexpr uint8_t r() const { return at(0); }
+  constexpr uint8_t g() const { return at(1); }
+  constexpr uint8_t b() const { return at(2); }
 
   template <std::size_t I>
   constexpr std::tuple_element_t<I, Color> &get() {
