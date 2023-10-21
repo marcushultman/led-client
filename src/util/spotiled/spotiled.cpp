@@ -1,11 +1,26 @@
 #include "util/spotiled/spotiled.h"
 
+#include <iostream>
 #include <queue>
 
 #include "time_of_day_brightness.h"
+#include "util/color/color.h"
 
 namespace spotiled {
 namespace {
+
+const auto kWarm = std::array<Color, 6>{{{155, 41, 72},
+                                         {255, 114, 81},
+                                         {255, 202, 123},
+                                         {255, 205, 116},
+                                         {255, 237, 191},
+                                         {255, 255, 255}}};
+
+Color hueFactor(double zero_to_one) {
+  auto s = zero_to_one * (kWarm.size() - 1);
+  auto i = int(s);
+  return i == kWarm.size() - 1 ? kWarm[i] : kWarm[i] + (s - i) * (kWarm[i + 1] - kWarm[i]);
+}
 
 struct RendererImpl final : public Renderer, LED {
   RendererImpl(async::Scheduler &main_scheduler, BrightnessProvider &brightness)
@@ -24,14 +39,16 @@ struct RendererImpl final : public Renderer, LED {
 
  private:
   void setLogo(Color color, const Options &options) final {
-    auto [r, g, b] = color * timeOfDayBrightness(_brightness.brightness());
+    auto [r, g, b] = color * timeOfDayBrightness(_brightness.brightness()) *
+                     hueFactor(_brightness.hue() / 255.0);
     for (auto i = 0; i < 19; ++i) {
       _buffer.set(i, r, g, b, options);
     }
   }
   void set(Coord pos, Color color, const Options &options) final {
     if (pos.x >= 0 && pos.x < 23 && pos.y >= 0 && pos.y < 16) {
-      auto [r, g, b] = color * timeOfDayBrightness(std::max(1, 3 * _brightness.brightness() / 4));
+      auto [r, g, b] = color * timeOfDayBrightness(std::max(1, 3 * _brightness.brightness() / 4)) *
+                       hueFactor(_brightness.hue() / 255.0);
       _buffer.set(19 + offset(pos), r, g, b, options);
     }
   }

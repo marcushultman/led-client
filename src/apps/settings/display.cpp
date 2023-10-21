@@ -17,7 +17,8 @@ using namespace std::chrono_literals;
 constexpr auto kMinBrightness = 1;
 constexpr auto kMaxBrightness = 64 - 1;
 
-constexpr auto kDefaultHue = 255;
+constexpr auto kMinHue = 0;
+constexpr auto kMaxHue = 255;
 
 constexpr auto kFilename = "brightness0";
 constexpr auto kTimeout = 3s;
@@ -47,7 +48,7 @@ DisplayService::DisplayService(async::Scheduler &main_scheduler,
     _brightness.setHue(std::stoi(line));
   } else {
     _brightness.setBrightness(kMaxBrightness);
-    _brightness.setHue(kDefaultHue);
+    _brightness.setHue(kMaxHue);
   }
   std::cout << "DisplayService brightness: " << int(_brightness.brightness())
             << " hue: " << int(_brightness.hue()) << std::endl;
@@ -73,7 +74,7 @@ http::Response DisplayService::operator()(http::Request req) {
   if (setting == "brightness") {
     _brightness.setBrightness(std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness));
   } else if (setting == "hue") {
-    _brightness.setHue(std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness));
+    _brightness.setHue(std::clamp(std::stoi(req.body), kMinHue, kMaxHue));
   }
   std::cout << "DisplayService brightness: " << int(_brightness.brightness())
             << " hue: " << int(_brightness.hue()) << std::endl;
