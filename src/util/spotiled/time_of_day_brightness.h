@@ -5,7 +5,23 @@
 #include <cmath>
 #include <cstdint>
 
+#include "brightness_provider.h"
+#include "util/color/color.h"
+
 namespace spotiled {
+
+constexpr auto kWarm = std::array<Color, 6>{{{155, 41, 72},
+                                             {255, 114, 81},
+                                             {255, 202, 123},
+                                             {255, 205, 116},
+                                             {255, 237, 191},
+                                             {255, 255, 255}}};
+
+inline Color hueFactor(double zero_to_one) {
+  auto s = zero_to_one * (kWarm.size() - 1);
+  auto i = int(s);
+  return i == kWarm.size() - 1 ? kWarm[i] : kWarm[i] + (s - i) * (kWarm[i + 1] - kWarm[i]);
+}
 
 inline double brightnessForTimeOfDay(int hour) { return std::pow(std::sin(M_PI * hour / 24), 3); }
 
@@ -14,8 +30,11 @@ inline int getHour() {
   return std::localtime(&now)->tm_hour;
 }
 
-inline uint8_t timeOfDayBrightness(uint8_t b, int hour = getHour()) {
-  return b ? std::min<uint8_t>(b * brightnessForTimeOfDay(hour) + 1, b) : 0;
+inline Color timeOfDayBrightness(BrightnessProvider &bp, int hour = getHour()) {
+  auto b = bp.brightness();
+  return b ? std::min<uint8_t>(b * brightnessForTimeOfDay(hour) + 1, b) *
+                 hueFactor(bp.hue() / 255.0)
+           : 0;
 }
 
 }  // namespace spotiled
