@@ -147,6 +147,7 @@ class HttpImpl final : public Http {
       }));
     }
     curl_easy_setopt(curl, CURLOPT_URL, state->request.url.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 
     setMethod(curl, state->request.method);
 
