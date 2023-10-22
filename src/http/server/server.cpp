@@ -67,8 +67,8 @@ struct Connection : public std::enable_shared_from_this<Connection> {
         auto res = (*sync_handler)(std::move(req));
         postResponse(std::move(res));
       } else if (auto *async_handler = std::get_if<AsyncHandler>(&_handler)) {
-        _handler_work = (*async_handler)(
-            std::move(req), [this](auto res) mutable { postResponse(std::move(res)); });
+        _main_work = (*async_handler)(std::move(req),
+                                      [this](auto res) mutable { postResponse(std::move(res)); });
       }
     });
 
@@ -85,7 +85,7 @@ struct Connection : public std::enable_shared_from_this<Connection> {
         return;
       }
       if (err == asio::error::eof) {
-        _handler_work.reset();
+        _handler_work = _main_scheduler.schedule([this] { _main_work.reset(); });
         asio::error_code ignored_err;
         _peer.shutdown(tcp::socket::shutdown_both, ignored_err);
       }
@@ -181,7 +181,8 @@ struct Connection : public std::enable_shared_from_this<Connection> {
   tcp::socket _peer;
   OnDone _on_done;
   std::vector<char> _buffer;
-  async::Lifetime _handler_work;
+  async::Lifetime _handler_work;  // set on asio - runs on main
+  async::Lifetime _main_work;     // set on main - runs on main
 };
 
 struct ServerImpl : Server {
