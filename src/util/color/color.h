@@ -4,6 +4,20 @@
 #include <cstdint>
 #include <type_traits>
 
+namespace color::detail {
+
+inline constexpr uint8_t mul(uint8_t lhs, double f) {
+  return (lhs || f) ? std::max<uint8_t>(1, lhs * f) : 0;
+}
+inline constexpr uint8_t mul(uint8_t lhs, uint8_t rhs) {
+  return (lhs || rhs) ? std::max(1, lhs * rhs) : 0;
+}
+inline constexpr uint8_t muld(uint8_t lhs, uint8_t rhs, uint8_t div) {
+  return (lhs || rhs) ? std::max(1, lhs * rhs / div) : 0;
+}
+
+}  // namespace color::detail
+
 struct Color : public std::array<uint8_t, 3> {
   using array::array;
 
@@ -17,10 +31,14 @@ struct Color : public std::array<uint8_t, 3> {
     return Color(r() - rhs.r(), g() - rhs.g(), b() - rhs.b());
   }
   constexpr Color operator*(const Color &rhs) const {
-    return Color(int(r()) * rhs.r() / 255, int(g()) * rhs.g() / 255, int(b()) * rhs.b() / 255);
+    using color::detail::muld;
+    return Color(muld(r(), rhs.r(), 255), muld(g(), rhs.g(), 255), muld(b(), rhs.b(), 255));
   }
 
-  constexpr Color operator*(double f) const { return Color(r() * f, g() * f, b() * f); }
+  constexpr Color operator*(double f) const {
+    using color::detail::mul;
+    return Color(mul(r(), f), mul(g(), f), mul(b(), f));
+  }
   constexpr Color operator*(uint8_t s) const { return *this * Color(s); }
 
   constexpr uint8_t r() const { return at(0); }

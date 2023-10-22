@@ -15,8 +15,8 @@ namespace spotiled {
 struct LED {
   using Options = apa102::SetOptions;
   virtual ~LED() = default;
-  virtual void setLogo(Color, const Options &options = {}) = 0;
-  virtual void set(Coord pos, Color, const Options &options = {}) = 0;
+  virtual void setLogo(Color, const Options & = {}) = 0;
+  virtual void set(Coord, Color, const Options & = {}) = 0;
 };
 
 struct Renderer {
