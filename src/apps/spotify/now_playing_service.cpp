@@ -39,17 +39,25 @@ struct TokenData {
   // std::string client_secret;
 };
 
-void parseTokenData(jq_state *jq, const std::string &buffer, TokenData &data) {
+bool parseTokenData(jq_state *jq, const std::string &buffer, TokenData &data) {
   const auto input = jv_parse(buffer.c_str());
+  if (!jv_is_valid(input)) {
+    std::cerr << "invalid JSON: " << buffer << std::endl;
+    return false;
+  }
   jq_compile(jq, ".error, .access_token, .refresh_token");
   jq_start(jq, input, 0);
   nextStr(jq, data.error);
   nextStr(jq, data.access_token);
   nextStr(jq, data.refresh_token);
+  return true;
 }
 
-void parseNowPlaying(jq_state *jq, const std::string &buffer, NowPlaying &now_playing) {
+bool parseNowPlaying(jq_state *jq, const std::string &buffer, NowPlaying &now_playing) {
   const auto input = jv_parse(buffer.c_str());
+  if (!jv_is_valid(input)) {
+    return false;
+  }
   jq_compile(jq,
              ".item.id,"
              ".context.href,"
@@ -68,6 +76,7 @@ void parseNowPlaying(jq_state *jq, const std::string &buffer, NowPlaying &now_pl
   nextStr(jq, now_playing.uri);
   nextMs(jq, now_playing.progress);
   nextMs(jq, now_playing.duration);
+  return true;
 }
 
 #if 0
@@ -224,7 +233,10 @@ void NowPlayingServiceImpl::onRefreshTokenResponse(http::Response response) {
   }
 
   TokenData data;
-  parseTokenData(_jq, response.body, data);
+  if (!parseTokenData(_jq, response.body, data)) {
+    std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
+              << " invalid JSON: " << response.body << std::endl;
+  }
   std::cerr << "refreshed "
             << "access_token: " << std::string_view(data.access_token).substr(0, 8) << ", "
             << "refresh_token: " << std::string_view(data.refresh_token).substr(0, 8) << std::endl;
@@ -274,7 +286,10 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
 
   auto track_id = _now_playing.track_id;
 
-  parseNowPlaying(_jq, response.body, _now_playing);
+  if (!parseNowPlaying(_jq, response.body, _now_playing)) {
+    std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
+              << " invalid JSON: " << response.body << std::endl;
+  }
 
   if (track_id == _now_playing.track_id) {
     return renderScannable(false);
