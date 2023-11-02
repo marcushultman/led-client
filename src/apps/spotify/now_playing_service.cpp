@@ -42,7 +42,6 @@ struct TokenData {
 bool parseTokenData(jq_state *jq, const std::string &buffer, TokenData &data) {
   const auto input = jv_parse(buffer.c_str());
   if (!jv_is_valid(input)) {
-    std::cerr << "invalid JSON: " << buffer << std::endl;
     return false;
   }
   jq_compile(jq, ".error, .access_token, .refresh_token");
@@ -227,17 +226,18 @@ void NowPlayingServiceImpl::refreshToken() {
 
 void NowPlayingServiceImpl::onRefreshTokenResponse(http::Response response) {
   if (response.status / 100 != 2) {
-    std::cerr << "failed to refresh token: " << response.body << std::endl;
+    std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
+              << " failed to refresh token: " << response.body << std::endl;
     _callbacks.onLogout(*this);
     return;
   }
 
   TokenData data;
   if (!parseTokenData(_jq, response.body, data)) {
-    std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
+    std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
               << " invalid JSON: " << response.body << std::endl;
   }
-  std::cerr << "refreshed "
+  std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] refreshed "
             << "access_token: " << std::string_view(data.access_token).substr(0, 8) << ", "
             << "refresh_token: " << std::string_view(data.refresh_token).substr(0, 8) << std::endl;
 
@@ -265,7 +265,8 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
 
   if (response.status / 100 != 2) {
     if (!allow_retry) {
-      std::cerr << "failed to get player state" << std::endl;
+      std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
+                << " failed to get player state" << std::endl;
       return scheduleFetchNowPlaying();
     }
     _now_playing.num_request--;
@@ -273,7 +274,8 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   }
 
   if (response.status == 204) {
-    std::cout << "cout-nothing is playing" << std::endl;
+    std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] "
+              << "nothing is playing" << std::endl;
     _now_playing.track_id.clear();
     if (prev_status == 200) {
       _callbacks.onStopped(*this);
@@ -337,7 +339,8 @@ void NowPlayingServiceImpl::fetchScannable(bool started_playing) {
 
 void NowPlayingServiceImpl::onScannable(bool started_playing, http::Response response) {
   if (response.status / 100 != 2) {
-    std::cerr << "failed to fetch scannable id, status: " << response.status << std::endl;
+    std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
+              << " failed to fetch scannable id" << std::endl;
     _now_playing.lengths0.fill(0);
     _now_playing.lengths1.fill(0);
     return renderScannable(started_playing);
@@ -367,12 +370,9 @@ void NowPlayingServiceImpl::onScannable(bool started_playing, http::Response res
 }
 
 void NowPlayingServiceImpl::renderScannable(bool started_playing) {
-  std::cerr << "context: " << _now_playing.context << "\n";
-  std::cerr << "title: " << _now_playing.title << "\n";
-  std::cerr << "artist: " << _now_playing.artist << "\n";
-  std::cerr << "image: " << _now_playing.image << "\n";
-  std::cerr << "uri: " << _now_playing.uri << "\n";
-  std::cerr << "duration: " << _now_playing.duration.count() << std::endl;
+  std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] "
+            << "Spotify: " << _now_playing.title << " - " << _now_playing.artist << " ("
+            << _now_playing.uri << ") " << _now_playing.context << std::endl;
 
   if (started_playing) {
     _callbacks.onPlaying(*this, _now_playing);
