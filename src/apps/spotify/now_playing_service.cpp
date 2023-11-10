@@ -252,7 +252,7 @@ void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry) {
   std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "]"
             << " fetch NowPlaying" << std::endl;
 
-  _now_playing.num_request++;
+  _now_playing.num_request = std::min<size_t>(_now_playing.num_request + 1, 1024);
   _now_playing.request =
       _http.request({.url = kPlayerUrl, .headers = {{kAuthorization, "Bearer " + _access_token}}},
                     {.post_to = _main_scheduler, .callback = [this, allow_retry](auto response) {
