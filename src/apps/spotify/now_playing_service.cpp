@@ -104,7 +104,7 @@ bool isLikelyToPlay() {
 // backoff 10s -> ~5min
 std::chrono::milliseconds requestBackoff(size_t num_request) {
   using namespace std::chrono_literals;
-  auto max_factor = isLikelyToPlay() ? 1 : 32;
+  auto max_factor = isLikelyToPlay() ? 6 : 32;
   return num_request > 0 ? 10s * std::min(1 << (num_request - 1), max_factor) : 0s;
 }
 
