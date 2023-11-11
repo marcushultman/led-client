@@ -1,3 +1,4 @@
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <future>
@@ -90,11 +91,17 @@ int main(int argc, char *argv[]) {
   std::cout << "Listening on port: " << server->port() << std::endl;
 
   auto interrupt = std::promise<int>();
-  auto sig = csignal::SignalHandler(main_scheduler, [&](auto) {
-    presenter->clear();
-    server.reset();
-    interrupt.set_value(0);
+  auto sig = csignal::SignalHandler(main_scheduler, [&](auto signal) {
+    std::cout << "Signal received: " << signal << std::endl;
+    if (signal == SIGINT) {
+      presenter->clear();
+      server.reset();
+      interrupt.set_value(0);
+    }
+    return signal == SIGINT;
   });
 
-  return interrupt.get_future().get();
+  const auto status = interrupt.get_future().get();
+  std::cout << "Exiting with status code: " << status << std::endl;
+  return status;
 }

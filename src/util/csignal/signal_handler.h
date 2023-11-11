@@ -8,7 +8,7 @@ namespace csignal {
 
 class SignalHandler final {
  public:
-  using Callback = std::function<void(int)>;
+  using Callback = std::function<bool(int)>;
 
   SignalHandler(async::Scheduler &scheduler, Callback callback);
   ~SignalHandler();

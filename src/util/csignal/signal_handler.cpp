@@ -12,16 +12,26 @@ SignalHandler::SignalHandler(async::Scheduler &scheduler, Callback callback)
     std::terminate();
   }
   s_handler = this;
-  std::signal(SIGINT, [](int sig) { s_handler->schedule(sig); });
+  auto catcher = [](int sig) { s_handler->schedule(sig); };
+  std::signal(SIGINT, catcher);
+  std::signal(SIGTERM, catcher);
+  std::signal(SIGSEGV, catcher);
 }
 
 SignalHandler::~SignalHandler() {
+  std::signal(SIGSEGV, nullptr);
+  std::signal(SIGTERM, nullptr);
   std::signal(SIGINT, nullptr);
   s_handler = nullptr;
 }
 
 void SignalHandler::schedule(int sig) {
-  _lifetime = _scheduler.schedule([this, sig] { _callback(sig); });
+  _lifetime = _scheduler.schedule([this, sig] {
+    if (!_callback(sig)) {
+      std::signal(sig, nullptr);
+      std::raise(sig);
+    }
+  });
 }
 
 }  // namespace csignal
