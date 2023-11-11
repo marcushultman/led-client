@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 
+#include "apps/flag/flag_service.h"
 #include "apps/settings/display.h"
 #include "apps/spotify/service.h"
 #include "apps/text/text_service.h"
@@ -70,6 +71,7 @@ int main(int argc, char *argv[]) {
   auto presenter = present::makePresenterQueue(*led);
 
   auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
+  auto flag_service = std::make_unique<FlagService>(main_scheduler, *presenter);
   auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
   auto spotify_service =
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
@@ -81,6 +83,7 @@ int main(int argc, char *argv[]) {
       {{"ping", [](auto) { return 200; }},
        {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
        {"mode", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
+       {"murica", [&](auto req) { return flag_service->handleRequest(std::move(req)); }},
        {"settings", [&](auto req) { return display_service(std::move(req)); }}},
       [&](auto req, auto callback) {
         return web_proxy.handleRequest(std::move(req), std::move(callback));
