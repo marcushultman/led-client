@@ -131,6 +131,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
 
  private:
   void scheduleFetchNowPlaying();
+  void onRateLimited(http::Response);
 
   void refreshToken();
   void onRefreshTokenResponse(http::Response response);
@@ -264,7 +265,10 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   auto prev_status = std::exchange(_now_playing.status, response.status);
 
   if (response.status / 100 != 2) {
-    if (!allow_retry || response.status == 429) {
+    if (response.status == 429) {
+      return onRateLimited(response);
+    }
+    if (!allow_retry) {
       std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
                 << " failed to get player state" << std::endl;
       return scheduleFetchNowPlaying();
@@ -299,6 +303,16 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
 
   // fetchContext(_now_playing.context_href);
   fetchScannable(_now_playing.status != prev_status);
+}
+
+void NowPlayingServiceImpl::onRateLimited(http::Response response) {
+  using namespace std::chrono;
+  auto delay =
+      std::clamp<milliseconds>(seconds(std::stoi(response.headers["retry-after"])), 60s, 24h);
+  std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
+            << " rate limited, retry in "
+            << std::chrono::duration_cast<std::chrono::seconds>(delay).count() << "s" << std::endl;
+  _now_playing.work = _main_scheduler.schedule([this] { fetchNowPlaying(true); }, {.delay = delay});
 }
 
 #if 0
