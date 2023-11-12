@@ -105,7 +105,7 @@ bool isLikelyToPlay() {
 std::chrono::milliseconds requestBackoff(size_t num_request) {
   using namespace std::chrono_literals;
   auto max_factor = isLikelyToPlay() ? 6 : 32;
-  return num_request > 0 ? 10s * std::min(1 << (num_request - 1), max_factor) : 0s;
+  return 10s * int(std::min<size_t>(1 << (std::max<size_t>(num_request, 1) - 1), max_factor));
 }
 
 class NowPlayingServiceImpl final : public NowPlayingService {
@@ -205,7 +205,7 @@ void NowPlayingServiceImpl::scheduleFetchNowPlaying() {
     delay = requestBackoff(_now_playing.num_request);
     std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "]"
               << " retry in " << std::chrono::duration_cast<std::chrono::seconds>(delay).count()
-              << "s" << std::endl;
+              << "s (" << _now_playing.num_request << ")" << std::endl;
   }
   _now_playing.work = _main_scheduler.schedule([this] { fetchNowPlaying(true); }, {.delay = delay});
 }
@@ -252,7 +252,7 @@ void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry) {
   std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "]"
             << " fetch NowPlaying" << std::endl;
 
-  _now_playing.num_request = std::min<size_t>(_now_playing.num_request + 1, 1024);
+  _now_playing.num_request = std::min<size_t>(_now_playing.num_request + 1, 32);
   _now_playing.request =
       _http.request({.url = kPlayerUrl, .headers = {{kAuthorization, "Bearer " + _access_token}}},
                     {.post_to = _main_scheduler, .callback = [this, allow_retry](auto response) {
