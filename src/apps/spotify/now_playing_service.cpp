@@ -264,7 +264,7 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   auto prev_status = std::exchange(_now_playing.status, response.status);
 
   if (response.status / 100 != 2) {
-    if (!allow_retry) {
+    if (!allow_retry || response.status == 429) {
       std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
                 << " failed to get player state" << std::endl;
       return scheduleFetchNowPlaying();
