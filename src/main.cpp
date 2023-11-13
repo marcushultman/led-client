@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 
+#include "apps/draw/draw_service.h"
 #include "apps/flag/flag_service.h"
 #include "apps/settings/display.h"
 #include "apps/spotify/service.h"
@@ -77,6 +78,8 @@ int main(int argc, char *argv[]) {
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
   auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, brightness, opts.base_url);
 
+  auto drawer = std::make_unique<DrawService>(*presenter);
+
   // todo: proxy and route settings
 
   PathMapper mapper{
@@ -84,7 +87,8 @@ int main(int argc, char *argv[]) {
        {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
        {"mode", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
        {"murica", [&](auto req) { return flag_service->handleRequest(std::move(req)); }},
-       {"settings", [&](auto req) { return display_service(std::move(req)); }}},
+       {"settings", [&](auto req) { return display_service(std::move(req)); }},
+       {"draw", [&](auto req) { return drawer->handleRequest(std::move(req)); }}},
       [&](auto req, auto callback) {
         return web_proxy.handleRequest(std::move(req), std::move(callback));
       },

@@ -1,3 +1,4 @@
+add_subdirectory(draw)
 add_subdirectory(flag)
 add_subdirectory(settings)
 add_subdirectory(spotify)
