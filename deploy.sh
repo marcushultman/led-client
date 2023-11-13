@@ -3,8 +3,8 @@
 set -eu
 
 cd ~/spoticode-apa102
-git fetch origin master
-git checkout origin/master
+git fetch origin main
+git checkout origin/main
 
 pkill -SIGTERM spoticode || true
 python3 scripts/clear.py
