@@ -9,6 +9,8 @@
 
 namespace spotify {
 
+struct AuthenticatorPresenter;
+
 class SpotifyService : NowPlayingService::Callbacks {
  public:
   SpotifyService(async::Scheduler &main_scheduler,
@@ -17,6 +19,8 @@ class SpotifyService : NowPlayingService::Callbacks {
                  bool verbose);
 
   http::Response handleRequest(http::Request req);
+
+  bool isAuthenticating() const;
 
  private:
   //  NowPlayingService::Callbacks
@@ -39,7 +43,7 @@ class SpotifyService : NowPlayingService::Callbacks {
   bool _verbose;
 
   std::vector<std::unique_ptr<NowPlayingService>> _now_playing_service;
-  bool _show_login = false;
+  AuthenticatorPresenter *_authenticator = nullptr;
   std::shared_ptr<void> _presenter;
   const NowPlayingService *_pending_play = nullptr;
   const NowPlayingService *_playing = nullptr;

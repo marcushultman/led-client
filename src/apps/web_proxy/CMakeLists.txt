@@ -12,5 +12,6 @@ target_include_directories(web_proxy PRIVATE
 target_link_libraries(web_proxy
   async
   http
+  spotify
   url
 )

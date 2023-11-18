@@ -94,6 +94,8 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   void start(spotiled::Renderer &, present::Callback) final;
   void stop() final;
 
+  void finishPresenting() final;
+
  private:
   void authenticate();
   void scheduleAuthRetry(std::chrono::milliseconds delay = {});
@@ -154,7 +156,16 @@ void AuthenticatorPresenterImpl::start(spotiled::Renderer &renderer, present::Ca
     return 200ms;
   });
 }
-void AuthenticatorPresenterImpl::stop() { _request.reset(); }
+void AuthenticatorPresenterImpl::stop() {
+  _work.reset();
+  _request.reset();
+}
+
+void AuthenticatorPresenterImpl::finishPresenting() {
+  if (auto presenter_callback = std::exchange(_presenter_callback, {})) {
+    presenter_callback();
+  }
+}
 
 void AuthenticatorPresenterImpl::authenticate() {
   const auto data = std::string{"client_id="} + credentials::kClientId +
@@ -227,9 +238,7 @@ void AuthenticatorPresenterImpl::onPollTokenResponse(http::Response response) {
   std::cerr << "access_token: " << std::string_view(data.access_token).substr(0, 8) << ", "
             << "refresh_token: " << std::string_view(data.refresh_token).substr(0, 8) << std::endl;
 
-  if (auto presenter_callback = std::exchange(_presenter_callback, {})) {
-    presenter_callback();
-  }
+  finishPresenting();
 
   // don't access this after token_callback
   _token_callback(std::move(data.access_token), std::move(data.refresh_token));

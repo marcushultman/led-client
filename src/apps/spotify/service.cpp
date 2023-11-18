@@ -56,28 +56,47 @@ SpotifyService::SpotifyService(async::Scheduler &main_scheduler,
 
 http::Response SpotifyService::handleRequest(http::Request req) {
   auto url = url::Url(req.url);
+  if (url.path.size() < 2) {
+    return 404;
+  }
 
-  if (auto it = req.headers.find("action"); it != req.headers.end()) {
+  using namespace std::string_literals;
+  if (url.path[1] == "tokens") {
+    if (req.method == http::Method::GET) {
+      return R"({ "tokens": )"s + std::to_string(_now_playing_service.size()) + " }";
+    }
+  } else if (url.path[1] == "auth") {
+    if (req.method == http::Method::GET) {
+      return R"({ "is_authenticating": )"s + (_authenticator ? "true" : "false") + " }";
+    }
+    if (req.method != http::Method::POST) {
+      return 400;
+    }
     int show_login = 0;
-    std::from_chars(it->second.data(), it->second.data() + it->second.size(), show_login);
-    _show_login = show_login;
-  } else {
-    _show_login = !_show_login;
-  }
+    if (auto it = req.headers.find("action"); it != req.headers.end()) {
+      std::from_chars(it->second.data(), it->second.data() + it->second.size(), show_login);
+    }
 
-  if (_show_login) {
-    _presenter = AuthenticatorPresenter::create(_main_scheduler, _http, _presenter_queue, _verbose,
-                                                [this](auto access_token, auto refresh_token) {
-                                                  addNowPlaying(std::move(access_token),
-                                                                std::move(refresh_token));
-                                                  _pending_play = _now_playing_service.back().get();
-                                                  saveTokens();
-                                                });
-  } else {
-    displaySomePlaying();
+    if (show_login || !_authenticator) {
+      auto authenticator = AuthenticatorPresenter::create(
+          _main_scheduler, _http, _presenter_queue, _verbose,
+          [this](auto access_token, auto refresh_token) {
+            addNowPlaying(std::move(access_token), std::move(refresh_token));
+            _pending_play = _now_playing_service.back().get();
+            saveTokens();
+          });
+      _authenticator = authenticator.get();
+      _presenter = std::move(authenticator);
+    } else {
+      std::exchange(_authenticator, nullptr)->finishPresenting();
+      displaySomePlaying();
+    }
+    return 204;
   }
-  return 204;
+  return 400;
 }
+
+bool SpotifyService::isAuthenticating() const { return _authenticator; }
 
 void SpotifyService::onPlaying(const NowPlayingService &service, const NowPlaying &now_playing) {
   std::cout << "Spotify: started playing '" << now_playing.title << "'" << std::endl;

@@ -13,10 +13,12 @@ const auto kHostHeader = "host";
 WebProxy::WebProxy(async::Scheduler &main_scheduler,
                    http::Http &http,
                    spotiled::BrightnessProvider &brightness,
+                   spotify::SpotifyService &spotify,
                    std::string base_url)
     : _main_scheduler{main_scheduler},
       _http{http},
       _brightness{brightness},
+      _spotify{spotify},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)} {}
 
 http::Lifetime WebProxy::handleRequest(http::Request req,
@@ -29,6 +31,7 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
 
   req.headers["x-spotiled-brightness"] = std::to_string(_brightness.brightness());
   req.headers["x-spotiled-hue"] = std::to_string(_brightness.hue());
+  req.headers["x-spotify-auth"] = _spotify.isAuthenticating() ? "true" : "false";
   return _http.request(std::move(req),
                        {.post_to = _main_scheduler, .callback = std::move(callback)});
 }

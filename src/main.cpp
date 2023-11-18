@@ -76,7 +76,8 @@ int main(int argc, char *argv[]) {
   auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
   auto spotify_service =
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
-  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, brightness, opts.base_url);
+  auto web_proxy =
+      web_proxy::WebProxy(main_scheduler, *http, brightness, *spotify_service, opts.base_url);
 
   auto drawer = std::make_unique<DrawService>(*presenter);
 
@@ -85,7 +86,7 @@ int main(int argc, char *argv[]) {
   PathMapper mapper{
       {{"ping", [](auto) { return 200; }},
        {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
-       {"mode", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
+       {"spotify", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
        {"murica", [&](auto req) { return flag_service->handleRequest(std::move(req)); }},
        {"settings", [&](auto req) { return display_service(std::move(req)); }},
        {"draw", [&](auto req) { return drawer->handleRequest(std::move(req)); }}},
