@@ -20,12 +20,12 @@ struct DrawService : present::Presentable {
     if (!std::exchange(_request, req)) {
       std::cout << "draw started: " << req.body.size() << std::endl;
       _presenter.add(*this, {.prio = present::Prio::kNotification});
-      _expire_at = std::chrono::system_clock::now() + 3s;
+
     } else {
       std::cout << "draw updated: " << req.body.size() << std::endl;
       _presenter.notify();
-      _expire_at += 3s;
     }
+    _expire_at = std::chrono::system_clock::now() + 3s;
     return 204;
   }
 
