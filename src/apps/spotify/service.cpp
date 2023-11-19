@@ -12,6 +12,10 @@
 #include "util/storage/string_set.h"
 #include "util/url/url.h"
 
+extern "C" {
+#include <jq.h>
+}
+
 namespace spotify {
 namespace {
 
@@ -36,6 +40,20 @@ void saveTokens(const std::unordered_map<std::string, std::string> &now_playing)
   }
   auto out = std::ofstream(kTokensFilename);
   storage::saveSet(set, out);
+}
+
+std::string makeJSON(const char *key, jv value) {
+  auto obj = jv_object();
+  jv_object_set(obj, jv_string(key), value);
+  auto jv = jv_dump_string(obj, 0);
+  jv_free(obj);
+  std::string ret = jv_string_value(jv);
+  jv_free(jv);
+  return ret;
+}
+
+std::string makeJSON(const char *key, const std::string &value) {
+  return makeJSON(key, jv_string(value.c_str()));
 }
 
 }  // namespace
@@ -63,11 +81,11 @@ http::Response SpotifyService::handleRequest(http::Request req) {
   using namespace std::string_literals;
   if (url.path[1] == "tokens") {
     if (req.method == http::Method::GET) {
-      return R"({ "tokens": )"s + std::to_string(_now_playing_service.size()) + " }";
+      return makeJSON("tokens", std::to_string(_now_playing_service.size()));
     }
   } else if (url.path[1] == "auth") {
     if (req.method == http::Method::GET) {
-      return R"({ "is_authenticating": )"s + (_authenticator ? "true" : "false") + " }";
+      return makeJSON("is_authenticating", _authenticator ? jv_true() : jv_false());
     }
     if (req.method != http::Method::POST) {
       return 400;
