@@ -81,11 +81,24 @@ http::Response SpotifyService::handleRequest(http::Request req) {
   using namespace std::string_literals;
   if (url.path[1] == "tokens") {
     if (req.method == http::Method::GET) {
-      return makeJSON("tokens", std::to_string(_now_playing_service.size()));
+      auto tokens = jv_array();
+      for (auto &service : _now_playing_service) {
+        auto token = jv_object();
+        jv_object_set(token, jv_string("accessToken"), jv_string(service->accessToken().c_str()));
+        if (auto is_playing = service->getIfPlaying()) {
+          jv_object_set(token, jv_string("isPlaying"), jv_true());
+          jv_object_set(token, jv_string("uri"), jv_string(is_playing->uri.c_str()));
+        } else {
+          jv_object_set(token, jv_string("isPlaying"), jv_false());
+        }
+        tokens = jv_array_append(tokens, token);
+      }
+
+      return makeJSON("tokens", tokens);
     }
   } else if (url.path[1] == "auth") {
     if (req.method == http::Method::GET) {
-      return makeJSON("is_authenticating", _authenticator ? jv_true() : jv_false());
+      return makeJSON("isAuthenticating", _authenticator ? jv_true() : jv_false());
     }
     if (req.method != http::Method::POST) {
       return 400;
