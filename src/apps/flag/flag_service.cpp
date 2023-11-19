@@ -47,46 +47,28 @@ constexpr std::array<Color, 23 * 16> kOlors = {
 
 };
 
-constexpr auto kDelayHeader = "delay";
-constexpr auto kDefaultTimeout = std::chrono::seconds{5};
-constexpr auto kSpeedHeader = "speed";
-
-std::chrono::milliseconds timeout(const http::Request &req) {
-  if (auto it = req.headers.find(kDelayHeader); it != req.headers.end()) {
-    int delay_s = 0;
-    auto value = std::string_view(it->second);
-    std::from_chars(value.begin(), value.end(), delay_s);
-    return std::chrono::seconds(delay_s);
-  }
-  return kDefaultTimeout;
-}
-
-double speed(const http::Request &req) {
-  if (auto it = req.headers.find(kSpeedHeader); it != req.headers.end()) {
-    return std::stod(it->second);
-  }
-  return 0.005;
-}
-
 }  // namespace
 
-FlagService::FlagService(async::Scheduler &main_scheduler, present::PresenterQueue &presenter)
-    : _main_scheduler{main_scheduler}, _presenter{presenter} {}
+FlagService::FlagService(present::PresenterQueue &presenter) : _presenter{presenter} {}
 
-http::Response FlagService::handleRequest(http::Request) {
-  _presenter.add(*this, {.prio = present::Prio::kNotification});
-
+http::Response FlagService::handleRequest(http::Request req) {
+  if (req.method == http::Method::POST) {
+    _presenter.add(*this, {.prio = present::Prio::kNotification});
+  } else if (req.method == http::Method::DELETE) {
+    _presenter.erase(*this);
+  } else {
+    return 400;
+  }
+  using namespace std::chrono_literals;
+  _expire_at = std::chrono::system_clock::now() + 3s;
   return 204;
 }
 
 void FlagService::start(spotiled::Renderer &renderer, present::Callback callback) {
-  // Få tag i flaggans data
-
-  _sentinel = std::make_shared<bool>(true);
-  renderer.add([this, callback = std::move(callback), alive = std::weak_ptr<void>(_sentinel)](
-                   spotiled::LED &led, auto elapsed) {
+  using ms = std::chrono::milliseconds;
+  renderer.add([this, callback = std::move(callback)](auto &led, auto) -> ms {
     using namespace std::chrono_literals;
-    if (alive.expired()) {
+    if (std::chrono::system_clock::now() > _expire_at) {
       callback();
       return 0ms;
     }
@@ -97,11 +79,8 @@ void FlagService::start(spotiled::Renderer &renderer, present::Callback callback
       }
     }
 
-    return 100ms;
+    return 1s;
   });
 }
 
-void FlagService::stop() {
-  _sentinel.reset();
-  _presenter.notify();
-}
+void FlagService::stop() { _expire_at = {}; }

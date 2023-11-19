@@ -8,7 +8,7 @@
 #include "present/presenter.h"
 
 struct FlagService : present::Presentable {
-  FlagService(async::Scheduler &main_scheduler, present::PresenterQueue &presenter);
+  FlagService(present::PresenterQueue &presenter);
 
   http::Response handleRequest(http::Request);
 
@@ -16,7 +16,6 @@ struct FlagService : present::Presentable {
   void stop() final;
 
  private:
-  async::Scheduler &_main_scheduler;
   present::PresenterQueue &_presenter;
-  std::shared_ptr<void> _sentinel;
+  std::chrono::system_clock::time_point _expire_at;
 };

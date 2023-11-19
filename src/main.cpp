@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
   auto presenter = present::makePresenterQueue(*led);
 
   auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
-  auto flag_service = std::make_unique<FlagService>(main_scheduler, *presenter);
+  auto flag_service = std::make_unique<FlagService>(*presenter);
   auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
   auto spotify_service =
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
