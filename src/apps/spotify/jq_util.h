@@ -8,8 +8,7 @@ extern "C" {
 
 namespace spotify {
 
-void nextStr(jq_state *jq, std::string &value);
-
-double nextNumber(jq_state *jq);
+bool nextNumber(jq_state *jq, double &value);
+bool nextStr(jq_state *jq, std::string &value);
 
 }  // namespace spotify

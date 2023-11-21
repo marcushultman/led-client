@@ -23,9 +23,12 @@ const auto kContentType = "content-type";
 const auto kXWWWFormUrlencoded = "application/x-www-form-urlencoded";
 const auto kAuthorization = "authorization";
 
-void nextMs(jq_state *jq, std::chrono::milliseconds &value) {
+bool nextMs(jq_state *jq, std::chrono::milliseconds &value) {
+  double s = 0.0;
+  auto ok = nextNumber(jq, s);
   using ms = std::chrono::milliseconds;
-  value = ms{static_cast<ms::rep>(nextNumber(jq))};
+  value = ms{static_cast<ms::rep>(s)};
+  return ok;
 }
 
 struct TokenData {
@@ -46,10 +49,8 @@ bool parseTokenData(jq_state *jq, const std::string &buffer, TokenData &data) {
   }
   jq_compile(jq, ".error, .access_token, .refresh_token");
   jq_start(jq, input, 0);
-  nextStr(jq, data.error);
-  nextStr(jq, data.access_token);
-  nextStr(jq, data.refresh_token);
-  return true;
+  return nextStr(jq, data.error) && nextStr(jq, data.access_token) &&
+         nextStr(jq, data.refresh_token);
 }
 
 bool parseNowPlaying(jq_state *jq, const std::string &buffer, NowPlaying &now_playing) {
@@ -67,15 +68,10 @@ bool parseNowPlaying(jq_state *jq, const std::string &buffer, NowPlaying &now_pl
              ".progress_ms,"
              ".item.duration_ms");
   jq_start(jq, input, 0);
-  nextStr(jq, now_playing.track_id);
-  nextStr(jq, now_playing.context_href);
-  nextStr(jq, now_playing.title);
-  nextStr(jq, now_playing.artist);
-  nextStr(jq, now_playing.image);
-  nextStr(jq, now_playing.uri);
-  nextMs(jq, now_playing.progress);
-  nextMs(jq, now_playing.duration);
-  return true;
+  return nextStr(jq, now_playing.track_id) && nextStr(jq, now_playing.context_href) &&
+         nextStr(jq, now_playing.title) && nextStr(jq, now_playing.artist) &&
+         nextStr(jq, now_playing.image) && nextStr(jq, now_playing.uri) &&
+         nextMs(jq, now_playing.progress) && nextMs(jq, now_playing.duration);
 }
 
 #if 0
@@ -237,6 +233,8 @@ void NowPlayingServiceImpl::onRefreshTokenResponse(http::Response response) {
   if (!parseTokenData(_jq, response.body, data)) {
     std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
               << " invalid JSON: " << response.body << std::endl;
+    _callbacks.onLogout(*this);
+    return;
   }
   std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] refreshed "
             << "access_token: " << std::string_view(data.access_token).substr(0, 8) << ", "
@@ -295,6 +293,7 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   if (!parseNowPlaying(_jq, response.body, _now_playing)) {
     std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
               << " invalid JSON: " << response.body << std::endl;
+    return scheduleFetchNowPlaying();
   }
 
   if (track_id == _now_playing.track_id) {

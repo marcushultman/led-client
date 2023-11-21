@@ -2,26 +2,36 @@
 
 namespace spotify {
 
-void nextStr(jq_state *jq, std::string &value) {
+bool nextNumber(jq_state *jq, double &value) {
   const auto jv = jq_next(jq);
-  if (jv_get_kind(jv) != JV_KIND_STRING) {
+  const auto kind = jv_get_kind(jv);
+  if (kind == JV_KIND_NUMBER) {
+    value = jv_number_value(jv);
+  } else if (kind == JV_KIND_NULL) {
+    value = 0;
+  } else {
     jv_free(jv);
-    value.clear();
-    return;
+    value = 0;
+    return false;
   }
-  value = jv_string_value(jv);
   jv_free(jv);
+  return true;
 }
 
-double nextNumber(jq_state *jq) {
+bool nextStr(jq_state *jq, std::string &value) {
   const auto jv = jq_next(jq);
-  if (jv_get_kind(jv) != JV_KIND_NUMBER) {
+  const auto kind = jv_get_kind(jv);
+  if (kind == JV_KIND_STRING) {
+    value = jv_string_value(jv);
+  } else if (kind == JV_KIND_NULL) {
+    value.clear();
+  } else {
     jv_free(jv);
-    return 0;
+    value.clear();
+    return false;
   }
-  const auto val = jv_number_value(jv);
   jv_free(jv);
-  return val;
+  return true;
 }
 
 }  // namespace spotify

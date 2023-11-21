@@ -23,9 +23,12 @@ const auto kAuthTokenUrl = "https://accounts.spotify.com/api/token";
 const auto kContentType = "content-type";
 const auto kXWWWFormUrlencoded = "application/x-www-form-urlencoded";
 
-void nextSeconds(jq_state *jq, std::chrono::seconds &value) {
+bool nextSeconds(jq_state *jq, std::chrono::seconds &value) {
+  double s = 0.0;
+  auto ok = nextNumber(jq, s);
   using sec = std::chrono::seconds;
-  value = sec{static_cast<sec::rep>(nextNumber(jq))};
+  value = sec{static_cast<sec::rep>(s)};
+  return ok;
 }
 
 struct DeviceFlowData {
@@ -37,18 +40,18 @@ struct DeviceFlowData {
   std::chrono::seconds interval;
 };
 
-void parseDeviceFlowData(jq_state *jq, const std::string &buffer, DeviceFlowData &data) {
+bool parseDeviceFlowData(jq_state *jq, const std::string &buffer, DeviceFlowData &data) {
   const auto input = jv_parse(buffer.c_str());
+  if (!jv_is_valid(input)) {
+    return false;
+  }
   jq_compile(jq,
              ".device_code, .user_code, .expires_in, .verification_url, "
              ".verification_url_prefilled, .interval");
   jq_start(jq, input, 0);
-  nextStr(jq, data.device_code);
-  nextStr(jq, data.user_code);
-  nextSeconds(jq, data.expires_in);
-  nextStr(jq, data.verification_url);
-  nextStr(jq, data.verification_url_prefilled);
-  nextSeconds(jq, data.interval);
+  return nextStr(jq, data.device_code) && nextStr(jq, data.user_code) &&
+         nextSeconds(jq, data.expires_in) && nextStr(jq, data.verification_url) &&
+         nextStr(jq, data.verification_url_prefilled) && nextSeconds(jq, data.interval);
 }
 
 struct TokenData {
@@ -62,13 +65,15 @@ struct TokenData {
   // std::string client_secret;
 };
 
-void parseTokenData(jq_state *jq, const std::string &buffer, TokenData &data) {
+bool parseTokenData(jq_state *jq, const std::string &buffer, TokenData &data) {
   const auto input = jv_parse(buffer.c_str());
+  if (!jv_is_valid(input)) {
+    return false;
+  }
   jq_compile(jq, ".error, .access_token, .refresh_token");
   jq_start(jq, input, 0);
-  nextStr(jq, data.error);
-  nextStr(jq, data.access_token);
-  nextStr(jq, data.refresh_token);
+  return nextStr(jq, data.error) && nextStr(jq, data.access_token) &&
+         nextStr(jq, data.refresh_token);
 }
 
 }  // namespace
@@ -193,7 +198,11 @@ void AuthenticatorPresenterImpl::onAuthResponse(http::Response response) {
   }
 
   DeviceFlowData data;
-  parseDeviceFlowData(_jq, response.body, data);
+  if (!parseDeviceFlowData(_jq, response.body, data)) {
+    std::cerr << "failed to parse device_code" << std::endl;
+    scheduleAuthRetry(std::chrono::seconds{5});
+    return;
+  }
   std::cerr << "url: " << data.verification_url_prefilled << std::endl;
 
   auto now = std::chrono::system_clock::now();
@@ -225,14 +234,18 @@ void AuthenticatorPresenterImpl::pollToken() {
 void AuthenticatorPresenterImpl::onPollTokenResponse(http::Response response) {
   if (response.status / 100 == 5) {
     std::cerr << "failed to get auth_code or error" << std::endl;
-    return scheduleAuthRetry();
+    return scheduleAuthRetry(std::chrono::seconds{5});
   }
 
   TokenData data;
-  parseTokenData(_jq, response.body, data);
+  if (!parseTokenData(_jq, response.body, data)) {
+    std::cerr << "failed to parse auth_code" << std::endl;
+    return scheduleAuthRetry(std::chrono::seconds{5});
+  }
   if (!data.error.empty()) {
     std::cerr << "auth_code error: " << data.error << std::endl;
-    return data.error == "authorization_pending" ? scheduleNextPollToken() : scheduleAuthRetry();
+    return data.error == "authorization_pending" ? scheduleNextPollToken()
+                                                 : scheduleAuthRetry(std::chrono::seconds{5});
   }
 
   std::cerr << "access_token: " << std::string_view(data.access_token).substr(0, 8) << ", "
