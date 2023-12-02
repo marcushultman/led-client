@@ -9,8 +9,15 @@ struct Coord {
   int y = 0;
 };
 
-Coord operator+(const Coord &lhs, const Coord &rhs);
-Coord operator*(const Coord &lhs, const Coord &rhs);
+constexpr Coord operator+(const Coord &lhs, const Coord &rhs) {
+  return {lhs.x + rhs.x, lhs.y + rhs.y};
+}
+constexpr Coord operator*(const Coord &lhs, const Coord &rhs) {
+  return {lhs.x * rhs.x, lhs.y * rhs.y};
+}
+constexpr Coord operator/(const Coord &lhs, const Coord &rhs) {
+  return {lhs.x / rhs.x, lhs.y / rhs.y};
+}
 
 constexpr auto kNormalScale = Coord{1, 1};
 

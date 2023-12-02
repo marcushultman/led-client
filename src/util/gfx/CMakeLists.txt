@@ -1,7 +1,7 @@
 
 set(SOURCES
   gfx.h
-  gfx.cpp
+  dummy.cpp
 )
 
 add_library(gfx ${SOURCES})
