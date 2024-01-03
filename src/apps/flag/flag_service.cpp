@@ -53,14 +53,15 @@ FlagService::FlagService(present::PresenterQueue &presenter) : _presenter{presen
 
 http::Response FlagService::handleRequest(http::Request req) {
   if (req.method == http::Method::POST) {
+    using namespace std::chrono_literals;
+    _expire_at = std::chrono::system_clock::now() + 3s;
     _presenter.add(*this, {.prio = present::Prio::kNotification});
   } else if (req.method == http::Method::DELETE) {
+    _expire_at = {};
     _presenter.erase(*this);
   } else {
     return 400;
   }
-  using namespace std::chrono_literals;
-  _expire_at = std::chrono::system_clock::now() + 3s;
   return 204;
 }
 
