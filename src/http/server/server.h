@@ -16,7 +16,8 @@ struct Server {
 };
 
 using SyncHandler = std::function<Response(Request)>;
-using AsyncHandler = std::function<Lifetime(Request, RequestOptions::OnResponse)>;
+using AsyncHandler =
+    std::function<Lifetime(Request, RequestOptions::OnResponse, RequestOptions::OnBytes)>;
 
 using RequestHandler = std::variant<SyncHandler, AsyncHandler>;
 

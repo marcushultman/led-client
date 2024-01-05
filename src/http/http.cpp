@@ -11,6 +11,8 @@
 namespace http {
 namespace {
 
+constexpr int64_t kMaxBufferSize = 16 * 1024;
+
 void setMethod(CURL *curl, Method method) {
   switch (method) {
     default:
@@ -35,6 +37,13 @@ bool shouldUseTimeout(const Request &req) {
   return it == req.headers.end() || it->second != "keep-alive";
 }
 
+struct Buffer {
+  int64_t offset = 0;
+  std::string data;
+  size_t skip = 0;
+  bool is_processing = false;
+};
+
 }  // namespace
 
 Response::Response() = default;
@@ -44,18 +53,21 @@ Response::Response(int status) : status{status} {}
 Response::Response(std::string body) : status{200}, body{std::move(body)} {}
 
 struct RequestState {
-  RequestState(Request &&request, RequestOptions &&opts)
-      : request{std::move(request)}, opts{std::move(opts)} {}
+  RequestState(async::Scheduler &http_scheduler, Request &&request, RequestOptions &&opts)
+      : request{std::move(request)}, opts{std::move(opts)}, _http_scheduler{http_scheduler} {}
 
   Request request;
   RequestOptions opts;
   Response response;
   std::atomic_bool aborted = false;
+  std::shared_ptr<Buffer> buffer;
 
-  void retain(async::Lifetime work) { _work = std::move(work); }
+  void runOnHttp(async::Fn fn) { _http_work = _http_scheduler.schedule(std::move(fn)); }
+  void runOnMain(async::Fn fn) { _main_work = opts.post_to.schedule(std::move(fn)); }
 
  private:
-  async::Lifetime _work;
+  async::Scheduler &_http_scheduler;
+  async::Lifetime _main_work, _http_work;
 };
 
 class RequestHandle final {
@@ -64,7 +76,9 @@ class RequestHandle final {
       : _curlm{std::move(curlm)}, _request{std::move(request)} {}
   ~RequestHandle() {
     _request->aborted = true;
-    if (auto curl = _curlm.lock()) curl_multi_wakeup(curl.get());
+    if (auto curl = _curlm.lock()) {
+      curl_multi_wakeup(curl.get());
+    }
   }
 
  private:
@@ -80,10 +94,10 @@ class HttpImpl final : public Http {
   ~HttpImpl() { _thread.reset(); }
 
   Lifetime request(Request request, RequestOptions opts) final {
-    auto state = std::make_shared<RequestState>(std::move(request), std::move(opts));
+    auto state =
+        std::make_shared<RequestState>(_thread->scheduler(), std::move(request), std::move(opts));
 
-    state->retain(_thread->scheduler().schedule(
-        [this, state]() mutable { processNewRequest(std::move(state)); }));
+    state->runOnHttp([this, state] { processNewRequest(state); });
 
     curl_multi_wakeup(_curlm.get());
 
@@ -122,8 +136,15 @@ class HttpImpl final : public Http {
       }
     }
 
-    if (!err && still_running) {
-      err = curl_multi_poll(_curlm.get(), nullptr, 0, 1000, NULL);
+    if (!err) {
+      for (auto &[curl, state] : _requests) {
+        if (state->buffer) {
+          processStream(curl, state, *state->buffer);
+        }
+      }
+      if (still_running) {
+        err = curl_multi_poll(_curlm.get(), nullptr, 0, 1000, NULL);
+      }
     }
 
     if (err) {
@@ -140,11 +161,11 @@ class HttpImpl final : public Http {
     auto curl = curl_easy_init();
 
     if (!curl) {
-      return state->retain(state->opts.post_to.schedule([state] {
+      return state->runOnMain([state] {
         if (!state->aborted) {
-          state->opts.callback(500);
+          state->opts.on_response(500);
         }
-      }));
+      });
     }
     curl_easy_setopt(curl, CURLOPT_URL, state->request.url.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
@@ -162,10 +183,10 @@ class HttpImpl final : public Http {
       curl_easy_setopt(curl, CURLOPT_POSTFIELDS, state->request.body.c_str());
     }
 
-    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &state->response);
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, state.get());
     curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, onHeader);
 
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state->response);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, state.get());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, onBytes);
 
     curl_multi_add_handle(_curlm.get(), curl);
@@ -173,19 +194,72 @@ class HttpImpl final : public Http {
     _requests[curl] = state;
   }
 
+  void processStream(CURL *curl, std::shared_ptr<RequestState> &state, Buffer &buffer) {
+    if (buffer.is_processing || buffer.data.size() < kMaxBufferSize) {
+      return;
+    }
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &state->response.status);
+    buffer.is_processing = true;
+
+    state->runOnMain([this, curl, state] {
+      triggerCallbacks(*state, [this, curl, state] {
+        state->runOnHttp([this, curl, state]() mutable { continueRequest(curl, state); });
+        curl_multi_wakeup(_curlm.get());
+      });
+    });
+  }
+
+  void continueRequest(CURL *curl, std::shared_ptr<RequestState> state) {
+    if (state->aborted) {
+      return;
+    }
+    state->buffer->offset += state->buffer->data.size();
+    state->buffer->data.clear();
+    state->buffer->is_processing = false;
+    curl_easy_pause(curl, CURLPAUSE_CONT);
+    process();
+  }
+
   void finishRequest(CURL *curl, std::shared_ptr<RequestState> state) {
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &state->response.status);
     curl_multi_remove_handle(_curlm.get(), curl);
     curl_easy_cleanup(curl);
 
-    state->retain(state->opts.post_to.schedule([state] {
-      if (!state->aborted) {
-        state->opts.callback(std::move(state->response));
-      }
-    }));
+    state->runOnMain([state] {
+      triggerCallbacks(
+          *state, [state] {}, [](auto &buffer) { return !buffer.data.empty(); });
+    });
   }
 
-  static size_t onHeader(char *ptr, size_t size, size_t nmemb, void *response) {
+  static void triggerCallbacks(RequestState &state,
+                               std::function<void()> next,
+                               std::function<bool(Buffer &)> filter = {}) {
+    if (state.aborted) {
+      return;
+    }
+    if (auto on_response = std::exchange(state.opts.on_response, {})) {
+      on_response(std::move(state.response));
+    }
+    if (state.aborted) {
+      return;
+    }
+    if (auto &buffer = state.buffer) {
+      if (auto on_bytes = state.opts.on_bytes; on_bytes && (!filter || filter(*buffer))) {
+        auto next_ptr = std::make_shared<decltype(next)>(std::move(next));
+        auto weak_next = std::weak_ptr(next_ptr);
+
+        on_bytes(buffer->offset, buffer->data, [next = std::exchange(next_ptr, {})] { (*next)(); });
+
+        if (!weak_next.expired()) {
+          return;
+        }
+      }
+      next();
+    }
+  }
+
+  static size_t onHeader(char *ptr, size_t size, size_t nmemb, void *obj) {
+    auto state = static_cast<RequestState *>(obj);
     size *= nmemb;
     auto buffer = std::string_view(ptr, size);
     if (buffer.starts_with("HTTP") || buffer.find('\r') == 0) {
@@ -194,13 +268,39 @@ class HttpImpl final : public Http {
     auto key = std::string(buffer.substr(0, buffer.find(":")));
     auto value = std::string(trim(buffer.substr(key.size() + 1)));
     std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-    static_cast<Response *>(response)->headers[std::move(key)] = std::move(value);
+
+    if (key == "content-length") {
+      if (auto content_length = std::stoll(value);
+          content_length < kMaxBufferSize || !state->opts.on_bytes) {
+        state->response.body.reserve(content_length);
+      } else {
+        state->buffer = std::make_unique<Buffer>();
+        state->buffer->data.reserve(content_length);
+      }
+    }
+
+    state->response.headers[std::move(key)] = std::move(value);
     return size;
   }
 
-  static size_t onBytes(char *ptr, size_t size, size_t nmemb, void *response) {
+  static size_t onBytes(char *ptr, size_t size, size_t nmemb, void *obj) {
+    auto state = static_cast<RequestState *>(obj);
     size *= nmemb;
-    static_cast<Response *>(response)->body.append(ptr, size);
+    auto chunk = std::string_view(ptr, size);
+
+    if (auto &buffer = state->buffer) {
+      if (buffer->data.size() + size > kMaxBufferSize) {
+        auto overflow = buffer->data.size() + size - kMaxBufferSize;
+        auto partial = chunk.substr(0, chunk.size() - overflow);
+        buffer->data += partial;
+        buffer->skip = partial.size();
+        return CURL_WRITEFUNC_PAUSE;
+      }
+      buffer->data += chunk.substr(std::exchange(buffer->skip, 0));
+    } else {
+      state->response.body += chunk;
+    }
+
     return size;
   }
 

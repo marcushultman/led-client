@@ -218,7 +218,7 @@ void NowPlayingServiceImpl::refreshToken() {
        .headers = {{kContentType, kXWWWFormUrlencoded}},
        .body = data},
       {.post_to = _main_scheduler,
-       .callback = [this](auto response) { onRefreshTokenResponse(std::move(response)); }});
+       .on_response = [this](auto response) { onRefreshTokenResponse(std::move(response)); }});
 }
 
 void NowPlayingServiceImpl::onRefreshTokenResponse(http::Response response) {
@@ -254,7 +254,7 @@ void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry) {
   _now_playing.num_request = std::min<size_t>(_now_playing.num_request + 1, 32);
   _now_playing.request =
       _http.request({.url = kPlayerUrl, .headers = {{kAuthorization, "Bearer " + _access_token}}},
-                    {.post_to = _main_scheduler, .callback = [this, allow_retry](auto response) {
+                    {.post_to = _main_scheduler, .on_response = [this, allow_retry](auto response) {
                        onNowPlayingResponse(allow_retry, std::move(response));
                      }});
 }
@@ -264,7 +264,7 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
 
   if (response.status / 100 != 2) {
     if (response.status == 429) {
-      return onRateLimited(response);
+      return onRateLimited(std::move(response));
     }
     if (!allow_retry) {
       std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
@@ -345,7 +345,7 @@ void NowPlayingServiceImpl::onContext(const std::string &access_token, http::Res
 void NowPlayingServiceImpl::fetchScannable(bool started_playing) {
   _now_playing.request = _http.request(
       {.url = credentials::kScannablesCdnUrl + _now_playing.uri + "?format=svg"},
-      {.post_to = _main_scheduler, .callback = [this, started_playing](auto response) {
+      {.post_to = _main_scheduler, .on_response = [this, started_playing](auto response) {
          onScannable(started_playing, std::move(response));
        }});
 }

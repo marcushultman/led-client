@@ -17,16 +17,18 @@ enum class Method {
   UNKNOWN,
 };
 
+using Headers = std::unordered_map<std::string, std::string>;
+
 struct Request {
   Method method = Method::GET;
   std::string url;
-  std::unordered_map<std::string, std::string> headers;
+  Headers headers;
   std::string body;
 };
 
 struct Response {
   int status = 500;
-  std::unordered_map<std::string, std::string> headers;
+  Headers headers;
   std::string body;
 
   Response();
@@ -36,8 +38,11 @@ struct Response {
 
 struct RequestOptions {
   using OnResponse = std::function<void(Response)>;
+  using OnBytes = std::function<void(int64_t offset, std::string_view, std::function<void()>)>;
+
   async::Scheduler &post_to;
-  OnResponse callback;
+  OnResponse on_response;
+  OnBytes on_bytes;
 };
 
 using Lifetime = std::shared_ptr<void>;

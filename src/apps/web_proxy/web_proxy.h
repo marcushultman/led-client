@@ -16,7 +16,9 @@ class WebProxy {
            spotiled::BrightnessProvider &,
            spotify::SpotifyService &,
            std::string base_url);
-  http::Lifetime handleRequest(http::Request, http::RequestOptions::OnResponse);
+  http::Lifetime handleRequest(http::Request,
+                               http::RequestOptions::OnResponse,
+                               http::RequestOptions::OnBytes);
 
  private:
   async::Scheduler &_main_scheduler;

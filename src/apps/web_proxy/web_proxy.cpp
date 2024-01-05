@@ -22,7 +22,8 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)} {}
 
 http::Lifetime WebProxy::handleRequest(http::Request req,
-                                       http::RequestOptions::OnResponse callback) {
+                                       http::RequestOptions::OnResponse on_response,
+                                       http::RequestOptions::OnBytes on_bytes) {
   auto suffix = std::string(url::Url(req.url).host.end(), std::string_view(req.url).end());
   req.url = _base_url + suffix;
   if (auto it = req.headers.find(kHostHeader); it != req.headers.end()) {
@@ -32,8 +33,9 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
   req.headers["x-spotiled-brightness"] = std::to_string(_brightness.brightness());
   req.headers["x-spotiled-hue"] = std::to_string(_brightness.hue());
   req.headers["x-spotify-auth"] = _spotify.isAuthenticating() ? "true" : "false";
-  return _http.request(std::move(req),
-                       {.post_to = _main_scheduler, .callback = std::move(callback)});
+  return _http.request(std::move(req), {.post_to = _main_scheduler,
+                                        .on_response = std::move(on_response),
+                                        .on_bytes = std::move(on_bytes)});
 }
 
 }  // namespace web_proxy

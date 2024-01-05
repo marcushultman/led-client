@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <asio.hpp>
 #include <iostream>
+#include <numeric>
 #include <set>
+#include <string_view>
 
 #include "async/scheduler.h"
 #include "http/util.h"
@@ -47,6 +49,7 @@ struct Connection : public std::enable_shared_from_this<Connection> {
   void start() {
     asio::error_code err;
     auto req = readRequest(err);
+
     if (err) {
       std::cerr << "Failed to read request: " << err << std::endl;
       if (err != asio::error::operation_aborted) {
@@ -62,15 +65,17 @@ struct Connection : public std::enable_shared_from_this<Connection> {
                 << req.body << std::endl;
 #endif
 
-    _handler_work = _main_scheduler.schedule([this, req = std::move(req)]() mutable {
-      if (auto *sync_handler = std::get_if<SyncHandler>(&_handler)) {
-        auto res = (*sync_handler)(std::move(req));
-        postResponse(std::move(res));
-      } else if (auto *async_handler = std::get_if<AsyncHandler>(&_handler)) {
-        _main_work = (*async_handler)(std::move(req),
-                                      [this](auto res) mutable { postResponse(std::move(res)); });
-      }
-    });
+    _handler_work =
+        _main_scheduler.schedule([this, self = shared_from_this(), req = std::move(req)]() mutable {
+          if (auto *handler = std::get_if<SyncHandler>(&_handler)) {
+            sendResponse((*handler)(std::move(req)));
+
+          } else if (auto *handler = std::get_if<AsyncHandler>(&_handler)) {
+            _main_work = (*handler)(
+                std::move(req), [this](auto res) mutable { sendResponse(std::move(res)); },
+                [this](auto, auto data, auto next) { sendData(data, std::move(next)); });
+          }
+        });
 
     pollSocket();
   }
@@ -85,19 +90,38 @@ struct Connection : public std::enable_shared_from_this<Connection> {
         return;
       }
       if (err == asio::error::eof) {
-        _handler_work = _main_scheduler.schedule([this] { _main_work.reset(); });
+        _handler_work = _main_scheduler.schedule([this, self] { _main_work.reset(); });
         asio::error_code ignored_err;
         _peer.shutdown(tcp::socket::shutdown_both, ignored_err);
       }
       if (err != asio::error::operation_aborted) {
-        _on_done(shared_from_this());
+        _on_done(self);
         _peer.close(err);
       }
     });
   }
 
-  void postResponse(http::Response res) {
-    asio::post(_ctx, [this, res = std::move(res)]() mutable { writeResponse(std::move(res)); });
+  void sendResponse(http::Response res) {
+    if (res.headers["content-length"].empty()) {
+      res.headers["content-length"] = std::to_string(_content_length = res.body.size());
+    } else {
+      _content_length = std::stoll(res.headers["content-length"]);
+    }
+
+    if (res.headers["content-type"].empty()) {
+      // todo: better default?
+      res.headers["content-type"] = "text/html";
+    }
+
+    asio::post(_ctx, [this, self = shared_from_this(), res = std::move(res)]() mutable {
+      writeResponse(std::move(res));
+    });
+  }
+
+  void sendData(std::string_view data, std::function<void()> next) {
+    asio::post(_ctx, [this, self = shared_from_this(), data, next = std::move(next)]() mutable {
+      writeData(data, std::move(next));
+    });
   }
 
  private:
@@ -152,24 +176,58 @@ struct Connection : public std::enable_shared_from_this<Connection> {
   }
 
   void writeResponse(http::Response res) {
-    auto data = "HTTP/1.0 " + std::to_string(res.status) + " " +
-                (res.status == 200 ? "OK" : "No Content") + "\r\n";
-    if (res.headers["content-length"].empty()) {
-      res.headers["content-length"] = std::to_string(res.body.size());
+    struct Handle {
+      http::Response res;
+      std::string status;
+    };
+    auto handle = std::make_shared<Handle>();
+    handle->res = std::move(res);
+    handle->status = std::to_string(handle->res.status);
+
+    using namespace std::string_view_literals;
+    auto buffers = std::vector<asio::const_buffer>{
+        asio::buffer("HTTP/1.0 "sv),
+        asio::buffer(handle->status),
+        handle->res.status == 200 ? asio::buffer(" OK"sv) : asio::buffer(" No Content"sv),
+        asio::buffer("\r\n"sv),
+    };
+    buffers.reserve(buffers.size() + handle->res.headers.size() * 4 + 2);
+
+    for (auto &[key, value] : handle->res.headers) {
+      buffers.insert(buffers.end(), {asio::buffer(key), asio::buffer(": "sv), asio::buffer(value),
+                                     asio::buffer("\r\n"sv)});
     }
-    if (res.headers["content-type"].empty()) {
-      res.headers["content-type"] = "text/html";
-    }
-    for (auto &[key, value] : res.headers) {
-      data += key + ": " + value + "\r\n";
-    }
-    _peer.async_send(asio::buffer(data + "\r\n" + res.body), [this](auto err, auto) {
+    buffers.push_back(asio::buffer("\r\n"sv));
+    buffers.push_back(asio::buffer(handle->res.body));
+
+    auto bytes = handle->res.body.size();
+
+    sendBuffers(std::move(buffers), bytes, std::move(handle));
+  }
+
+  void writeData(std::string_view buffer, std::function<void()> next) {
+    struct Handle {
+      Handle(std::function<void()> next) : next{next} {}
+      ~Handle() { next(); }
+      std::function<void()> next;
+    };
+
+    sendBuffers(asio::buffer(buffer), buffer.size(), std::make_shared<Handle>(std::move(next)));
+  }
+
+  template <typename Buffers>
+  void sendBuffers(Buffers &&buffers, int64_t bytes, std::shared_ptr<void> &&handle) {
+    _peer.async_send(buffers, [this, self = shared_from_this(), bytes, handle](auto err, auto) {
+      _bytes_sent += bytes;
+      if (_bytes_sent < _content_length) {
+        return;
+      }
       if (!err) {
         asio::error_code ignored_err;
         _peer.shutdown(tcp::socket::shutdown_both, ignored_err);
       }
       if (err != asio::error::operation_aborted) {
-        _on_done(shared_from_this());
+        _on_done(self);
         _peer.close(err);
       }
     });
@@ -181,6 +239,8 @@ struct Connection : public std::enable_shared_from_this<Connection> {
   tcp::socket _peer;
   OnDone _on_done;
   std::vector<char> _buffer;
+  int64_t _bytes_sent = 0;
+  int64_t _content_length = 0;
   async::Lifetime _handler_work;  // set on asio - runs on main
   async::Lifetime _main_work;     // set on main - runs on main
 };

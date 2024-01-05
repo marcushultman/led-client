@@ -181,7 +181,7 @@ void AuthenticatorPresenterImpl::authenticate() {
                             .url = kAuthDeviceCodeUrl,
                             .headers = {{kContentType, kXWWWFormUrlencoded}},
                             .body = data},
-                           {.post_to = _main_scheduler, .callback = [this](auto response) {
+                           {.post_to = _main_scheduler, .on_response = [this](auto response) {
                               onAuthResponse(std::move(response));
                             }});
 }
@@ -226,7 +226,7 @@ void AuthenticatorPresenterImpl::pollToken() {
                             .url = kAuthTokenUrl,
                             .headers = {{kContentType, kXWWWFormUrlencoded}},
                             .body = data},
-                           {.post_to = _main_scheduler, .callback = [this](auto response) {
+                           {.post_to = _main_scheduler, .on_response = [this](auto response) {
                               onPollTokenResponse(std::move(response));
                             }});
 }

@@ -43,14 +43,16 @@ struct PathMapper {
   PathMapper(Map map, http::AsyncHandler index = {})
       : _map{std::move(map)}, _index{std::move(index)} {}
 
-  http::Lifetime operator()(http::Request req, http::RequestOptions::OnResponse callback) {
+  http::Lifetime operator()(http::Request req,
+                            http::RequestOptions::OnResponse on_response,
+                            http::RequestOptions::OnBytes on_bytes) {
     url::Url url(req.url);
     auto it = url.path.empty() ? _map.end() : _map.find(std::string(url.path.front()));
     if (it != _map.end()) {
-      callback(it->second(std::move(req)));
+      on_response(it->second(std::move(req)));
       return {};
     }
-    return _index(req, [callback = std::move(callback)](auto res) mutable { callback(res); });
+    return _index(req, std::move(on_response), std::move(on_bytes));
   }
 
  private:
@@ -90,8 +92,8 @@ int main(int argc, char *argv[]) {
        {"murica", [&](auto req) { return flag_service->handleRequest(std::move(req)); }},
        {"settings", [&](auto req) { return display_service(std::move(req)); }},
        {"draw", [&](auto req) { return drawer->handleRequest(std::move(req)); }}},
-      [&](auto req, auto callback) {
-        return web_proxy.handleRequest(std::move(req), std::move(callback));
+      [&](auto req, auto on_response, auto on_bytes) {
+        return web_proxy.handleRequest(std::move(req), std::move(on_response), std::move(on_bytes));
       },
   };
 
