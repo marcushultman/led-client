@@ -72,8 +72,8 @@ struct Connection : public std::enable_shared_from_this<Connection> {
 
           } else if (auto *handler = std::get_if<AsyncHandler>(&_handler)) {
             _main_work = (*handler)(
-                std::move(req), [this](auto res) mutable { sendResponse(std::move(res)); },
-                [this](auto, auto data, auto next) { sendData(data, std::move(next)); });
+                std::move(req), [this, self](auto res) mutable { sendResponse(std::move(res)); },
+                [this, self](auto, auto data, auto next) { sendData(data, std::move(next)); });
           }
         });
 
