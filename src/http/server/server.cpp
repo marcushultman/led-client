@@ -73,7 +73,9 @@ struct Connection : public std::enable_shared_from_this<Connection> {
           } else if (auto *handler = std::get_if<AsyncHandler>(&_handler)) {
             _main_work = (*handler)(
                 std::move(req), [this, self](auto res) mutable { sendResponse(std::move(res)); },
-                [this, self](auto, auto data, auto next) { sendData(data, std::move(next)); });
+                [this, self](auto offset, auto data, auto lifetime) mutable {
+                  sendData(data, std::move(lifetime));
+                });
           }
         });
 
@@ -118,9 +120,9 @@ struct Connection : public std::enable_shared_from_this<Connection> {
     });
   }
 
-  void sendData(std::string_view data, std::function<void()> next) {
-    asio::post(_ctx, [this, self = shared_from_this(), data, next = std::move(next)]() mutable {
-      writeData(data, std::move(next));
+  void sendData(std::string_view data, http::Lifetime lifetime) {
+    asio::post(_ctx, [this, self = shared_from_this(), data, lifetime]() mutable {
+      writeData(data, std::exchange(lifetime, nullptr));
     });
   }
 
@@ -205,14 +207,8 @@ struct Connection : public std::enable_shared_from_this<Connection> {
     sendBuffers(std::move(buffers), bytes, std::move(handle));
   }
 
-  void writeData(std::string_view buffer, std::function<void()> next) {
-    struct Handle {
-      Handle(std::function<void()> next) : next{next} {}
-      ~Handle() { next(); }
-      std::function<void()> next;
-    };
-
-    sendBuffers(asio::buffer(buffer), buffer.size(), std::make_shared<Handle>(std::move(next)));
+  void writeData(std::string_view buffer, http::Lifetime &&lifetime) {
+    sendBuffers(asio::buffer(buffer), buffer.size(), std::forward<decltype(lifetime)>(lifetime));
   }
 
   template <typename Buffers>

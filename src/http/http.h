@@ -7,6 +7,8 @@
 
 namespace http {
 
+using Lifetime = std::shared_ptr<void>;
+
 enum class Method {
   GET,
   HEAD,
@@ -38,14 +40,12 @@ struct Response {
 
 struct RequestOptions {
   using OnResponse = std::function<void(Response)>;
-  using OnBytes = std::function<void(int64_t offset, std::string_view, std::function<void()>)>;
+  using OnBytes = std::function<void(int64_t offset, std::string_view, Lifetime)>;
 
   async::Scheduler &post_to;
   OnResponse on_response;
   OnBytes on_bytes;
 };
-
-using Lifetime = std::shared_ptr<void>;
 
 struct Http {
   virtual ~Http() = default;

@@ -152,9 +152,7 @@ class HttpImpl final : public Http {
       return;
     }
 
-    if (still_running) {
-      _work = _thread->scheduler().schedule([this] { process(); });
-    }
+    _work = still_running ? _thread->scheduler().schedule([this] { process(); }) : nullptr;
   }
 
   void setupRequest(std::shared_ptr<RequestState> state) {
@@ -203,7 +201,7 @@ class HttpImpl final : public Http {
 
     state->runOnMain([this, curl, state] {
       triggerCallbacks(*state, [this, curl, state] {
-        state->runOnHttp([this, curl, state]() mutable { continueRequest(curl, state); });
+        state->runOnHttp([this, curl, state] { continueRequest(curl, state); });
         curl_multi_wakeup(_curlm.get());
       });
     });
@@ -245,16 +243,15 @@ class HttpImpl final : public Http {
     }
     if (auto &buffer = state.buffer) {
       if (auto on_bytes = state.opts.on_bytes; on_bytes && (!filter || filter(*buffer))) {
-        auto next_ptr = std::make_shared<decltype(next)>(std::move(next));
-        auto weak_next = std::weak_ptr(next_ptr);
-
-        on_bytes(buffer->offset, buffer->data, [next = std::exchange(next_ptr, {})] { (*next)(); });
-
-        if (!weak_next.expired()) {
-          return;
-        }
+        struct BufferHandle {
+          BufferHandle(std::function<void()> next) : next{std::move(next)} {}
+          ~BufferHandle() { next(); }
+          std::function<void()> next;
+        };
+        on_bytes(buffer->offset, buffer->data, std::make_shared<BufferHandle>(std::move(next)));
+      } else {
+        next();
       }
-      next();
     }
   }
 
