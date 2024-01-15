@@ -122,7 +122,7 @@ struct Connection : public std::enable_shared_from_this<Connection> {
 
   void sendData(std::string_view data, http::Lifetime lifetime) {
     asio::post(_ctx, [this, self = shared_from_this(), data, lifetime]() mutable {
-      writeData(data, std::exchange(lifetime, nullptr));
+      writeData(data, std::move(lifetime));
     });
   }
 
@@ -208,14 +208,26 @@ struct Connection : public std::enable_shared_from_this<Connection> {
   }
 
   void writeData(std::string_view buffer, http::Lifetime &&lifetime) {
-    sendBuffers(asio::buffer(buffer), buffer.size(), std::forward<decltype(lifetime)>(lifetime));
+    if (_out_buffer) {
+      _pending_send = [this, buffer, lifetime = std::move(lifetime)]() mutable {
+        sendBuffers(asio::buffer(buffer), buffer.size(), std::move(lifetime));
+      };
+    } else {
+      sendBuffers(asio::buffer(buffer), buffer.size(), std::move(lifetime));
+    }
   }
 
   template <typename Buffers>
-  void sendBuffers(Buffers &&buffers, int64_t bytes, std::shared_ptr<void> &&handle) {
-    _peer.async_send(buffers, [this, self = shared_from_this(), bytes, handle](auto err, auto) {
-      _bytes_sent += bytes;
-      if (_bytes_sent < _content_length) {
+  void sendBuffers(Buffers &&buffers, int64_t num_bytes, http::Lifetime &&lifetime) {
+    assert(!_out_buffer);
+    _out_buffer = std::move(lifetime);
+    _peer.async_send(buffers, [this, self = shared_from_this(), num_bytes](auto err, auto) {
+      _out_buffer.reset();
+      _bytes_sent += num_bytes;
+
+      if (auto pending_send = std::exchange(_pending_send, {})) {
+        return pending_send();
+      } else if (_bytes_sent < _content_length) {
         return;
       }
       if (!err) {
@@ -235,6 +247,8 @@ struct Connection : public std::enable_shared_from_this<Connection> {
   tcp::socket _peer;
   OnDone _on_done;
   std::vector<char> _buffer;
+  http::Lifetime _out_buffer;
+  std::function<void()> _pending_send;
   int64_t _bytes_sent = 0;
   int64_t _content_length = 0;
   async::Lifetime _handler_work;  // set on asio - runs on main
