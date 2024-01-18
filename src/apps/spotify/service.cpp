@@ -43,10 +43,7 @@ void saveTokens(const std::unordered_map<std::string, std::string> &now_playing)
 }
 
 std::string makeJSON(const char *key, jv value) {
-  auto obj = jv_object();
-  jv_object_set(obj, jv_string(key), value);
-  auto jv = jv_dump_string(obj, 0);
-  jv_free(obj);
+  auto jv = jv_dump_string(jv_object_set(jv_object(), jv_string(key), value), 0);
   std::string ret = jv_string_value(jv);
   jv_free(jv);
   return ret;
