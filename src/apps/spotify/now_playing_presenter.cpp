@@ -53,7 +53,8 @@ std::unique_ptr<NowPlayingPresenter> NowPlayingPresenter::create(present::Presen
 void NowPlayingPresenterImpl::displayScannable(spotiled::LED &led) {
   led.setLogo(color::kWhite);
 
-  auto bpm = _now_playing.bpm;
+  // todo: enable bpm
+  auto bpm = 0;  //_now_playing.bpm;
   auto now = std::chrono::system_clock::now();
   auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 
