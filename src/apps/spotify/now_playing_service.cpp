@@ -17,7 +17,8 @@ namespace spotify {
 namespace {
 
 const auto kAuthTokenUrl = "https://accounts.spotify.com/api/token";
-const auto kPlayerUrl = "https://api.spotify.com/v1/me/player";
+const auto kPlayerUrl = "https://api.spotify.com/v1/me/player?additional_types=track,episode";
+const auto kAudioFeaturesUrl = std::string("https://api.spotify.com/v1/audio-features/");
 
 const auto kContentType = "content-type";
 const auto kXWWWFormUrlencoded = "application/x-www-form-urlencoded";
@@ -58,20 +59,34 @@ bool parseNowPlaying(jq_state *jq, const std::string &buffer, NowPlaying &now_pl
   if (!jv_is_valid(input)) {
     return false;
   }
-  jq_compile(jq,
-             ".item.id,"
-             ".context.href,"
-             ".item.name,"
-             "(.item.artists | map(.name) | join(\", \")),"
-             "(.item.album.images | min_by(.width)).url,"
-             ".item.uri,"
-             ".progress_ms,"
-             ".item.duration_ms");
+  jq_compile(
+      jq,
+      ".item.id,"
+      ".context.href,"
+      ".item.name,"
+      "(if .item.artists then .item.artists | map(.name) | join(\", \") else .item.show.name end),"
+      "(.item.album.images // .item.images | min_by(.width)).url,"
+      ".item.uri,"
+      ".item.id,"
+      ".progress_ms,"
+      ".item.duration_ms,"
+      ".is_playing");
   jq_start(jq, input, 0);
   return nextStr(jq, now_playing.track_id) && nextStr(jq, now_playing.context_href) &&
          nextStr(jq, now_playing.title) && nextStr(jq, now_playing.artist) &&
          nextStr(jq, now_playing.image) && nextStr(jq, now_playing.uri) &&
-         nextMs(jq, now_playing.progress) && nextMs(jq, now_playing.duration);
+         nextStr(jq, now_playing.id) && nextMs(jq, now_playing.progress) &&
+         nextMs(jq, now_playing.duration) && nextBool(jq, now_playing.is_playing);
+}
+
+bool parseAudioFeatures(jq_state *jq, const std::string &buffer, double &bpm) {
+  const auto input = jv_parse(buffer.c_str());
+  if (!jv_is_valid(input)) {
+    return false;
+  }
+  jq_compile(jq, ".tempo");
+  jq_start(jq, input, 0);
+  return nextNumber(jq, bpm);
 }
 
 #if 0
@@ -119,7 +134,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   const std::string &refreshToken() const final { return _refresh_token; }
 
   const NowPlaying *getIfPlaying() const final {
-    if (_now_playing.status == 200) {
+    if (_now_playing.status == 200 && _now_playing.is_playing) {
       return &_now_playing;
     }
     return nullptr;
@@ -127,6 +142,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
 
  private:
   void scheduleFetchNowPlaying();
+  void onStopped(bool was_playing);
   void onRateLimited(http::Response);
 
   void refreshToken();
@@ -139,7 +155,7 @@ class NowPlayingServiceImpl final : public NowPlayingService {
   // void onContext(const std::string &access_token, http::Response response);
 
   void fetchScannable(bool started_playing);
-  void onScannable(bool started_playing, http::Response response);
+  void onScannable(http::Response response);
 
   void renderScannable(bool started_playing);
 
@@ -261,6 +277,7 @@ void NowPlayingServiceImpl::fetchNowPlaying(bool allow_retry) {
 
 void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Response response) {
   auto prev_status = std::exchange(_now_playing.status, response.status);
+  auto was_playing = prev_status == 200 && _now_playing.is_playing;
 
   if (response.status / 100 != 2) {
     if (response.status == 429) {
@@ -276,13 +293,7 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   }
 
   if (response.status == 204) {
-    std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] "
-              << "nothing is playing" << std::endl;
-    _now_playing.track_id.clear();
-    if (prev_status == 200) {
-      _callbacks.onStopped(*this);
-    }
-    return scheduleFetchNowPlaying();
+    return onStopped(was_playing);
   }
   assert(response.status == 200);
 
@@ -296,12 +307,26 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
     return scheduleFetchNowPlaying();
   }
 
+  if (!_now_playing.is_playing) {
+    return onStopped(was_playing);
+  }
+
   if (track_id == _now_playing.track_id) {
     return renderScannable(false);
   }
 
   // fetchContext(_now_playing.context_href);
-  fetchScannable(_now_playing.status != prev_status);
+  fetchScannable(!was_playing);
+}
+
+void NowPlayingServiceImpl::onStopped(bool was_playing) {
+  std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] "
+            << "nothing is playing" << std::endl;
+  _now_playing.track_id.clear();
+  if (was_playing) {
+    _callbacks.onStopped(*this);
+  }
+  return scheduleFetchNowPlaying();
 }
 
 void NowPlayingServiceImpl::onRateLimited(http::Response response) {
@@ -343,20 +368,41 @@ void NowPlayingServiceImpl::onContext(const std::string &access_token, http::Res
 #endif
 
 void NowPlayingServiceImpl::fetchScannable(bool started_playing) {
-  _now_playing.request = _http.request(
-      {.url = credentials::kScannablesCdnUrl + _now_playing.uri + "?format=svg"},
-      {.post_to = _main_scheduler, .on_response = [this, started_playing](auto response) {
-         onScannable(started_playing, std::move(response));
-       }});
+  struct Composite {
+    Composite(unsigned remaining) : remaining{remaining} {}
+    void operator()(NowPlayingServiceImpl &self, bool started_playing) {
+      if (--remaining == 0) self.renderScannable(started_playing);
+    }
+    unsigned remaining = 0;
+  };
+  auto remaining = std::make_shared<Composite>(2);
+  auto lifetimes = std::vector<http::Lifetime>{
+      _http.request({.url = credentials::kScannablesCdnUrl + _now_playing.uri + "?format=svg"},
+                    {.post_to = _main_scheduler,
+                     .on_response =
+                         [this, started_playing, remaining](auto response) {
+                           onScannable(std::move(response));
+                           (*remaining)(*this, started_playing);
+                         }}),
+      _http.request({.url = kAudioFeaturesUrl + _now_playing.id,
+                     .headers = {{kAuthorization, "Bearer " + _access_token}}},
+                    {.post_to = _main_scheduler,
+                     .on_response =
+                         [this, started_playing, remaining](auto res) {
+                           parseAudioFeatures(_jq, res.body, _now_playing.bpm);
+                           (*remaining)(*this, started_playing);
+                         }}),
+  };
+  _now_playing.request = std::make_shared<decltype(lifetimes)>(std::move(lifetimes));
 }
 
-void NowPlayingServiceImpl::onScannable(bool started_playing, http::Response response) {
+void NowPlayingServiceImpl::onScannable(http::Response response) {
   if (response.status / 100 != 2) {
     std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
               << " failed to fetch scannable id" << std::endl;
     _now_playing.lengths0.fill(0);
     _now_playing.lengths1.fill(0);
-    return renderScannable(started_playing);
+    return;
   }
 
   auto sv = std::string_view(response.body);
@@ -376,16 +422,14 @@ void NowPlayingServiceImpl::onScannable(bool started_playing, http::Response res
     sv.remove_prefix(8);
     _now_playing.lengths1[i] = map[std::atoi(sv.data())];
   }
-
-  _callbacks.onNewTrack(*this, _now_playing);
-
-  renderScannable(started_playing);
 }
 
 void NowPlayingServiceImpl::renderScannable(bool started_playing) {
   std::cout << "[" << std::string_view(_access_token).substr(0, 8) << "] "
             << "Spotify: " << _now_playing.title << " - " << _now_playing.artist << " ("
             << _now_playing.uri << ") " << _now_playing.context << std::endl;
+
+  _callbacks.onNewTrack(*this, _now_playing);
 
   if (started_playing) {
     _callbacks.onPlaying(*this, _now_playing);

@@ -2,6 +2,22 @@
 
 namespace spotify {
 
+bool nextBool(jq_state *jq, bool &value) {
+  const auto jv = jq_next(jq);
+  const auto kind = jv_get_kind(jv);
+  if (kind == JV_KIND_TRUE) {
+    value = true;
+  } else if (kind == JV_KIND_FALSE || kind == JV_KIND_NULL) {
+    value = false;
+  } else {
+    jv_free(jv);
+    value = false;
+    return false;
+  }
+  jv_free(jv);
+  return true;
+}
+
 bool nextNumber(jq_state *jq, double &value) {
   const auto jv = jq_next(jq);
   const auto kind = jv_get_kind(jv);

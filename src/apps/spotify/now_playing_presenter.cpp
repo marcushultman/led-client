@@ -1,6 +1,7 @@
 #include "now_playing_presenter.h"
 
 #include <chrono>
+#include <cmath>
 #include <iostream>
 
 #include "now_playing_service.h"
@@ -19,13 +20,14 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
   void start(spotiled::Renderer &renderer, present::Callback) {
     _alive = std::make_shared<bool>(true);
     _start = std::chrono::system_clock::now();
-    renderer.add([this, sentinel = std::weak_ptr<void>(_alive)](auto &led, auto elapsed) {
+    renderer.add([this, sentinel = std::weak_ptr<void>(_alive)](
+                     auto &led, auto elapsed) -> std::chrono::milliseconds {
       using namespace std::chrono_literals;
       if (sentinel.expired() || (_stop.time_since_epoch().count() && _start + elapsed < _stop)) {
         return 0s;
       }
       displayScannable(led);
-      return 1s;
+      return 200ms;
     });
   }
   void stop() {
@@ -51,9 +53,18 @@ std::unique_ptr<NowPlayingPresenter> NowPlayingPresenter::create(present::Presen
 void NowPlayingPresenterImpl::displayScannable(spotiled::LED &led) {
   led.setLogo(color::kWhite);
 
+  auto bpm = _now_playing.bpm;
+  auto now = std::chrono::system_clock::now();
+  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
   for (auto col = 0; col < 23; ++col) {
-    auto start = 8 - _now_playing.lengths0[col];
-    auto end = 8 + _now_playing.lengths1[col];
+    auto zto8 = bpm ? 0.5 + 0.25 * (1 + std::sin((4 * 2 * M_PI * col / 23.0) - M_PI / 2 +
+                                                 (bpm / 60.0) * 2 * M_PI * ms / 1000.0))
+                    : 1.0;
+
+    auto start = 8 - int(std::round(_now_playing.lengths0[col] * zto8));
+    auto end = 8 + int(std::round(_now_playing.lengths1[col] * zto8));
+
     for (auto y = start; y < end; ++y) {
       led.set({.x = col, .y = y}, color::kWhite);
     }

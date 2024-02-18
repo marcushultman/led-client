@@ -20,10 +20,13 @@ struct NowPlaying {
   std::string title;
   std::string artist;
   std::string image;
+  std::string id;
   std::string uri;
   std::chrono::milliseconds progress = {};
   std::chrono::milliseconds duration = {};
+  bool is_playing = false;
   std::array<uint8_t, 23> lengths0, lengths1;
+  double bpm = 0.0;
 
   http::Lifetime request;
   async::Lifetime work;
