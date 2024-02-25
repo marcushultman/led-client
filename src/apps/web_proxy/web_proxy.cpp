@@ -42,10 +42,6 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
     it->second = url::Url(req.url).host;
   }
 
-  req.headers["x-spotiled-brightness"] = std::to_string(_brightness.brightness());
-  req.headers["x-spotiled-hue"] = std::to_string(_brightness.hue());
-  req.headers["x-spotify-auth"] = _spotify.isAuthenticating() ? "true" : "false";
-
   auto sp = jv_object();
   sp = jv_object_set(sp, jv_string("isAuthenticating"),
                      _spotify.isAuthenticating() ? jv_true() : jv_false());
