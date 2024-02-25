@@ -1,3 +1,6 @@
+#include <execinfo.h>
+#include <unistd.h>
+
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -102,11 +105,16 @@ int main(int argc, char *argv[]) {
 
   auto interrupt = std::promise<int>();
   auto sig = csignal::SignalHandler(main_scheduler, [&](auto signal) {
-    std::cout << "Signal received: " << signal << std::endl;
+    std::cerr << "Signal received: " << signal << std::endl;
+
     if (signal == SIGINT) {
       presenter->clear();
       server.reset();
       interrupt.set_value(0);
+    } else if (signal == SIGSEGV) {
+      std::array<void *, 10> bt;
+      auto size = backtrace(bt.data(), bt.size());
+      backtrace_symbols_fd(bt.data(), size, STDERR_FILENO);
     }
     return signal == SIGINT;
   });
