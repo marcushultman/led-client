@@ -7,6 +7,10 @@
 #include "now_playing_service.h"
 #include "present/presenter.h"
 
+extern "C" {
+#include <jq.h>
+}
+
 namespace spotify {
 
 struct AuthenticatorPresenter;
@@ -21,6 +25,7 @@ class SpotifyService : NowPlayingService::Callbacks {
   http::Response handleRequest(http::Request req);
 
   bool isAuthenticating() const;
+  jv getTokens() const;
 
  private:
   //  NowPlayingService::Callbacks

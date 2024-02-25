@@ -100,6 +100,7 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   void stop() final;
 
   void finishPresenting() final;
+  std::string_view userCode() const final;
 
  private:
   void authenticate();
@@ -171,6 +172,8 @@ void AuthenticatorPresenterImpl::finishPresenting() {
     presenter_callback();
   }
 }
+
+std::string_view AuthenticatorPresenterImpl::userCode() const { return _auth_state.user_code; }
 
 void AuthenticatorPresenterImpl::authenticate() {
   const auto data = std::string{"client_id="} + credentials::kClientId +

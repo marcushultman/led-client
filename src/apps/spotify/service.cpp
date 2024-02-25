@@ -78,20 +78,7 @@ http::Response SpotifyService::handleRequest(http::Request req) {
   using namespace std::string_literals;
   if (url.path[1] == "tokens") {
     if (req.method == http::Method::GET) {
-      auto tokens = jv_array();
-      for (auto &service : _now_playing_service) {
-        auto token = jv_object();
-        jv_object_set(token, jv_string("accessToken"), jv_string(service->accessToken().c_str()));
-        if (auto is_playing = service->getIfPlaying()) {
-          jv_object_set(token, jv_string("isPlaying"), jv_true());
-          jv_object_set(token, jv_string("uri"), jv_string(is_playing->uri.c_str()));
-        } else {
-          jv_object_set(token, jv_string("isPlaying"), jv_false());
-        }
-        tokens = jv_array_append(tokens, token);
-      }
-
-      return makeJSON("tokens", tokens);
+      return makeJSON("tokens", getTokens());
     }
   } else if (url.path[1] == "auth") {
     if (req.method == http::Method::GET) {
@@ -125,6 +112,19 @@ http::Response SpotifyService::handleRequest(http::Request req) {
 }
 
 bool SpotifyService::isAuthenticating() const { return _authenticator; }
+
+jv SpotifyService::getTokens() const {
+  auto tokens = jv_array();
+  for (auto &service : _now_playing_service) {
+    auto is_playing = service->getIfPlaying();
+    auto jv = jv_object();
+    jv = jv_object_set(jv, jv_string("accessToken"), jv_string(service->accessToken().c_str()));
+    jv = jv_object_set(jv, jv_string("isPlaying"), is_playing ? jv_true() : jv_false());
+    jv = is_playing ? jv_object_set(jv, jv_string("uri"), jv_string(is_playing->uri.c_str())) : jv;
+    tokens = jv_array_append(tokens, jv);
+  }
+  return tokens;
+}
 
 void SpotifyService::onPlaying(const NowPlayingService &service, const NowPlaying &now_playing) {
   std::cout << "Spotify: started playing '" << now_playing.title << "'" << std::endl;

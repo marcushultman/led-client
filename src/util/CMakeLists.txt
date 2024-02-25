@@ -1,6 +1,7 @@
 add_subdirectory(apa102)
 add_subdirectory(color)
 add_subdirectory(csignal)
+add_subdirectory(encoding)
 add_subdirectory(gfx)
 add_subdirectory(page)
 add_subdirectory(spotiled)

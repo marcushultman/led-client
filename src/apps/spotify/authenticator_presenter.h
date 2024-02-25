@@ -15,6 +15,7 @@ struct AuthenticatorPresenter {
       std::function<void(std::string access_token, std::string refresh_token)>;
   virtual ~AuthenticatorPresenter() = default;
   virtual void finishPresenting() = 0;
+  virtual std::string_view userCode() const = 0;
 
   static std::unique_ptr<AuthenticatorPresenter> create(async::Scheduler &main_scheduler,
                                                         http::Http &,
