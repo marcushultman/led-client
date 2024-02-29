@@ -29,6 +29,10 @@ target_include_directories(spoticode PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+target_link_options(spoticode PUBLIC
+  -rdynamic
+)
+
 target_link_libraries(spoticode
   # 1st party
   async
