@@ -15,11 +15,9 @@ SignalHandler::SignalHandler(async::Scheduler &scheduler, Callback callback)
   auto catcher = [](int sig) { s_handler->schedule(sig); };
   std::signal(SIGINT, catcher);
   std::signal(SIGTERM, catcher);
-  std::signal(SIGSEGV, catcher);
 }
 
 SignalHandler::~SignalHandler() {
-  std::signal(SIGSEGV, nullptr);
   std::signal(SIGTERM, nullptr);
   std::signal(SIGINT, nullptr);
   s_handler = nullptr;

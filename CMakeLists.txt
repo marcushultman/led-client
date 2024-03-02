@@ -6,6 +6,14 @@ if (PI)
   add_subdirectory(spidev-lib)
 endif()
 
+include(FetchContent)
+
+FetchContent_Declare(cpptrace
+  GIT_REPOSITORY https://github.com/jeremy-rifkin/cpptrace.git
+  GIT_TAG        v0.4.1
+)
+FetchContent_MakeAvailable(cpptrace)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -29,10 +37,6 @@ target_include_directories(spoticode PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_options(spoticode PUBLIC
-  -rdynamic
-)
-
 target_link_libraries(spoticode
   # 1st party
   async
@@ -52,6 +56,7 @@ target_link_libraries(spoticode
   url
   web_proxy
   # 3rd party
+  cpptrace::cpptrace
   pthread
   ${CURL_LIBRARIES}
   ${JQ}

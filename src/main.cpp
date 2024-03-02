@@ -1,6 +1,7 @@
 #include <execinfo.h>
 #include <unistd.h>
 
+#include <cpptrace/cpptrace.hpp>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -111,12 +112,14 @@ int main(int argc, char *argv[]) {
       presenter->clear();
       server.reset();
       interrupt.set_value(0);
-    } else if (signal == SIGSEGV) {
-      std::array<void *, 10> bt;
-      auto size = backtrace(bt.data(), bt.size());
-      backtrace_symbols_fd(bt.data(), size, STDERR_FILENO);
     }
     return signal == SIGINT;
+  });
+
+  std::signal(SIGSEGV, [](auto) {
+    cpptrace::generate_trace().print();
+    std::signal(SIGSEGV, nullptr);
+    std::raise(SIGSEGV);
   });
 
   const auto status = interrupt.get_future().get();
