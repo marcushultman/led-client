@@ -280,7 +280,7 @@ void NowPlayingServiceImpl::onNowPlayingResponse(bool allow_retry, http::Respons
   auto was_playing = prev_status == 200 && _now_playing.is_playing;
 
   if (response.status / 100 != 2) {
-    if (response.status == 429) {
+    if (response.status == 429 || response.status == 503) {
       return onRateLimited(std::move(response));
     }
     if (!allow_retry) {
@@ -332,10 +332,10 @@ void NowPlayingServiceImpl::onStopped(bool was_playing) {
 void NowPlayingServiceImpl::onRateLimited(http::Response response) {
   using namespace std::chrono;
   auto delay =
-      std::clamp<milliseconds>(seconds(std::stoi(response.headers["retry-after"])), 60s, 24h);
+      std::clamp<milliseconds>(seconds(std::stoi(response.headers["retry-after"])), 60s, 6h);
   std::cerr << "[" << std::string_view(_access_token).substr(0, 8) << "] " << response.status
-            << " rate limited, retry in "
-            << std::chrono::duration_cast<std::chrono::seconds>(delay).count() << "s" << std::endl;
+            << (response.status == 429 ? " rate limited" : " service unavailable") << ", retry in "
+            << duration_cast<seconds>(delay).count() << "s" << std::endl;
   _now_playing.work = _main_scheduler.schedule([this] { fetchNowPlaying(true); }, {.delay = delay});
 }
 
