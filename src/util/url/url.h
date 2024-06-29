@@ -14,6 +14,8 @@ struct Url {
   std::string_view fragment;
 
   Url(std::string_view url);
+  constexpr auto begin() const { return scheme.begin(); }
+  constexpr auto end() const { return fragment.end(); }
 };
 
 }  // namespace url
