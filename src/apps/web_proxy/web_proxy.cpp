@@ -31,15 +31,17 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _http{http},
       _brightness{brightness},
       _spotify{spotify},
-      _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)} {}
+      _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)},
+      _base_host{url::Url(_base_url).host} {}
 
 http::Lifetime WebProxy::handleRequest(http::Request req,
                                        http::RequestOptions::OnResponse on_response,
                                        http::RequestOptions::OnBytes on_bytes) {
-  auto suffix = std::string(url::Url(req.url).host.end(), std::string_view(req.url).end());
-  req.url = _base_url + suffix;
+  auto url = url::Url(req.url);
+  req.url = _base_url + std::string(url.host.end(), url.end());
+
   if (auto it = req.headers.find(kHostHeader); it != req.headers.end()) {
-    it->second = url::Url(req.url).host;
+    it->second = _base_host;
   }
 
   auto sp = jv_object();

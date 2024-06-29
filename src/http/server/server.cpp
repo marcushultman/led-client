@@ -5,6 +5,7 @@
 #include <iostream>
 #include <numeric>
 #include <set>
+#include <span>
 #include <string_view>
 
 #include "async/scheduler.h"
@@ -31,6 +32,94 @@ Method methodFromString(std::string_view str) {
   return Method::UNKNOWN;
 }
 
+class RequestParser {
+ private:
+  struct PendingMethod {
+    PendingMethod() { buffer.reserve(7); }
+    Request req;
+    std::string buffer;
+  };
+  struct PendingUrl {
+    Request req;
+  };
+  struct PendingHeader {
+    Request req;
+    std::string buffer;
+  };
+  struct PendingBody {
+    Request req;
+  };
+
+ public:
+  struct Input {
+    std::string &buffer;
+    size_t hint = 0;
+  };
+  using ParseResult = std::variant<std::error_code, Request, Input>;
+
+  ParseResult operator()(PendingMethod &p) {
+    auto end = p.buffer.find(' ');
+    if (end == std::string::npos) {
+      return Input{.buffer = p.buffer};
+    }
+    p.req.method = methodFromString(std::string_view(p.buffer).substr(0, end));
+    p.req.url = std::string(std::move(p.buffer), end + 1);
+    _state = PendingUrl{.req = std::move(p.req)};
+    return {};
+  }
+
+  ParseResult operator()(PendingUrl &p) {
+    auto end = p.req.url.find('\n');
+    if (end == std::string::npos) {
+      return Input{.buffer = p.req.url};
+    }
+    auto buffer = p.req.url.substr(end + 1);
+    auto path_end = p.req.url.find(' ');
+    p.req.url.resize(path_end == std::string::npos ? 0 : path_end);
+    _state = PendingHeader{.req = std::move(p.req), .buffer = std::move(buffer)};
+    return {};
+  }
+
+  ParseResult operator()(PendingHeader &p) {
+    for (;;) {
+      auto end = p.buffer.find("\r\n");
+      if (end == 0) {
+        p.req.body = std::string(std::move(p.buffer), 2);
+        _state = PendingBody{.req = std::move(p.req)};
+        return {};
+      }
+      if (end == std::string::npos) {
+        break;
+      }
+      auto line = std::string_view(p.buffer.data(), end);
+      auto key = std::string(line.substr(0, line.find(":")));
+      auto value = std::string(trim(line.substr(key.size() + 1)));
+      std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+      p.req.headers[std::move(key)] = std::move(value);
+      p.buffer.erase(0, end + 2);
+    }
+    return Input{.buffer = p.buffer};
+  }
+
+  ParseResult operator()(PendingBody &p) {
+    auto content_length = 0u;
+    if (auto it = p.req.headers.find("content-length"); it != p.req.headers.end()) {
+      content_length = static_cast<size_t>(std::stoi(it->second));
+      if (p.req.body.size() < content_length) {
+        return Input{.buffer = p.req.body, .hint = content_length - p.req.body.size()};
+      }
+    }
+    p.req.body.resize(content_length);
+    return std::move(p.req);
+  }
+
+  ParseResult parseSome() { return std::visit(*this, _state); }
+
+ private:
+  using State = std::variant<PendingMethod, PendingUrl, PendingHeader, PendingBody>;
+  State _state;
+};
+
 struct Connection : public std::enable_shared_from_this<Connection> {
   using tcp = asio::ip::tcp;
   using OnDone = std::function<void(std::shared_ptr<Connection>)>;
@@ -46,23 +135,43 @@ struct Connection : public std::enable_shared_from_this<Connection> {
         _peer{std::move(peer)},
         _on_done{std::move(on_done)} {}
 
-  void start() {
-    asio::error_code err;
-    auto req = readRequest(err);
+  void start() { parseSome(); }
 
-    if (err) {
-      std::cerr << "Failed to read request: " << err << std::endl;
-      if (err != asio::error::operation_aborted) {
-        _on_done(shared_from_this());
-        _peer.close();
+ private:
+  void parseSome(std::error_code err = {}) {
+    while (!err) {
+      auto result = _request_parser.parseSome();
+
+      if (auto *request = std::get_if<Request>(&result)) {
+        return handleRequest(std::move(*request));
+      } else if (auto *input = std::get_if<RequestParser::Input>(&result)) {
+        return readSome(*input);
       }
-      return;
+      err = std::get<std::error_code>(result);
     }
+    return handleError(err);
+  }
 
+  void readSome(RequestParser::Input &input) {
+    auto &[buffer, hint] = input;
+    auto num_buffered = buffer.size();
+
+    buffer.resize(num_buffered + (hint ? hint : std::clamp<size_t>(2 * num_buffered, 128, 1024)));
+
+    auto slice = std::span{buffer}.subspan(num_buffered);
+    _peer.async_read_some(
+        asio::buffer(slice.data(), slice.size_bytes()),
+        [this, self = shared_from_this(), buffer, num_buffered](auto err, auto num_read) mutable {
+          buffer.resize(num_buffered + num_read);
+          return parseSome(err);
+        });
+  }
+
+  void handleRequest(Request req) {
 #if 0
-      std::cout << int(req.method) << " " << req.url << " "
-                << (req.headers.contains("action") ? req.headers["action"] : "") << "\n"
-                << req.body << std::endl;
+    std::cout << int(req.method) << " " << req.url << " "
+              << (req.headers.contains("action") ? req.headers["action"] : "") << "\n"
+              << req.body << std::endl;
 #endif
 
     _handler_work =
@@ -82,25 +191,34 @@ struct Connection : public std::enable_shared_from_this<Connection> {
     pollSocket();
   }
 
+  void handleError(std::error_code err) {
+    std::cerr << "Failed to read request: " << err << std::endl;
+    if (err != asio::error::operation_aborted) {
+      _on_done(shared_from_this());
+      _peer.close();
+    }
+  }
+
   void pollSocket() {
-    _peer.async_read_some(asio::buffer(_buffer), [this, self = shared_from_this()](auto err, auto) {
-      if (!_peer.is_open()) {
-        return;
-      }
-      if (!err) {
-        pollSocket();
-        return;
-      }
-      if (err == asio::error::eof) {
-        _handler_work = _main_scheduler.schedule([this, self] { _main_work.reset(); });
-        asio::error_code ignored_err;
-        _peer.shutdown(tcp::socket::shutdown_both, ignored_err);
-      }
-      if (err != asio::error::operation_aborted) {
-        _on_done(self);
-        _peer.close(err);
-      }
-    });
+    _peer.async_read_some(
+        asio::buffer(_poll_buffer), [this, self = shared_from_this()](auto err, auto) {
+          if (!_peer.is_open()) {
+            return;
+          }
+          if (!err) {
+            pollSocket();
+            return;
+          }
+          if (err == asio::error::eof) {
+            _handler_work = _main_scheduler.schedule([this, self] { _main_work.reset(); });
+            asio::error_code ignored_err;
+            (void)_peer.shutdown(tcp::socket::shutdown_both, ignored_err);
+          }
+          if (err != asio::error::operation_aborted) {
+            _on_done(self);
+            (void)_peer.close(err);
+          }
+        });
   }
 
   void sendResponse(http::Response res) {
@@ -124,57 +242,6 @@ struct Connection : public std::enable_shared_from_this<Connection> {
     asio::post(_ctx, [this, self = shared_from_this(), data, lifetime]() mutable {
       writeData(data, std::move(lifetime));
     });
-  }
-
- private:
-  std::string_view readIntoBuffer(asio::error_code &err) {
-    size_t offset = 0, size = std::max<size_t>(_buffer.size(), 128);
-    std::string_view buffer;
-    for (;;) {
-      _buffer.resize(size);
-      auto bytes_read = _peer.read_some(
-          asio::mutable_buffer(_buffer.data() + offset, _buffer.size() - offset), err);
-      if (offset + bytes_read < size || err) {
-        return std::string_view(_buffer.data(), offset + bytes_read);
-      }
-      offset += bytes_read;
-      size *= 2;
-    }
-  }
-
-  Request readRequest(asio::error_code &err) {
-    std::string_view buffer = readIntoBuffer(err);
-
-    Request req;
-
-    if (err) {
-      return req;
-    }
-
-    auto method = buffer.substr(0, buffer.find_first_of(' '));
-    req.method = methodFromString(method);
-    buffer.remove_prefix(method.size() + 1);
-
-    auto path = buffer.substr(0, buffer.find_first_of(' '));
-    buffer.remove_prefix(buffer.find_first_of("\n") + 1);
-
-    while (buffer.find('\r') != 0) {
-      auto key = std::string(buffer.substr(0, buffer.find(":")));
-      auto value = std::string(trim(buffer.substr(key.size() + 1)));
-      std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-      req.headers[std::move(key)] = std::move(value);
-      buffer.remove_prefix(buffer.find_first_of("\n") + 1);
-    }
-
-    if (auto it = req.headers.find("host"); it != req.headers.end()) {
-      req.url = "http://" + it->second;
-    }
-    req.url += path;
-
-    buffer.remove_prefix(buffer.find_first_of("\n") + 1);
-    req.body = buffer;
-
-    return req;
   }
 
   void writeResponse(http::Response res) {
@@ -246,7 +313,8 @@ struct Connection : public std::enable_shared_from_this<Connection> {
   asio::io_context &_ctx;
   tcp::socket _peer;
   OnDone _on_done;
-  std::vector<char> _buffer;
+  RequestParser _request_parser;
+  std::array<uint8_t, 1> _poll_buffer;
   http::Lifetime _out_buffer;
   std::function<void()> _pending_send;
   int64_t _bytes_sent = 0;

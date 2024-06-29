@@ -26,6 +26,7 @@ class WebProxy {
   spotiled::BrightnessProvider &_brightness;
   spotify::SpotifyService &_spotify;
   std::string _base_url;
+  std::string_view _base_host;
 };
 
 }  // namespace web_proxy
