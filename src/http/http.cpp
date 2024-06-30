@@ -200,7 +200,7 @@ class HttpImpl final : public Http {
     buffer.is_processing = true;
 
     state->runOnMain([this, curl, state] {
-      triggerCallbacks(*state, [this, curl, state] {
+      triggerCallbacks(*state, /* skip_empty */ false, [this, curl, state] {
         state->runOnHttp([this, curl, state] { continueRequest(curl, state); });
         curl_multi_wakeup(_curlm.get());
       });
@@ -223,15 +223,10 @@ class HttpImpl final : public Http {
     curl_multi_remove_handle(_curlm.get(), curl);
     curl_easy_cleanup(curl);
 
-    state->runOnMain([state] {
-      triggerCallbacks(
-          *state, [state] {}, [](auto &buffer) { return !buffer.data.empty(); });
-    });
+    state->runOnMain([state] { triggerCallbacks(*state, /* skip_empty */ true, [state] {}); });
   }
 
-  static void triggerCallbacks(RequestState &state,
-                               std::function<void()> next,
-                               std::function<bool(Buffer &)> filter = {}) {
+  static void triggerCallbacks(RequestState &state, bool skip_empty, std::function<void()> next) {
     if (state.aborted) {
       return;
     }
@@ -242,7 +237,7 @@ class HttpImpl final : public Http {
       return;
     }
     if (auto &buffer = state.buffer) {
-      if (auto on_bytes = state.opts.on_bytes; on_bytes && (!filter || filter(*buffer))) {
+      if (auto on_bytes = state.opts.on_bytes; on_bytes && (!skip_empty || !buffer->data.empty())) {
         struct BufferHandle {
           BufferHandle(std::function<void()> next) : next{std::move(next)} {}
           ~BufferHandle() { next(); }
