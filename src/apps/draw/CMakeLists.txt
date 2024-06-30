@@ -1,7 +1,7 @@
 
 set(SOURCES
   draw_service.h
-  dummy.cpp
+  draw_service.cpp
 )
 
 add_library(draw ${SOURCES})
