@@ -272,7 +272,7 @@ class HttpImpl final : public Http {
         state->response.body.reserve(content_length);
       } else {
         state->buffer = std::make_unique<Buffer>();
-        state->buffer->data.reserve(content_length);
+        state->buffer->data.reserve(kMaxBufferSize);
       }
     }
 
