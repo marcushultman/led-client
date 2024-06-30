@@ -1,8 +1,5 @@
 #include "flag_service.h"
 
-#include <queue>
-
-#include "present/rolling_presenter.h"
 #include "util/spotiled/spotiled.h"
 
 namespace {
