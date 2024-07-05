@@ -53,6 +53,7 @@ target_link_libraries(spoticode
   spotify
   spotiled
   text
+  ui
   url
   web_proxy
   # 3rd party
