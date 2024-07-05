@@ -5,9 +5,9 @@
 
 #include "credentials.h"
 #include "font/font.h"
-#include "jq_util.h"
 #include "now_playing_service.h"
 #include "present/rolling_presenter.h"
+#include "util/jq/jq_util.h"
 #include "util/spotiled/spotiled.h"
 
 extern "C" {

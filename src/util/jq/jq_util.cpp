@@ -1,7 +1,5 @@
 #include "jq_util.h"
 
-namespace spotify {
-
 bool nextBool(jq_state *jq, bool &value) {
   const auto jv = jq_next(jq);
   const auto kind = jv_get_kind(jv);
@@ -49,5 +47,3 @@ bool nextStr(jq_state *jq, std::string &value) {
   jv_free(jv);
   return true;
 }
-
-}  // namespace spotify

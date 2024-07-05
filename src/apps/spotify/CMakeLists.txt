@@ -2,8 +2,6 @@
 set(SOURCES
   authenticator_presenter.cpp
   authenticator_presenter.h
-  jq_util.cpp
-  jq_util.h
   now_playing_presenter.cpp
   now_playing_presenter.h
   now_playing_service.cpp
@@ -21,6 +19,7 @@ target_include_directories(spotify PRIVATE
 target_link_libraries(spotify
   async
   http
+  jq_util
   present
   settings
   storage

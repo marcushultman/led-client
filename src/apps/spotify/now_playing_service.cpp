@@ -7,7 +7,7 @@
 #include <map>
 
 #include "credentials.h"
-#include "jq_util.h"
+#include "util/jq/jq_util.h"
 
 extern "C" {
 #include <jq.h>
