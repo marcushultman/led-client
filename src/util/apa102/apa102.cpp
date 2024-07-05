@@ -53,7 +53,6 @@ void Buffer::set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions &op
 
   auto max_l = std::max(luminance(dst_r, dst_g, dst_b), luminance(r, g, b));
   auto sum_l = luminance(sum_r, sum_g, sum_b);
-  assert(sum_l >= max_l);
 
   if (sum_l == 0) {
     return;

@@ -7,13 +7,13 @@
 namespace color::detail {
 
 inline constexpr uint8_t mul(uint8_t lhs, double f) {
-  return (lhs || f) ? std::max<uint8_t>(1, lhs * f) : 0;
+  return (lhs) ? std::max<uint8_t>(1, lhs * f) : 0;
 }
 inline constexpr uint8_t mul(uint8_t lhs, uint8_t rhs) {
-  return (lhs || rhs) ? std::max(1, lhs * rhs) : 0;
+  return (lhs && rhs) ? std::max(1, lhs * rhs) : 0;
 }
 inline constexpr uint8_t muld(uint8_t lhs, uint8_t rhs, uint8_t div) {
-  return (lhs || rhs) ? std::max(1, lhs * rhs / div) : 0;
+  return (lhs && rhs) ? std::max(1, lhs * rhs / div) : 0;
 }
 
 }  // namespace color::detail
