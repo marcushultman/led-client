@@ -12,8 +12,8 @@ struct TextService : present::Presentable {
 
   http::Response handleRequest(http::Request req);
 
-  void start(spotiled::Renderer &, present::Callback callback) final;
-  void stop() final;
+  void onStart(spotiled::Renderer &) final;
+  void onStop() final;
 
  private:
   async::Scheduler &_main_scheduler;

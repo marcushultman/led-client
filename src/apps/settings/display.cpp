@@ -87,16 +87,16 @@ http::Response DisplayService::operator()(http::Request req) {
   return 204;
 }
 
-void DisplayService::start(spotiled::Renderer &renderer, present::Callback callback) {
-  renderer.add([this, callback = std::move(callback)](auto &led, auto elapsed) {
+void DisplayService::onStart(spotiled::Renderer &renderer) {
+  renderer.add([this](auto &led, auto elapsed) {
     using namespace std::chrono_literals;
 
     if (std::exchange(_notified, false)) {
       _timeout = elapsed + kTimeout;
     }
     if (elapsed >= _timeout) {
-      stop();
-      callback();
+      onStop();
+      _presenter.erase(*this);
       return 0ms;
     }
     led.setLogo(color::kWhite);
@@ -119,7 +119,7 @@ void DisplayService::start(spotiled::Renderer &renderer, present::Callback callb
   });
 }
 
-void DisplayService::stop() {
+void DisplayService::onStop() {
   _timeout = {};
   _notified = false;
 }

@@ -21,8 +21,8 @@ struct UIServiceImpl final : UIService {
 
   virtual http::Response handleRequest(http::Request) final;
 
-  void start(spotiled::Renderer &, present::Callback) final;
-  void stop() final;
+  void onStart(spotiled::Renderer &) final;
+  void onStop() final;
 
  private:
   void onResponse(const std::string &json);
@@ -46,7 +46,6 @@ UIServiceImpl::UIServiceImpl(async::Scheduler &main_scheduler,
       _base_url{base_url.empty() ? kDefaultBaseUrl : base_url} {}
 
 http::Response UIServiceImpl::handleRequest(http::Request req) {
-  auto url = url::Url(req.url);
   if (!req.body.starts_with("mode=")) {
     return 400;
   }
@@ -56,35 +55,33 @@ http::Response UIServiceImpl::handleRequest(http::Request req) {
     _presenter.erase(*this);
     return 204;
   }
-  if (!_bytes) {
-    _bytes = std::string();
-    _presenter.add(*this, {.prio = present::Prio::kApp});
-  }
-  auto path = [&] { return std::string_view(url.path[0].end(), url.end()); }();
-  _lifetime = _http.request({.url = std::string(_base_url) + std::string(path)},
-                            {.post_to = _main_scheduler, .on_response = [this](auto res) {
-                               if (res.status / 100 != 2) {
-                                 _bytes.reset();
-                                 return;
-                               }
-                               _bytes = std::move(res.body);
-                               _presenter.notify();
-                             }});
+  auto url = url::Url(req.url);
+  _lifetime =
+      _http.request({.url = std::string(_base_url) + std::string(url.path[0].end(), url.end())},
+                    {.post_to = _main_scheduler, .on_response = [this](auto res) {
+                       if (res.status / 100 != 2) {
+                         _bytes.reset();
+                         return;
+                       }
+                       if (!_bytes) {
+                         _presenter.add(*this);
+                       }
+                       _bytes = std::move(res.body);
+                       _presenter.notify();
+                     }});
   return 204;
 }
 
-void UIServiceImpl::start(spotiled::Renderer &renderer, present::Callback callback) {
-  renderer.add([this, callback = std::move(callback)](spotiled::LED &led,
-                                                      auto elapsed) -> std::chrono::milliseconds {
+void UIServiceImpl::onStart(spotiled::Renderer &renderer) {
+  renderer.add([this](spotiled::LED &led, auto elapsed) -> std::chrono::milliseconds {
     if (!_bytes) {
-      callback();
       return {};
     }
 
     auto bytes = std::string_view(*_bytes);
     for (auto i = 0; i < bytes.size() / 4; ++i) {
       auto *p = &bytes[i * 4];
-      auto [r, g, b, a] = std::tie(*p, *(p + 1), *(p + 2), *(p + 3));
+      auto [r, g, b, a] = std::tie(p[0], p[1], p[2], p[3]);
       led.set({i / 16, i % 16}, Color(r, g, b), {.src = uint8_t(a) / 255.0});
     }
 
@@ -92,7 +89,7 @@ void UIServiceImpl::start(spotiled::Renderer &renderer, present::Callback callba
   });
 }
 
-void UIServiceImpl::stop() { _bytes.reset(); }
+void UIServiceImpl::onStop() { _bytes.reset(); }
 
 std::unique_ptr<UIService> makeUIService(async::Scheduler &main_scheduler,
                                          http::Http &http,

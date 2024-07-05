@@ -1,7 +1,7 @@
 #include "presenter.h"
 
+#include <deque>
 #include <map>
-#include <queue>
 
 #include "util/spotiled/spotiled.h"
 
@@ -13,7 +13,7 @@ struct PresenterQueueImpl final : PresenterQueue {
   void add(Presentable &presentable, const Options &options = {}) final {
     if (_current.presentable && _current.prio < options.prio) {
       auto presentable = std::exchange(_current.presentable, nullptr);
-      presentable->stop();
+      presentable->onStop();
       _queue[_current.prio].push_front(presentable);
     }
     _queue[options.prio].push_back(&presentable);
@@ -45,11 +45,7 @@ struct PresenterQueueImpl final : PresenterQueue {
       _current.prio = prio;
       _current.presentable = queue.front();
       queue.pop_front();
-      _current.presentable->start(_renderer, [this, presentable = _current.presentable] {
-        if (_current.presentable == presentable) {
-          presentNext();
-        }
-      });
+      _current.presentable->onStart(_renderer);
       return;
     }
     _current.presentable = nullptr;

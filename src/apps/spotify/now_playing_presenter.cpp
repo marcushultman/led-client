@@ -17,7 +17,7 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
   }
   ~NowPlayingPresenterImpl() { _presenter.erase(*this); }
 
-  void start(spotiled::Renderer &renderer, present::Callback) {
+  void onStart(spotiled::Renderer &renderer) {
     _alive = std::make_shared<bool>(true);
     _start = std::chrono::system_clock::now();
     renderer.add([this, sentinel = std::weak_ptr<void>(_alive)](
@@ -30,7 +30,7 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
       return 200ms;
     });
   }
-  void stop() {
+  void onStop() {
     using namespace std::chrono_literals;
     std::cout << "NowPlayingPresenter::stop()" << std::endl;
     _stop = std::chrono::system_clock::now() + 1s;

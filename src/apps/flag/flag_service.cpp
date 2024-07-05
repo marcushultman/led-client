@@ -62,12 +62,12 @@ http::Response FlagService::handleRequest(http::Request req) {
   return 204;
 }
 
-void FlagService::start(spotiled::Renderer &renderer, present::Callback callback) {
+void FlagService::onStart(spotiled::Renderer &renderer) {
   using ms = std::chrono::milliseconds;
-  renderer.add([this, callback = std::move(callback)](auto &led, auto) -> ms {
+  renderer.add([this](auto &led, auto) -> ms {
     using namespace std::chrono_literals;
     if (std::chrono::system_clock::now() > _expire_at) {
-      callback();
+      _presenter.erase(*this);
       return 0ms;
     }
 
@@ -81,4 +81,4 @@ void FlagService::start(spotiled::Renderer &renderer, present::Callback callback
   });
 }
 
-void FlagService::stop() { _expire_at = {}; }
+void FlagService::onStop() { _expire_at = {}; }

@@ -1,18 +1,15 @@
 #pragma once
 
-#include <functional>
 #include <memory>
 
 #include "util/spotiled/spotiled.h"
 
 namespace present {
 
-using Callback = std::function<void()>;
-
 struct Presentable {
   virtual ~Presentable() = default;
-  virtual void start(spotiled::Renderer &, Callback) = 0;
-  virtual void stop() = 0;
+  virtual void onStart(spotiled::Renderer &) = 0;
+  virtual void onStop() = 0;
 };
 
 enum class Prio {

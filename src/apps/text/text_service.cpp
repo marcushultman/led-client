@@ -45,7 +45,7 @@ http::Response TextService::handleRequest(http::Request req) {
   return 204;
 }
 
-void TextService::start(spotiled::Renderer &renderer, present::Callback callback) {
+void TextService::onStart(spotiled::Renderer &renderer) {
   if (_requests.empty()) {
     return;
   }
@@ -57,11 +57,11 @@ void TextService::start(spotiled::Renderer &renderer, present::Callback callback
   _text->setText(std::move(text));
 
   _sentinel = std::make_shared<bool>(true);
-  renderer.add([this, timeout = timeout(req), speed = speed(req), callback = std::move(callback),
+  renderer.add([this, timeout = timeout(req), speed = speed(req),
                 alive = std::weak_ptr<void>(_sentinel)](auto &led, auto elapsed) {
     using namespace std::chrono_literals;
     if (elapsed >= timeout || alive.expired()) {
-      callback();
+      _presenter.erase(*this);
       return 0ms;
     }
     renderRolling(led, elapsed, *_text, {}, kNormalScale, speed);
@@ -69,7 +69,7 @@ void TextService::start(spotiled::Renderer &renderer, present::Callback callback
   });
 }
 
-void TextService::stop() {
+void TextService::onStop() {
   _sentinel.reset();
   _presenter.notify();
 }

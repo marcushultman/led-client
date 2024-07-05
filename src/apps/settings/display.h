@@ -13,8 +13,8 @@ struct DisplayService : present::Presentable {
 
   http::Response operator()(http::Request);
 
-  void start(spotiled::Renderer &, present::Callback) final;
-  void stop() final;
+  void onStart(spotiled::Renderer &) final;
+  void onStop() final;
 
  private:
   void save();

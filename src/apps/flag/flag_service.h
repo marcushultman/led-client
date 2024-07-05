@@ -8,8 +8,8 @@ struct FlagService : present::Presentable {
 
   http::Response handleRequest(http::Request);
 
-  void start(spotiled::Renderer &, present::Callback callback) final;
-  void stop() final;
+  void onStart(spotiled::Renderer &) final;
+  void onStop() final;
 
  private:
   present::PresenterQueue &_presenter;

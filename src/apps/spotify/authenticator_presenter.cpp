@@ -96,8 +96,8 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   }
   ~AuthenticatorPresenterImpl() { jq_teardown(&_jq); }
 
-  void start(spotiled::Renderer &, present::Callback) final;
-  void stop() final;
+  void onStart(spotiled::Renderer &) final;
+  void onStop() final;
 
   void finishPresenting() final;
   std::string_view userCode() const final;
@@ -116,7 +116,7 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   present::PresenterQueue &_presenter;
   jq_state *_jq;
   AccessTokenCallback _token_callback;
-  present::Callback _presenter_callback;
+  bool _presenting = false;
 
   struct AuthState {
     std::chrono::system_clock::time_point expiry;
@@ -146,12 +146,12 @@ std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
                                                       callback);
 }
 
-void AuthenticatorPresenterImpl::start(spotiled::Renderer &renderer, present::Callback callback) {
-  _presenter_callback = callback;
+void AuthenticatorPresenterImpl::onStart(spotiled::Renderer &renderer) {
+  _presenting = true;
 
   renderer.add([this](auto &led, auto elapsed) {
     using namespace std::chrono_literals;
-    if (!_presenter_callback) {
+    if (!_presenting) {
       return 0ms;
     }
 
@@ -162,15 +162,14 @@ void AuthenticatorPresenterImpl::start(spotiled::Renderer &renderer, present::Ca
     return 200ms;
   });
 }
-void AuthenticatorPresenterImpl::stop() {
+void AuthenticatorPresenterImpl::onStop() {
   _work.reset();
   _request.reset();
 }
 
 void AuthenticatorPresenterImpl::finishPresenting() {
-  if (auto presenter_callback = std::exchange(_presenter_callback, {})) {
-    presenter_callback();
-  }
+  _presenter.erase(*this);
+  _presenting = false;
 }
 
 std::string_view AuthenticatorPresenterImpl::userCode() const { return _auth_state.user_code; }

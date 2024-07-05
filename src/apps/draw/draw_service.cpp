@@ -27,45 +27,44 @@ http::Response DrawService::handleRequest(http::Request req) {
   return 204;
 }
 
-void DrawService::start(spotiled::Renderer &renderer, present::Callback callback) {
+void DrawService::onStart(spotiled::Renderer &renderer) {
   assert(_request);
   std::cout << "draw presenting" << std::endl;
-  renderer.add(
-      [this, callback = std::move(callback)](auto &led, auto elapsed) -> std::chrono::milliseconds {
-        if (!_request) {
-          return 0s;
-        }
-        if (std::chrono::system_clock::now() > _expire_at) {
-          _request.reset();
-          callback();
-          return 0s;
-        }
-        uint8_t *data = reinterpret_cast<uint8_t *>(_request->body.data());
+  renderer.add([this](auto &led, auto elapsed) -> std::chrono::milliseconds {
+    if (!_request) {
+      return 0s;
+    }
+    if (std::chrono::system_clock::now() > _expire_at) {
+      _request.reset();
+      _presenter.erase(*this);
+      return 0s;
+    }
+    uint8_t *data = reinterpret_cast<uint8_t *>(_request->body.data());
 
-        if (auto it = _request->headers.find("x-draw-logo");
-            it != _request->headers.end() && it->second.size() == 3) {
-          uint8_t *logo = reinterpret_cast<uint8_t *>(it->second.data());
-          led.setLogo({logo[0], logo[1], logo[2]});
-        }
+    if (auto it = _request->headers.find("x-draw-logo");
+        it != _request->headers.end() && it->second.size() == 3) {
+      uint8_t *logo = reinterpret_cast<uint8_t *>(it->second.data());
+      led.setLogo({logo[0], logo[1], logo[2]});
+    }
 
-        for (auto x = 0; x < 23; ++x) {
-          for (auto y = 0; y < 16; ++y) {
-            auto *p = &data[(x * 16 + y) * 3];
-            auto [r, g, b] = std::tie(*p, *(p + 1), *(p + 2));
-            if (std::max({r, g, b}) > 0) {
-              led.set({x, y}, {r, g, b});
-            }
-          }
+    for (auto x = 0; x < 23; ++x) {
+      for (auto y = 0; y < 16; ++y) {
+        auto *p = &data[(x * 16 + y) * 3];
+        auto [r, g, b] = std::tie(p[0], p[1], p[2]);
+        if (std::max({r, g, b}) > 0) {
+          led.set({x, y}, {r, g, b});
         }
+      }
+    }
 
-        if (auto it = _request->headers.find("x-draw-fps"); it != _request->headers.end()) {
-          return std::chrono::milliseconds(1000 / std::stoi(it->second));
-        }
-        return 100ms;
-      });
+    if (auto it = _request->headers.find("x-draw-fps"); it != _request->headers.end()) {
+      return std::chrono::milliseconds(1000 / std::stoi(it->second));
+    }
+    return 100ms;
+  });
 }
 
-void DrawService::stop() {
+void DrawService::onStop() {
   std::cout << "draw stop" << std::endl;
   _request.reset();
 }
