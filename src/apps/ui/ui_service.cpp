@@ -7,6 +7,9 @@
 namespace {
 
 using namespace std::chrono_literals;
+using namespace std::string_view_literals;
+
+const auto kDefaultBaseUrl = "https://spotiled.deno.dev"sv;
 
 }  // namespace
 
@@ -37,7 +40,10 @@ UIServiceImpl::UIServiceImpl(async::Scheduler &main_scheduler,
                              http::Http &http,
                              present::PresenterQueue &presenter,
                              std::string_view base_url)
-    : _main_scheduler{main_scheduler}, _http{http}, _presenter{presenter}, _base_url{base_url} {}
+    : _main_scheduler{main_scheduler},
+      _http{http},
+      _presenter{presenter},
+      _base_url{base_url.empty() ? kDefaultBaseUrl : base_url} {}
 
 http::Response UIServiceImpl::handleRequest(http::Request req) {
   auto url = url::Url(req.url);
