@@ -58,7 +58,7 @@ http::Response UIServiceImpl::handleRequest(http::Request req) {
   }
   if (!_bytes) {
     _bytes = std::string();
-    _presenter.add(*this, {.prio = present::Prio::kNotification});
+    _presenter.add(*this, {.prio = present::Prio::kApp});
   }
   auto path = [&] { return std::string_view(url.path[0].end(), url.end()); }();
   _lifetime = _http.request({.url = std::string(_base_url) + std::string(path)},
