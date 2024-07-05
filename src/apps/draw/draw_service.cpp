@@ -50,7 +50,8 @@ void DrawService::start(spotiled::Renderer &renderer, present::Callback callback
 
         for (auto x = 0; x < 23; ++x) {
           for (auto y = 0; y < 16; ++y) {
-            auto [r, g, b] = std::array<uint8_t, 3>{data[(x * 16 + y) * 3]};
+            auto *p = &data[(x * 16 + y) * 3];
+            auto [r, g, b] = std::tie(*p, *(p + 1), *(p + 2));
             if (std::max({r, g, b}) > 0) {
               led.set({x, y}, {r, g, b});
             }
