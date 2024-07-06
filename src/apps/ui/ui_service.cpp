@@ -65,13 +65,11 @@ http::Response UIServiceImpl::handleRequest(http::Request req) {
                     {.post_to = _main_scheduler, .on_response = [this](auto res) {
                        if (res.status / 100 != 2) {
                          _bytes.reset();
-                         return;
-                       }
-                       if (!_bytes) {
+                       } else if (std::exchange(_bytes, std::move(res.body))) {
+                         _renderer.notify();
+                       } else {
                          _presenter.add(*this);
                        }
-                       _bytes = std::move(res.body);
-                       _renderer.notify();
                      }});
   return 204;
 }
