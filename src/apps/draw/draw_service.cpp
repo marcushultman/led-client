@@ -9,7 +9,8 @@ using namespace std::chrono_literals;
 
 }  // namespace
 
-DrawService::DrawService(present::PresenterQueue &presenter) : _presenter{presenter} {}
+DrawService::DrawService(spotiled::Renderer &renderer, present::PresenterQueue &presenter)
+    : _renderer{renderer}, _presenter{presenter} {}
 
 http::Response DrawService::handleRequest(http::Request req) {
   if (req.method != http::Method::POST || req.body.size() != 16 * 23 * 3) {
@@ -21,16 +22,16 @@ http::Response DrawService::handleRequest(http::Request req) {
 
   } else {
     std::cout << "draw updated" << std::endl;
-    _presenter.notify();
+    _renderer.notify();
   }
   _expire_at = std::chrono::system_clock::now() + 3s;
   return 204;
 }
 
-void DrawService::onStart(spotiled::Renderer &renderer) {
+void DrawService::onStart() {
   assert(_request);
   std::cout << "draw presenting" << std::endl;
-  renderer.add([this](auto &led, auto elapsed) -> std::chrono::milliseconds {
+  _renderer.add([this](auto &led, auto elapsed) -> std::chrono::milliseconds {
     if (!_request) {
       return 0s;
     }

@@ -3,13 +3,9 @@
 #include <deque>
 #include <map>
 
-#include "util/spotiled/spotiled.h"
-
 namespace present {
 
 struct PresenterQueueImpl final : PresenterQueue {
-  explicit PresenterQueueImpl(spotiled::Renderer &renderer) : _renderer{renderer} {}
-
   void add(Presentable &presentable, const Options &options = {}) final {
     if (_current.presentable && _current.prio < options.prio) {
       auto presentable = std::exchange(_current.presentable, nullptr);
@@ -29,7 +25,6 @@ struct PresenterQueueImpl final : PresenterQueue {
       presentNext();
     }
   }
-  void notify() final { _renderer.notify(); }
 
   void clear() final {
     _current.presentable = nullptr;
@@ -45,24 +40,23 @@ struct PresenterQueueImpl final : PresenterQueue {
       _current.prio = prio;
       _current.presentable = queue.front();
       queue.pop_front();
-      _current.presentable->onStart(_renderer);
+      _current.presentable->onStart();
       return;
     }
     _current.presentable = nullptr;
-    _renderer.notify();
   }
 
   struct Current {
     Prio prio;
     Presentable *presentable = nullptr;
   };
-  spotiled::Renderer &_renderer;
+
   std::map<Prio, std::deque<Presentable *>, std::greater<Prio>> _queue;
   Current _current;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::Renderer &renderer) {
-  return std::make_unique<PresenterQueueImpl>(renderer);
+std::unique_ptr<PresenterQueue> makePresenterQueue() {
+  return std::make_unique<PresenterQueueImpl>();
 }
 
 }  // namespace present

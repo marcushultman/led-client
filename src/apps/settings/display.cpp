@@ -38,8 +38,12 @@ std::pair<int, int> waveIndices(
 
 DisplayService::DisplayService(async::Scheduler &main_scheduler,
                                spotiled::BrightnessProvider &brightness,
+                               spotiled::Renderer &renderer,
                                present::PresenterQueue &presenter)
-    : _main_scheduler{main_scheduler}, _presenter{presenter}, _brightness(brightness) {
+    : _main_scheduler{main_scheduler},
+      _renderer{renderer},
+      _presenter{presenter},
+      _brightness(brightness) {
   if (auto stream = std::ifstream(kFilename); stream.good()) {
     std::string line(64, '\0');
     stream.getline(line.data(), line.size());
@@ -87,8 +91,8 @@ http::Response DisplayService::operator()(http::Request req) {
   return 204;
 }
 
-void DisplayService::onStart(spotiled::Renderer &renderer) {
-  renderer.add([this](auto &led, auto elapsed) {
+void DisplayService::onStart() {
+  _renderer.add([this](auto &led, auto elapsed) {
     using namespace std::chrono_literals;
 
     if (std::exchange(_notified, false)) {

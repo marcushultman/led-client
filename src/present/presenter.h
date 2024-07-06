@@ -2,13 +2,11 @@
 
 #include <memory>
 
-#include "util/spotiled/spotiled.h"
-
 namespace present {
 
 struct Presentable {
   virtual ~Presentable() = default;
-  virtual void onStart(spotiled::Renderer &) = 0;
+  virtual void onStart() = 0;
   virtual void onStop() = 0;
 };
 
@@ -24,10 +22,9 @@ struct PresenterQueue {
   virtual ~PresenterQueue() = default;
   virtual void add(Presentable &, const Options & = {}) = 0;
   virtual void erase(Presentable &) = 0;
-  virtual void notify() = 0;
   virtual void clear() = 0;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::Renderer &);
+std::unique_ptr<PresenterQueue> makePresenterQueue();
 
 }  // namespace present

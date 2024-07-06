@@ -46,7 +46,8 @@ constexpr std::array<Color, 23 * 16> kOlors = {
 
 }  // namespace
 
-FlagService::FlagService(present::PresenterQueue &presenter) : _presenter{presenter} {}
+FlagService::FlagService(spotiled::Renderer &renderer, present::PresenterQueue &presenter)
+    : _renderer{renderer}, _presenter{presenter} {}
 
 http::Response FlagService::handleRequest(http::Request req) {
   if (req.method == http::Method::POST) {
@@ -62,9 +63,9 @@ http::Response FlagService::handleRequest(http::Request req) {
   return 204;
 }
 
-void FlagService::onStart(spotiled::Renderer &renderer) {
+void FlagService::onStart() {
   using ms = std::chrono::milliseconds;
-  renderer.add([this](auto &led, auto) -> ms {
+  _renderer.add([this](auto &led, auto) -> ms {
     using namespace std::chrono_literals;
     if (std::chrono::system_clock::now() > _expire_at) {
       _presenter.erase(*this);

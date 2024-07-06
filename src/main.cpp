@@ -76,18 +76,18 @@ int main(int argc, char *argv[]) {
   auto &main_scheduler = main_thread->scheduler();
   auto brightness = spotiled::BrightnessProvider();
   auto led = spotiled::Renderer::create(main_scheduler, brightness);
-  auto presenter = present::makePresenterQueue(*led);
+  auto presenter = present::makePresenterQueue();
 
-  auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
-  auto flag_service = std::make_unique<FlagService>(*presenter);
-  auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
-  auto ui_service = makeUIService(main_scheduler, *http, *presenter, opts.base_url);
-  auto spotify_service =
-      std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
+  auto display_service = settings::DisplayService(main_scheduler, brightness, *led, *presenter);
+  auto flag_service = std::make_unique<FlagService>(*led, *presenter);
+  auto text_service = std::make_unique<TextService>(main_scheduler, *led, *presenter);
+  auto ui_service = makeUIService(main_scheduler, *http, *led, *presenter, opts.base_url);
+  auto spotify_service = std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *led,
+                                                                   *presenter, opts.verbose);
   auto web_proxy =
       web_proxy::WebProxy(main_scheduler, *http, brightness, *spotify_service, opts.base_url);
 
-  auto drawer = std::make_unique<DrawService>(*presenter);
+  auto drawer = std::make_unique<DrawService>(*led, *presenter);
 
   // todo: proxy and route settings
 

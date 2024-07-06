@@ -32,8 +32,10 @@ double speed(const http::Request &req) {
 
 }  // namespace
 
-TextService::TextService(async::Scheduler &main_scheduler, present::PresenterQueue &presenter)
-    : _main_scheduler{main_scheduler}, _presenter{presenter} {}
+TextService::TextService(async::Scheduler &main_scheduler,
+                         spotiled::Renderer &renderer,
+                         present::PresenterQueue &presenter)
+    : _main_scheduler{main_scheduler}, _renderer{renderer}, _presenter{presenter} {}
 
 http::Response TextService::handleRequest(http::Request req) {
   if (req.method != http::Method::POST) {
@@ -45,7 +47,7 @@ http::Response TextService::handleRequest(http::Request req) {
   return 204;
 }
 
-void TextService::onStart(spotiled::Renderer &renderer) {
+void TextService::onStart() {
   if (_requests.empty()) {
     return;
   }
@@ -57,8 +59,8 @@ void TextService::onStart(spotiled::Renderer &renderer) {
   _text->setText(std::move(text));
 
   _sentinel = std::make_shared<bool>(true);
-  renderer.add([this, timeout = timeout(req), speed = speed(req),
-                alive = std::weak_ptr<void>(_sentinel)](auto &led, auto elapsed) {
+  _renderer.add([this, timeout = timeout(req), speed = speed(req),
+                 alive = std::weak_ptr<void>(_sentinel)](auto &led, auto elapsed) {
     using namespace std::chrono_literals;
     if (elapsed >= timeout || alive.expired()) {
       _presenter.erase(*this);
@@ -71,5 +73,5 @@ void TextService::onStart(spotiled::Renderer &renderer) {
 
 void TextService::onStop() {
   _sentinel.reset();
-  _presenter.notify();
+  _renderer.notify();
 }

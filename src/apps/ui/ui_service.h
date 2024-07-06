@@ -5,6 +5,7 @@
 #include "async/scheduler.h"
 #include "http/http.h"
 #include "present/presenter.h"
+#include "util/spotiled/spotiled.h"
 
 struct UIService : present::Presentable {
   virtual ~UIService() = default;
@@ -13,5 +14,6 @@ struct UIService : present::Presentable {
 
 std::unique_ptr<UIService> makeUIService(async::Scheduler &,
                                          http::Http &,
+                                         spotiled::Renderer &,
                                          present::PresenterQueue &,
                                          std::string_view base_url);

@@ -16,12 +16,13 @@ const auto kDefaultBaseUrl = "https://spotiled.deno.dev"sv;
 struct UIServiceImpl final : UIService {
   UIServiceImpl(async::Scheduler &,
                 http::Http &,
+                spotiled::Renderer &,
                 present::PresenterQueue &,
                 std::string_view base_url);
 
   virtual http::Response handleRequest(http::Request) final;
 
-  void onStart(spotiled::Renderer &) final;
+  void onStart() final;
   void onStop() final;
 
  private:
@@ -29,6 +30,7 @@ struct UIServiceImpl final : UIService {
 
   async::Scheduler &_main_scheduler;
   http::Http &_http;
+  spotiled::Renderer &_renderer;
   present::PresenterQueue &_presenter;
   std::string_view _base_url;
 
@@ -38,10 +40,12 @@ struct UIServiceImpl final : UIService {
 
 UIServiceImpl::UIServiceImpl(async::Scheduler &main_scheduler,
                              http::Http &http,
+                             spotiled::Renderer &renderer,
                              present::PresenterQueue &presenter,
                              std::string_view base_url)
     : _main_scheduler{main_scheduler},
       _http{http},
+      _renderer{renderer},
       _presenter{presenter},
       _base_url{base_url.empty() ? kDefaultBaseUrl : base_url} {}
 
@@ -67,13 +71,13 @@ http::Response UIServiceImpl::handleRequest(http::Request req) {
                          _presenter.add(*this);
                        }
                        _bytes = std::move(res.body);
-                       _presenter.notify();
+                       _renderer.notify();
                      }});
   return 204;
 }
 
-void UIServiceImpl::onStart(spotiled::Renderer &renderer) {
-  renderer.add([this](spotiled::LED &led, auto elapsed) -> std::chrono::milliseconds {
+void UIServiceImpl::onStart() {
+  _renderer.add([this](spotiled::LED &led, auto elapsed) -> std::chrono::milliseconds {
     if (!_bytes) {
       return {};
     }
@@ -93,7 +97,8 @@ void UIServiceImpl::onStop() { _bytes.reset(); }
 
 std::unique_ptr<UIService> makeUIService(async::Scheduler &main_scheduler,
                                          http::Http &http,
+                                         spotiled::Renderer &renderer,
                                          present::PresenterQueue &presenter,
                                          std::string_view base_url) {
-  return std::make_unique<UIServiceImpl>(main_scheduler, http, presenter, base_url);
+  return std::make_unique<UIServiceImpl>(main_scheduler, http, renderer, presenter, base_url);
 }

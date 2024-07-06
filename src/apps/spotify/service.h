@@ -6,6 +6,7 @@
 #include "http/http.h"
 #include "now_playing_service.h"
 #include "present/presenter.h"
+#include "util/spotiled/spotiled.h"
 
 extern "C" {
 #include <jq.h>
@@ -19,6 +20,7 @@ class SpotifyService : NowPlayingService::Callbacks {
  public:
   SpotifyService(async::Scheduler &main_scheduler,
                  http::Http &http,
+                 spotiled::Renderer &,
                  present::PresenterQueue &presenter_queue,
                  bool verbose);
 
@@ -49,6 +51,7 @@ class SpotifyService : NowPlayingService::Callbacks {
 
   std::vector<std::unique_ptr<NowPlayingService>> _now_playing_service;
   AuthenticatorPresenter *_authenticator = nullptr;
+  spotiled::Renderer &_renderer;
   std::shared_ptr<void> _presenter;
   const NowPlayingService *_pending_play = nullptr;
   const NowPlayingService *_playing = nullptr;

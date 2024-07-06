@@ -11,17 +11,19 @@ namespace spotify {
 
 class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Presentable {
  public:
-  NowPlayingPresenterImpl(present::PresenterQueue &presenter, const NowPlaying &now_playing)
-      : _presenter{presenter}, _now_playing{now_playing} {
+  NowPlayingPresenterImpl(spotiled::Renderer &renderer,
+                          present::PresenterQueue &presenter,
+                          const NowPlaying &now_playing)
+      : _renderer{renderer}, _presenter{presenter}, _now_playing{now_playing} {
     _presenter.add(*this);
   }
   ~NowPlayingPresenterImpl() { _presenter.erase(*this); }
 
-  void onStart(spotiled::Renderer &renderer) {
+  void onStart() {
     _alive = std::make_shared<bool>(true);
     _start = std::chrono::system_clock::now();
-    renderer.add([this, sentinel = std::weak_ptr<void>(_alive)](
-                     auto &led, auto elapsed) -> std::chrono::milliseconds {
+    _renderer.add([this, sentinel = std::weak_ptr<void>(_alive)](
+                      auto &led, auto elapsed) -> std::chrono::milliseconds {
       using namespace std::chrono_literals;
       if (sentinel.expired() || (_stop.time_since_epoch().count() && _start + elapsed < _stop)) {
         return 0s;
@@ -39,15 +41,17 @@ class NowPlayingPresenterImpl final : public NowPlayingPresenter, present::Prese
  private:
   void displayScannable(spotiled::LED &led);
 
+  spotiled::Renderer &_renderer;
   present::PresenterQueue &_presenter;
   const NowPlaying &_now_playing;
   std::shared_ptr<bool> _alive;
   std::chrono::system_clock::time_point _start, _stop;
 };
 
-std::unique_ptr<NowPlayingPresenter> NowPlayingPresenter::create(present::PresenterQueue &presenter,
+std::unique_ptr<NowPlayingPresenter> NowPlayingPresenter::create(spotiled::Renderer &renderer,
+                                                                 present::PresenterQueue &presenter,
                                                                  const NowPlaying &now_playing) {
-  return std::make_unique<NowPlayingPresenterImpl>(presenter, now_playing);
+  return std::make_unique<NowPlayingPresenterImpl>(renderer, presenter, now_playing);
 }
 
 void NowPlayingPresenterImpl::displayScannable(spotiled::LED &led) {
