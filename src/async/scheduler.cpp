@@ -119,8 +119,8 @@ class ThreadImpl final : public Thread {
   Scheduler &scheduler() final { return *_scheduler; }
 
  private:
-  std::thread _thread;
   std::unique_ptr<SchedulerImpl> _scheduler = std::make_unique<SchedulerImpl>();
+  std::thread _thread;
 };
 
 std::unique_ptr<Thread> Thread::create(std::string_view name) {
