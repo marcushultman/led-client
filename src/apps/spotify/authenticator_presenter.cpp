@@ -96,7 +96,10 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
     _presenter.add(*this);
     authenticate();
   }
-  ~AuthenticatorPresenterImpl() { jq_teardown(&_jq); }
+  ~AuthenticatorPresenterImpl() {
+    _presenter.erase(*this);
+    jq_teardown(&_jq);
+  }
 
   void onStart() final;
   void onStop() final;
