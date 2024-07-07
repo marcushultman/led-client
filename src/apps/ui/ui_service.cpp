@@ -1,5 +1,6 @@
 #include "apps/ui/ui_service.h"
 
+#include <charconv>
 #include <iostream>
 
 #include "util/url/url.h"
@@ -10,6 +11,17 @@ using namespace std::chrono_literals;
 using namespace std::string_view_literals;
 
 const auto kDefaultBaseUrl = "https://spotiled.deno.dev"sv;
+
+void hexToColor(std::string_view hex, Color &color) {
+  std::from_chars(&hex[0], &hex[2], color.r(), 16);
+  std::from_chars(&hex[2], &hex[4], color.g(), 16);
+  std::from_chars(&hex[4], &hex[6], color.b(), 16);
+}
+
+auto findHexColor(http::Headers &headers, const std::string &key) {
+  auto it = headers.find("x-spotiled-logo");
+  return it != headers.end() && it->second.size() == 6 ? &it->second : nullptr;
+}
 
 }  // namespace
 
@@ -35,6 +47,7 @@ struct UIServiceImpl final : UIService {
   std::string_view _base_url;
 
   std::optional<std::string> _bytes;
+  Color _logo = color::kWhite;
   http::Lifetime _lifetime;
 };
 
@@ -50,13 +63,11 @@ UIServiceImpl::UIServiceImpl(async::Scheduler &main_scheduler,
       _base_url{base_url.empty() ? kDefaultBaseUrl : base_url} {}
 
 http::Response UIServiceImpl::handleRequest(http::Request req) {
-  if (!req.body.starts_with("mode=")) {
-    return 400;
-  }
-  if (!req.body.ends_with("=true")) {
+  if (_lifetime) {
     _lifetime.reset();
     _bytes.reset();
     _presenter.erase(*this);
+    _renderer.notify();
     return 204;
   }
   auto url = url::Url(req.url);
@@ -65,11 +76,15 @@ http::Response UIServiceImpl::handleRequest(http::Request req) {
                     {.post_to = _main_scheduler, .on_response = [this](auto res) {
                        if (res.status / 100 != 2) {
                          _bytes.reset();
-                       } else if (std::exchange(_bytes, std::move(res.body))) {
+                         return;
+                       }
+                       if (std::exchange(_bytes, std::move(res.body))) {
                          _renderer.notify();
                        } else {
                          _presenter.add(*this);
                        }
+                       auto *color = findHexColor(res.headers, "x-spotiled-logo");
+                       color ? hexToColor(*color, _logo) : void(_logo = color::kWhite);
                      }});
   return 204;
 }
@@ -79,6 +94,8 @@ void UIServiceImpl::onStart() {
     if (!_bytes) {
       return {};
     }
+
+    led.setLogo(_logo);
 
     auto bytes = std::string_view(*_bytes);
     for (auto i = 0; i < bytes.size() / 4; ++i) {

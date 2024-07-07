@@ -41,6 +41,9 @@ struct Color : public std::array<uint8_t, 3> {
   }
   constexpr Color operator*(uint8_t s) const { return *this * Color(s); }
 
+  constexpr uint8_t &r() { return at(0); }
+  constexpr uint8_t &g() { return at(1); }
+  constexpr uint8_t &b() { return at(2); }
   constexpr uint8_t r() const { return at(0); }
   constexpr uint8_t g() const { return at(1); }
   constexpr uint8_t b() const { return at(2); }
