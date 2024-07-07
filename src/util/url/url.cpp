@@ -1,5 +1,7 @@
 #include "url.h"
 
+#include <cassert>
+
 namespace url {
 
 Url::Url(std::string_view url) {
@@ -16,18 +18,19 @@ Url::Url(std::string_view url) {
       paths = paths.substr(std::min(path.back().size() + 1, paths.size()));
     }
   }
-  if (url.size() && url[0] == '?') {
-    auto qs = url.substr(1, url.find('#'));
-    url = url.substr(0, qs.size());
+  if (url.size() && url.front() == '?') {
+    auto qs = url.substr(0, url.find('#'));
+    url = url.substr(qs.size());
     while (qs.size()) {
+      qs = qs.substr(1);
       auto eql = qs.find('=');
       auto end = std::min(qs.find('&'), qs.find('#'));
       if (eql < end) {
-        q.emplace(qs.substr(0, eql), qs.substr(eql + 1, end));
+        q.emplace(qs.substr(0, eql), qs.substr((eql + 1), end - (eql + 1)));
       } else {
         q.emplace(qs.substr(0, end), "");
       }
-      qs = qs.substr(end + 1);
+      qs = qs.substr(end != std::string_view::npos ? end : qs.size());
     }
   }
   fragment = url.size() ? url.substr(1) : url;
