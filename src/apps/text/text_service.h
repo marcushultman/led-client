@@ -1,6 +1,5 @@
 #pragma once
 
-#include <charconv>
 #include <queue>
 
 #include "font/font.h"
@@ -9,18 +8,18 @@
 #include "util/spotiled/spotiled.h"
 
 struct TextService : present::Presentable {
-  TextService(async::Scheduler &main_scheduler, spotiled::Renderer &, present::PresenterQueue &);
+  TextService(async::Scheduler &main_scheduler, present::PresenterQueue &);
 
   http::Response handleRequest(http::Request req);
 
   void onStart() final;
-  void onStop() final;
+  void onRenderPass(spotiled::LED &, std::chrono::milliseconds elapsed) final;
 
  private:
   async::Scheduler &_main_scheduler;
-  spotiled::Renderer &_renderer;
   present::PresenterQueue &_presenter;
   std::unique_ptr<font::TextPage> _text = font::TextPage::create();
   std::queue<http::Request> _requests;
-  std::shared_ptr<void> _sentinel;
+  std::chrono::milliseconds _timeout;
+  double _speed = 0;
 };

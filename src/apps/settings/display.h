@@ -9,15 +9,12 @@
 namespace settings {
 
 struct DisplayService : present::Presentable {
-  DisplayService(async::Scheduler &,
-                 spotiled::BrightnessProvider &,
-                 spotiled::Renderer &,
-                 present::PresenterQueue &);
+  DisplayService(async::Scheduler &, spotiled::BrightnessProvider &, present::PresenterQueue &);
   ~DisplayService();
 
   http::Response operator()(http::Request);
 
-  void onStart() final;
+  void onRenderPass(spotiled::LED &, std::chrono::milliseconds elapsed) final;
   void onStop() final;
 
  private:
@@ -25,7 +22,6 @@ struct DisplayService : present::Presentable {
 
   async::Scheduler &_main_scheduler;
   spotiled::BrightnessProvider &_brightness;
-  spotiled::Renderer &_renderer;
   present::PresenterQueue &_presenter;
 
   std::chrono::milliseconds _timeout = {};

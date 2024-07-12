@@ -1,6 +1,5 @@
 #include "apps/draw/draw_service.h"
 
-#include <cassert>
 #include <iostream>
 
 namespace {
@@ -9,60 +8,52 @@ using namespace std::chrono_literals;
 
 }  // namespace
 
-DrawService::DrawService(spotiled::Renderer &renderer, present::PresenterQueue &presenter)
-    : _renderer{renderer}, _presenter{presenter} {}
+DrawService::DrawService(async::Scheduler &main_scheduler, present::PresenterQueue &presenter)
+    : _main_scheduler{main_scheduler}, _presenter{presenter} {}
 
 http::Response DrawService::handleRequest(http::Request req) {
   if (req.method != http::Method::POST || req.body.size() != 16 * 23 * 3) {
     return 400;
   }
+
+  auto render_period = 100ms;
+
+  if (auto it = _request->headers.find("x-draw-fps"); it != _request->headers.end()) {
+    render_period = std::chrono::milliseconds(1000 / std::stoi(it->second));
+  }
+
   if (!std::exchange(_request, req)) {
     std::cout << "draw started" << std::endl;
-    _presenter.add(*this, {.prio = present::Prio::kNotification});
+    _presenter.add(*this, {.prio = present::Prio::kNotification, .render_period = render_period});
 
   } else {
     std::cout << "draw updated" << std::endl;
-    _renderer.notify();
+    _presenter.notify();
   }
-  _expire_at = std::chrono::system_clock::now() + 3s;
+  _expire = _main_scheduler.schedule([this] { _presenter.erase(*this); }, {.delay = 3s});
   return 204;
 }
 
-void DrawService::onStart() {
-  assert(_request);
-  std::cout << "draw presenting" << std::endl;
-  _renderer.add([this](auto &led, auto elapsed) -> std::chrono::milliseconds {
-    if (!_request) {
-      return 0s;
-    }
-    if (std::chrono::system_clock::now() > _expire_at) {
-      _request.reset();
-      _presenter.erase(*this);
-      return 0s;
-    }
-    uint8_t *data = reinterpret_cast<uint8_t *>(_request->body.data());
+void DrawService::onStart() { std::cout << "draw start" << std::endl; }
 
-    if (auto it = _request->headers.find("x-draw-logo");
-        it != _request->headers.end() && it->second.size() == 3) {
-      uint8_t *logo = reinterpret_cast<uint8_t *>(it->second.data());
-      led.setLogo({logo[0], logo[1], logo[2]});
-    }
+void DrawService::onRenderPass(spotiled::LED &led, std::chrono::milliseconds) {
+  uint8_t *data = reinterpret_cast<uint8_t *>(_request->body.data());
 
-    for (auto x = 0; x < 23; ++x) {
-      for (auto y = 0; y < 16; ++y) {
-        auto *p = &data[(x * 16 + y) * 3];
-        auto [r, g, b] = std::tie(p[0], p[1], p[2]);
-        if (std::max({r, g, b}) > 0) {
-          led.set({x, y}, {r, g, b});
-        }
+  if (auto it = _request->headers.find("x-draw-logo");
+      it != _request->headers.end() && it->second.size() == 3) {
+    uint8_t *logo = reinterpret_cast<uint8_t *>(it->second.data());
+    led.setLogo({logo[0], logo[1], logo[2]});
+  }
+
+  for (auto x = 0; x < 23; ++x) {
+    for (auto y = 0; y < 16; ++y) {
+      auto *p = &data[(x * 16 + y) * 3];
+      auto [r, g, b] = std::tie(p[0], p[1], p[2]);
+      if (std::max({r, g, b}) > 0) {
+        led.set({x, y}, {r, g, b});
       }
     }
-
-    if (auto it = _request->headers.find("x-draw-fps"); it != _request->headers.end()) {
-      return std::chrono::milliseconds(1000 / std::stoi(it->second));
-    }
-    return 100ms;
-  });
+  }
 }
 
 void DrawService::onStop() {

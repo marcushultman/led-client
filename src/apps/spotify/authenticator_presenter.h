@@ -7,7 +7,6 @@
 #include "async/scheduler.h"
 #include "http/http.h"
 #include "present/presenter.h"
-#include "util/spotiled/spotiled.h"
 
 namespace spotify {
 
@@ -20,7 +19,6 @@ struct AuthenticatorPresenter {
 
   static std::unique_ptr<AuthenticatorPresenter> create(async::Scheduler &main_scheduler,
                                                         http::Http &,
-                                                        spotiled::Renderer &,
                                                         present::PresenterQueue &presenter,
                                                         bool verbose,
                                                         AccessTokenCallback);

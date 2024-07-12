@@ -1,6 +1,5 @@
 #include "display.h"
 
-#include <charconv>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -38,12 +37,8 @@ std::pair<int, int> waveIndices(
 
 DisplayService::DisplayService(async::Scheduler &main_scheduler,
                                spotiled::BrightnessProvider &brightness,
-                               spotiled::Renderer &renderer,
                                present::PresenterQueue &presenter)
-    : _main_scheduler{main_scheduler},
-      _renderer{renderer},
-      _presenter{presenter},
-      _brightness(brightness) {
+    : _main_scheduler{main_scheduler}, _presenter{presenter}, _brightness(brightness) {
   if (auto stream = std::ifstream(kFilename); stream.good()) {
     std::string line(64, '\0');
     stream.getline(line.data(), line.size());
@@ -85,42 +80,36 @@ http::Response DisplayService::operator()(http::Request req) {
   save();
 
   if (!_notified && !_timeout.count()) {
-    _presenter.add(*this, {.prio = present::Prio::kNotification});
+    _presenter.add(*this, {.prio = present::Prio::kNotification, .render_period = 1000ms / 15});
   }
   _notified = true;
   return 204;
 }
 
-void DisplayService::onStart() {
-  _renderer.add([this](auto &led, auto elapsed) {
-    using namespace std::chrono_literals;
+void DisplayService::onRenderPass(spotiled::LED &led, std::chrono::milliseconds elapsed) {
+  if (std::exchange(_notified, false)) {
+    _timeout = elapsed + kTimeout;
+  }
+  if (elapsed >= _timeout) {
+    onStop();
+    _presenter.erase(*this);
+    return;
+  }
+  led.setLogo(color::kWhite);
 
-    if (std::exchange(_notified, false)) {
-      _timeout = elapsed + kTimeout;
+  auto percent = 100 * _brightness.brightness() / kMaxBrightness;
+
+  for (auto x = 0; x < 23; ++x) {
+    for (auto [y, end] = waveIndices(10 * elapsed.count(), percent, x, 20, 8, 3); y < end; y++) {
+      led.set({x, y}, Color(0, 128, 255));
     }
-    if (elapsed >= _timeout) {
-      onStop();
-      _presenter.erase(*this);
-      return 0ms;
+    for (auto [y, end] = waveIndices(15 * elapsed.count(), percent, x, 25, 6, 3); y < end; y++) {
+      led.set({x, y}, Color(128, 0, 255));
     }
-    led.setLogo(color::kWhite);
-
-    auto percent = 100 * _brightness.brightness() / kMaxBrightness;
-
-    for (auto x = 0; x < 23; ++x) {
-      for (auto [y, end] = waveIndices(10 * elapsed.count(), percent, x, 20, 8, 3); y < end; y++) {
-        led.set({x, y}, Color(0, 128, 255));
-      }
-      for (auto [y, end] = waveIndices(15 * elapsed.count(), percent, x, 25, 6, 3); y < end; y++) {
-        led.set({x, y}, Color(128, 0, 255));
-      }
-      for (auto [y, end] = waveIndices(20 * elapsed.count(), percent, x, 30, 4, 2); y < end; y++) {
-        led.set({x, y}, color::kWhite);
-      }
+    for (auto [y, end] = waveIndices(20 * elapsed.count(), percent, x, 30, 4, 2); y < end; y++) {
+      led.set({x, y}, color::kWhite);
     }
-
-    return 1000ms / 15;
-  });
+  }
 }
 
 void DisplayService::onStop() {

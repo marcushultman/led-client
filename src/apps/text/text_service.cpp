@@ -32,17 +32,17 @@ double speed(const http::Request &req) {
 
 }  // namespace
 
-TextService::TextService(async::Scheduler &main_scheduler,
-                         spotiled::Renderer &renderer,
-                         present::PresenterQueue &presenter)
-    : _main_scheduler{main_scheduler}, _renderer{renderer}, _presenter{presenter} {}
+TextService::TextService(async::Scheduler &main_scheduler, present::PresenterQueue &presenter)
+    : _main_scheduler{main_scheduler}, _presenter{presenter} {}
 
 http::Response TextService::handleRequest(http::Request req) {
   if (req.method != http::Method::POST) {
     return 400;
   }
   _requests.push(std::move(req));
-  _presenter.add(*this, {.prio = present::Prio::kNotification});
+
+  using namespace std::chrono_literals;
+  _presenter.add(*this, {.prio = present::Prio::kNotification, .render_period = 100ms});
 
   return 204;
 }
@@ -54,24 +54,18 @@ void TextService::onStart() {
   auto req = std::move(_requests.front());
   _requests.pop();
 
-  auto text = std::string(req.body.substr(req.body.find_first_of("=") + 1));
+  auto text = req.body.substr(req.body.find("=") + 1);
   std::transform(text.begin(), text.end(), text.begin(), ::toupper);
   _text->setText(std::move(text));
 
-  _sentinel = std::make_shared<bool>(true);
-  _renderer.add([this, timeout = timeout(req), speed = speed(req),
-                 alive = std::weak_ptr<void>(_sentinel)](auto &led, auto elapsed) {
-    using namespace std::chrono_literals;
-    if (elapsed >= timeout || alive.expired()) {
-      _presenter.erase(*this);
-      return 0ms;
-    }
-    renderRolling(led, elapsed, *_text, {}, kNormalScale, speed);
-    return std::min(timeout - elapsed, 100ms);
-  });
+  _timeout = timeout(req);
+  _speed = speed(req);
 }
 
-void TextService::onStop() {
-  _sentinel.reset();
-  _renderer.notify();
+void TextService::onRenderPass(spotiled::LED &led, std::chrono::milliseconds elapsed) {
+  if (elapsed >= _timeout) {
+    _presenter.erase(*this);
+    return;
+  }
+  renderRolling(led, elapsed, *_text, {}, kNormalScale, _speed);
 }

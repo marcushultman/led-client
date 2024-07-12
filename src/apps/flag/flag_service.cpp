@@ -46,16 +46,14 @@ constexpr std::array<Color, 23 * 16> kOlors = {
 
 }  // namespace
 
-FlagService::FlagService(spotiled::Renderer &renderer, present::PresenterQueue &presenter)
-    : _renderer{renderer}, _presenter{presenter} {}
+FlagService::FlagService(present::PresenterQueue &presenter) : _presenter{presenter} {}
 
 http::Response FlagService::handleRequest(http::Request req) {
+  using namespace std::chrono_literals;
+
   if (req.method == http::Method::POST) {
-    using namespace std::chrono_literals;
-    _expire_at = std::chrono::system_clock::now() + 3s;
-    _presenter.add(*this, {.prio = present::Prio::kNotification});
+    _presenter.add(*this, {.prio = present::Prio::kNotification, .render_period = 1s});
   } else if (req.method == http::Method::DELETE) {
-    _expire_at = {};
     _presenter.erase(*this);
   } else {
     return 400;
@@ -63,23 +61,17 @@ http::Response FlagService::handleRequest(http::Request req) {
   return 204;
 }
 
-void FlagService::onStart() {
-  using ms = std::chrono::milliseconds;
-  _renderer.add([this](auto &led, auto) -> ms {
-    using namespace std::chrono_literals;
-    if (std::chrono::system_clock::now() > _expire_at) {
-      _presenter.erase(*this);
-      return 0ms;
-    }
+void FlagService::onRenderPass(spotiled::LED &led, std::chrono::milliseconds elapsed) {
+  using namespace std::chrono_literals;
 
-    for (int y = 0; y < 16; y++) {
-      for (int x = 0; x < 23; x++) {
-        led.set({x, y}, kOlors[y * 23 + x]);
-      }
-    }
+  if (elapsed >= 3s) {
+    _presenter.erase(*this);
+    return;
+  }
 
-    return 1s;
-  });
+  for (int y = 0; y < 16; y++) {
+    for (int x = 0; x < 23; x++) {
+      led.set({x, y}, kOlors[y * 23 + x]);
+    }
+  }
 }
-
-void FlagService::onStop() { _expire_at = {}; }

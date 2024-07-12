@@ -57,12 +57,10 @@ std::string makeJSON(const char *key, const std::string &value) {
 
 SpotifyService::SpotifyService(async::Scheduler &main_scheduler,
                                http::Http &http,
-                               spotiled::Renderer &renderer,
                                present::PresenterQueue &presenter_queue,
                                bool verbose)
     : _main_scheduler(main_scheduler),
       _http(http),
-      _renderer{renderer},
       _presenter_queue(presenter_queue),
       _verbose(verbose) {
   for (auto &[access_token, refresh_token] : loadTokens()) {
@@ -96,7 +94,7 @@ http::Response SpotifyService::handleRequest(http::Request req) {
 
     if (show_login || !_authenticator) {
       auto authenticator = AuthenticatorPresenter::create(
-          _main_scheduler, _http, _renderer, _presenter_queue, _verbose,
+          _main_scheduler, _http, _presenter_queue, _verbose,
           [this](auto access_token, auto refresh_token) {
             addNowPlaying(std::move(access_token), std::move(refresh_token));
             _pending_play = _now_playing_service.back().get();
@@ -133,12 +131,12 @@ void SpotifyService::onPlaying(const NowPlayingService &service, const NowPlayin
   if (&service == _pending_play || !_presenter) {
     _pending_play = nullptr;
     _playing = &service;
-    _presenter = NowPlayingPresenter::create(_renderer, _presenter_queue, now_playing);
+    _presenter = NowPlayingPresenter::create(_presenter_queue, now_playing);
   }
 }
 
 void SpotifyService::onNewTrack(const NowPlayingService &, const NowPlaying &) {
-  _renderer.notify();
+  _presenter_queue.notify();
 }
 
 void SpotifyService::onStopped(const NowPlayingService &service) {
@@ -174,7 +172,7 @@ void SpotifyService::displaySomePlaying() {
   if (auto [service, now_playing] = get_some_playing(); service) {
     std::cout << "Spotify: playing '" << now_playing->title << "'" << std::endl;
     _playing = service;
-    _presenter = NowPlayingPresenter::create(_renderer, _presenter_queue, *now_playing);
+    _presenter = NowPlayingPresenter::create(_presenter_queue, *now_playing);
   } else {
     _presenter.reset();
   }

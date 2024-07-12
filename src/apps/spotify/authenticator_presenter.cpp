@@ -82,18 +82,17 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
  public:
   AuthenticatorPresenterImpl(async::Scheduler &main_scheduler,
                              http::Http &http,
-                             spotiled::Renderer &renderer,
                              present::PresenterQueue &presenter,
                              jq_state *jq,
                              bool verbose,
                              AccessTokenCallback token_callback)
       : _main_scheduler{main_scheduler},
         _http{http},
-        _renderer{renderer},
         _presenter{presenter},
         _jq{jq},
         _token_callback{std::move(token_callback)} {
-    _presenter.add(*this);
+    using namespace std::chrono_literals;
+    _presenter.add(*this, {.render_period = 200ms});
     authenticate();
   }
   ~AuthenticatorPresenterImpl() {
@@ -102,6 +101,7 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   }
 
   void onStart() final;
+  void onRenderPass(spotiled::LED &, std::chrono::milliseconds elapsed) final;
   void onStop() final;
 
   void finishPresenting() final;
@@ -118,7 +118,6 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
 
   async::Scheduler &_main_scheduler;
   http::Http &_http;
-  spotiled::Renderer &_renderer;
   present::PresenterQueue &_presenter;
   jq_state *_jq;
   AccessTokenCallback _token_callback;
@@ -141,7 +140,6 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
 std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
     async::Scheduler &main_scheduler,
     http::Http &http,
-    spotiled::Renderer &renderer,
     present::PresenterQueue &presenter,
     bool verbose,
     AccessTokenCallback callback) {
@@ -149,26 +147,24 @@ std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
   if (!jq) {
     return nullptr;
   }
-  return std::make_unique<AuthenticatorPresenterImpl>(main_scheduler, http, renderer, presenter, jq,
-                                                      verbose, callback);
+  return std::make_unique<AuthenticatorPresenterImpl>(main_scheduler, http, presenter, jq, verbose,
+                                                      callback);
 }
 
-void AuthenticatorPresenterImpl::onStart() {
-  _presenting = true;
+void AuthenticatorPresenterImpl::onStart() { _presenting = true; }
 
-  _renderer.add([this](auto &led, auto elapsed) {
-    using namespace std::chrono_literals;
-    if (!_presenting) {
-      return 0ms;
-    }
+void AuthenticatorPresenterImpl::onRenderPass(spotiled::LED &led,
+                                              std::chrono::milliseconds elapsed) {
+  using namespace std::chrono_literals;
+  if (!_presenting) {
+    return;
+  }
 
-    if (!_auth_state.user_code.empty()) {
-      renderRolling(led, elapsed, *_text);
-    }
-
-    return 200ms;
-  });
+  if (!_auth_state.user_code.empty()) {
+    renderRolling(led, elapsed, *_text);
+  }
 }
+
 void AuthenticatorPresenterImpl::onStop() {
   _work.reset();
   _request.reset();

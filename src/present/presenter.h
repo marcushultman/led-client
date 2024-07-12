@@ -1,13 +1,17 @@
 #pragma once
 
+#include <util/spotiled/spotiled.h>
+
+#include <chrono>
 #include <memory>
 
 namespace present {
 
 struct Presentable {
   virtual ~Presentable() = default;
-  virtual void onStart() = 0;
-  virtual void onStop() = 0;
+  virtual void onStart(){};
+  virtual void onRenderPass(spotiled::LED &, std::chrono::milliseconds elapsed){};
+  virtual void onStop(){};
 };
 
 enum class Prio {
@@ -16,6 +20,7 @@ enum class Prio {
 };
 struct Options {
   Prio prio = Prio::kApp;
+  std::chrono::milliseconds render_period = std::chrono::hours{1};
 };
 
 struct PresenterQueue {
@@ -23,8 +28,9 @@ struct PresenterQueue {
   virtual void add(Presentable &, const Options & = {}) = 0;
   virtual void erase(Presentable &) = 0;
   virtual void clear() = 0;
+  virtual void notify() = 0;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue();
+std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::Renderer &);
 
 }  // namespace present
