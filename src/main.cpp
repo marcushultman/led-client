@@ -75,8 +75,7 @@ int main(int argc, char *argv[]) {
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
   auto brightness = spotiled::BrightnessProvider();
-  auto led = spotiled::Renderer::create(main_scheduler, brightness);
-  auto presenter = present::makePresenterQueue(*led);
+  auto presenter = present::makePresenterQueue(main_scheduler, brightness);
 
   auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
   auto flag_service = std::make_unique<FlagService>(*presenter);

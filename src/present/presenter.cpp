@@ -9,8 +9,9 @@ namespace present {
 using namespace std::chrono_literals;
 
 struct PresenterQueueImpl final : PresenterQueue {
-  PresenterQueueImpl(spotiled::Renderer &renderer) : _renderer{renderer} {
-    _renderer.add([this](auto &led, auto elapsed) -> std::chrono::milliseconds {
+  PresenterQueueImpl(async::Scheduler &main_scheduler, spotiled::BrightnessProvider &brightness)
+      : _renderer{spotiled::Renderer::create(main_scheduler, brightness)} {
+    _renderer->add([this](auto &led, auto elapsed) -> std::chrono::milliseconds {
       if (!_current.presentable) {
         return 1h;
       }
@@ -57,7 +58,7 @@ struct PresenterQueueImpl final : PresenterQueue {
     _queue.clear();
   }
 
-  void notify() final { _renderer.notify(); }
+  void notify() final { _renderer->notify(); }
 
  private:
   void presentNext() {
@@ -69,7 +70,7 @@ struct PresenterQueueImpl final : PresenterQueue {
       queue.pop_front();
       std::cout << "presenting " << _current.presentable << std::endl;
       _current.presentable->onStart();
-      _renderer.notify();
+      _renderer->notify();
       return;
     }
     _current.presentable = nullptr;
@@ -82,13 +83,14 @@ struct PresenterQueueImpl final : PresenterQueue {
     bool operator==(const Presentable *rhs) const { return presentable == rhs; }
   };
 
-  spotiled::Renderer &_renderer;
+  std::unique_ptr<spotiled::Renderer> _renderer;
   std::map<Prio, std::deque<Entry>, std::greater<Prio>> _queue;
   Entry _current;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::Renderer &renderer) {
-  return std::make_unique<PresenterQueueImpl>(renderer);
+std::unique_ptr<PresenterQueue> makePresenterQueue(async::Scheduler &main_scheduler,
+                                                   spotiled::BrightnessProvider &brightness) {
+  return std::make_unique<PresenterQueueImpl>(main_scheduler, brightness);
 }
 
 }  // namespace present

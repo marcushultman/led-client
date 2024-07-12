@@ -31,6 +31,7 @@ struct PresenterQueue {
   virtual void notify() = 0;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(spotiled::Renderer &);
+std::unique_ptr<PresenterQueue> makePresenterQueue(async::Scheduler &,
+                                                   spotiled::BrightnessProvider &);
 
 }  // namespace present
