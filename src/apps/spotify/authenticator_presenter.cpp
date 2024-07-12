@@ -100,7 +100,6 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
     jq_teardown(&_jq);
   }
 
-  void onStart() final;
   void onRenderPass(spotiled::LED &, std::chrono::milliseconds elapsed) final;
   void onStop() final;
 
@@ -121,7 +120,6 @@ class AuthenticatorPresenterImpl final : public AuthenticatorPresenter, present:
   present::PresenterQueue &_presenter;
   jq_state *_jq;
   AccessTokenCallback _token_callback;
-  bool _presenting = false;
 
   struct AuthState {
     std::chrono::system_clock::time_point expiry;
@@ -151,15 +149,8 @@ std::unique_ptr<AuthenticatorPresenter> AuthenticatorPresenter::create(
                                                       callback);
 }
 
-void AuthenticatorPresenterImpl::onStart() { _presenting = true; }
-
 void AuthenticatorPresenterImpl::onRenderPass(spotiled::LED &led,
                                               std::chrono::milliseconds elapsed) {
-  using namespace std::chrono_literals;
-  if (!_presenting) {
-    return;
-  }
-
   if (!_auth_state.user_code.empty()) {
     renderRolling(led, elapsed, *_text);
   }
@@ -170,10 +161,7 @@ void AuthenticatorPresenterImpl::onStop() {
   _request.reset();
 }
 
-void AuthenticatorPresenterImpl::finishPresenting() {
-  _presenter.erase(*this);
-  _presenting = false;
-}
+void AuthenticatorPresenterImpl::finishPresenting() { _presenter.erase(*this); }
 
 std::string_view AuthenticatorPresenterImpl::userCode() const { return _auth_state.user_code; }
 
