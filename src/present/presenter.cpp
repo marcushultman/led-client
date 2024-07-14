@@ -8,54 +8,66 @@ namespace present {
 
 using namespace std::chrono_literals;
 
-struct PresenterQueueImpl final : PresenterQueue {
-  PresenterQueueImpl(async::Scheduler &main_scheduler, spotiled::BrightnessProvider &brightness)
-      : _renderer{spotiled::Renderer::create(main_scheduler, brightness)} {
-    _renderer->add([this](auto &led, auto elapsed) -> std::chrono::milliseconds {
-      if (!_current.presentable) {
-        return 1h;
+struct Entry {
+  Presentable *presentable = nullptr;
+  Options options;
+  bool operator==(const Presentable *rhs) const { return presentable == rhs; }
+};
+
+struct RenderHandle {
+  RenderHandle(spotiled::Renderer &renderer, Entry entry) : entry{std::move(entry)} {
+    std::cout << "presentable onStart " << entry.presentable << std::endl;
+    entry.presentable->onStart();
+    renderer.add([this, alive = std::weak_ptr<void>(_alive)](
+                     auto &led, auto elapsed) -> std::chrono::milliseconds {
+      if (!alive.expired()) {
+        this->entry.presentable->onRenderPass(led, elapsed);
+        return this->entry.options.render_period;
       }
-      if (!_current.start) {
-        _current.start = elapsed;
-      }
-      _current.presentable->onRenderPass(led, elapsed - *_current.start);
-      return _current.options.render_period;
+      return {};
     });
   }
+  ~RenderHandle() {
+    std::cout << "presentable onStop " << entry.presentable << std::endl;
+    entry.presentable->onStop();
+  }
+
+  Entry entry;
+
+ private:
+  std::shared_ptr<void> _alive = std::make_shared<bool>(1);
+};
+
+struct PresenterQueueImpl final : PresenterQueue {
+  PresenterQueueImpl(async::Scheduler &main_scheduler, spotiled::BrightnessProvider &brightness)
+      : _renderer{spotiled::Renderer::create(main_scheduler, brightness)} {}
 
   void add(Presentable &presentable, const Options &options = {}) final {
-    std::cout << "adding " << &presentable << std::endl;
-
-    if (_current.presentable && _current.options.prio < options.prio) {
+    if (_current && _current->entry.options.prio < options.prio) {
       auto current = std::exchange(_current, {});
-      std::cout << "stopping " << current.presentable << std::endl;
-      current.presentable->onStop();
-      current.start = {};
-      _queue[current.options.prio].push_front(current);
+      _queue[current->entry.options.prio].push_front(current->entry);
     }
+    std::cout << "adding " << &presentable << std::endl;
     _queue[options.prio].push_back({&presentable, options});
-    if (!_current.presentable) {
+    if (!_current) {
       presentNext();
     }
   }
   void erase(Presentable &presentable) final {
+    std::cout << "erase " << &presentable << std::endl;
+
     for (auto &[_, queue] : _queue) {
       std::erase(queue, &presentable);
     }
-    if (_current.presentable == &presentable) {
-      _current = {};
-      std::cout << "erase (current) " << &presentable << std::endl;
-      presentable.onStop();
+    if (_current && _current->entry == &presentable) {
+      _current.reset();
       presentNext();
-    } else {
-      std::cout << "erase " << &presentable << std::endl;
     }
   }
 
   void clear() final {
-    std::cout << "clear" << std::endl;
-    _current = {};
     _queue.clear();
+    _current.reset();
   }
 
   void notify() final { _renderer->notify(); }
@@ -66,26 +78,15 @@ struct PresenterQueueImpl final : PresenterQueue {
       if (queue.empty()) {
         continue;
       }
-      _current = std::move(queue.front());
+      _current = std::make_unique<RenderHandle>(*_renderer, std::move(queue.front()));
       queue.pop_front();
-      std::cout << "presenting " << _current.presentable << std::endl;
-      _current.presentable->onStart();
-      _renderer->notify();
       return;
     }
-    _current.presentable = nullptr;
   }
-
-  struct Entry {
-    Presentable *presentable = nullptr;
-    Options options;
-    std::optional<std::chrono::milliseconds> start;
-    bool operator==(const Presentable *rhs) const { return presentable == rhs; }
-  };
 
   std::unique_ptr<spotiled::Renderer> _renderer;
   std::map<Prio, std::deque<Entry>, std::greater<Prio>> _queue;
-  Entry _current;
+  std::unique_ptr<RenderHandle> _current;
 };
 
 std::unique_ptr<PresenterQueue> makePresenterQueue(async::Scheduler &main_scheduler,
