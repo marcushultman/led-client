@@ -43,7 +43,7 @@ Options parseOptions(int argc, char *argv[]) {
 }
 
 struct PathMapper {
-  using Map = std::unordered_map<std::string, http::SyncHandler>;
+  using Map = std::unordered_map<std::string, http::RequestHandler>;
 
   PathMapper(Map map, http::AsyncHandler index = {})
       : _map{std::move(map)}, _index{std::move(index)} {}
@@ -54,7 +54,10 @@ struct PathMapper {
     url::Url url(req.url);
     auto it = url.path.empty() ? _map.end() : _map.find(std::string(url.path.front()));
     if (it != _map.end()) {
-      on_response(it->second(std::move(req)));
+      if (auto *handler = std::get_if<http::AsyncHandler>(&it->second)) {
+        return (*handler)(std::move(req), std::move(on_response), std::move(on_bytes));
+      }
+      on_response(std::get<http::SyncHandler>(it->second)(std::move(req)));
       return {};
     }
     return _index(req, std::move(on_response), std::move(on_bytes));
