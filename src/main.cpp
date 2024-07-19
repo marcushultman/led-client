@@ -86,8 +86,8 @@ int main(int argc, char *argv[]) {
   auto ui_service = makeUIService(main_scheduler, *http, *presenter, opts.base_url);
   auto spotify_service =
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
-  auto web_proxy =
-      web_proxy::WebProxy(main_scheduler, *http, brightness, *spotify_service, opts.base_url);
+  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, brightness, *presenter,
+                                       *spotify_service, opts.base_url);
 
   auto drawer = std::make_unique<DrawService>(main_scheduler, *presenter);
 

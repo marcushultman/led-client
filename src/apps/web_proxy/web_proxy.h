@@ -9,24 +9,33 @@
 
 namespace web_proxy {
 
+struct State;
+struct StateThingy;
+
 class WebProxy {
  public:
   WebProxy(async::Scheduler &,
            http::Http &,
            spotiled::BrightnessProvider &,
+           present::PresenterQueue &,
            spotify::SpotifyService &,
            std::string base_url);
+  ~WebProxy();
   http::Lifetime handleRequest(http::Request,
                                http::RequestOptions::OnResponse,
                                http::RequestOptions::OnBytes);
 
  private:
+  void updateState(std::string id, State &);
+
   async::Scheduler &_main_scheduler;
   http::Http &_http;
   spotiled::BrightnessProvider &_brightness;
+  present::PresenterQueue &_presenter;
   spotify::SpotifyService &_spotify;
   std::string _base_url;
   std::string_view _base_host;
+  std::unique_ptr<StateThingy> _state_thingy;
 };
 
 }  // namespace web_proxy

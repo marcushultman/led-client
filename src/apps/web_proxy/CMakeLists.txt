@@ -1,5 +1,7 @@
 
 set(SOURCES
+  display.h
+  display.cpp
   web_proxy.h
   web_proxy.cpp
 )
