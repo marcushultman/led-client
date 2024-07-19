@@ -82,6 +82,7 @@ struct PresenterQueueImpl final : PresenterQueue {
       queue.pop_front();
       return;
     }
+    _renderer->notify();
   }
 
   std::unique_ptr<spotiled::Renderer> _renderer;
