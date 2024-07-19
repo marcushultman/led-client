@@ -179,6 +179,8 @@ class HttpImpl final : public Http {
 
     if (!state->request.body.empty()) {
       curl_easy_setopt(curl, CURLOPT_POSTFIELDS, state->request.body.c_str());
+    } else {
+      curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0);
     }
 
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, state.get());
