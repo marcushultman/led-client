@@ -34,7 +34,7 @@ std::string makeJSON(const char *key, jv value) {
 struct State {
   std::string data;
   std::optional<Display> display;
-  async::Lifetime behavior;
+  async::Lifetime work;
 };
 
 struct StateThingy final {
@@ -152,8 +152,8 @@ struct StateThingy final {
             _poll(id, state, delay);
           }
           jv_free(jv_poll);
-        } else if (state.behavior) {
-          state.behavior = {};
+        } else {
+          state.work = {};
         }
         jv_free(jv_behavior);
       } else if (kind == JV_KIND_NULL) {
@@ -192,7 +192,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
           [this](auto id, auto &state, auto delay) {
-            state.behavior = _main_scheduler.schedule(
+            state.work = _main_scheduler.schedule(
                 [this, id, &state] { updateState(std::move(id), state); }, {.delay = delay});
           },
           _presenter)} {}
@@ -245,14 +245,14 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
 }
 
 void WebProxy::updateState(std::string id, State &state) {
-  state.behavior = _http.request(
+  state.work = _http.request(
       {.method = http::Method::POST,
        .url = _base_url + "/" + id,
        .body = makeJSON("data", jv_string(state.data.c_str()))},
       {.post_to = _main_scheduler, .on_response = [this, id, &state](auto res) {
          if (!_state_thingy->onServiceResponse(res)) {
            std::cerr << "retry " << id << " in 5s" << std::endl;
-           state.behavior = _main_scheduler.schedule(
+           state.work = _main_scheduler.schedule(
                [this, id, &state] { updateState(std::move(id), state); }, {.delay = 5s});
          }
        }});
