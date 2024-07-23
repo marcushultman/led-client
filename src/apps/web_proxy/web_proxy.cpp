@@ -54,7 +54,7 @@ struct StateThingy final {
       std::cout << id << " loaded (" << _states[id].data << ")" << std::endl;
       _poll(id, _states[id], {});
     }
-    _save_work = _main_scheduler.schedule([this] { saveStates(); }, {.period = 1min});
+    _save_work = _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min});
   }
   ~StateThingy() { saveStates(); }
 
@@ -65,7 +65,9 @@ struct StateThingy final {
     }
     auto out = std::ofstream(kStatesFilename);
     storage::saveSet(set, out);
-    std::cout << _states.size() << " states saved" << std::endl;
+
+    _states.empty() ? (std::cout << "States cleared" << std::endl)
+                    : (std::cout << _states.size() << " states saved" << std::endl);
   }
 
   const std::unordered_map<std::string, State> &states() { return _states; }
