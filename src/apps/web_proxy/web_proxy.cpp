@@ -41,10 +41,7 @@ struct StateThingy final {
   using Poll = std::function<void(std::string id, State &, std::chrono::milliseconds)>;
 
   StateThingy(async::Scheduler &main_scheduler, Poll poll, present::PresenterQueue &presenter)
-      : _main_scheduler(main_scheduler),
-        _poll(poll),
-        _presenter(presenter),
-        _save_work{_main_scheduler.schedule([this] { saveStates(); }, {.period = 1min})} {
+      : _main_scheduler(main_scheduler), _poll(poll), _presenter(presenter) {
     std::unordered_set<std::string> set;
     storage::loadSet(set, std::ifstream(kStatesFilename));
 
@@ -57,6 +54,7 @@ struct StateThingy final {
       std::cout << id << " loaded (" << _states[id].data << ")" << std::endl;
       _poll(id, _states[id], {});
     }
+    _save_work = _main_scheduler.schedule([this] { saveStates(); }, {.period = 1min});
   }
   ~StateThingy() { saveStates(); }
 
