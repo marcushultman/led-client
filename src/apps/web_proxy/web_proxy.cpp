@@ -72,8 +72,10 @@ struct StateThingy final {
 
   const std::unordered_map<std::string, State> &states() { return _states; }
 
-  bool onServiceResponse(const http::Response &res) {
-    if (res.status != 200) {
+  bool onServiceResponse(const http::Response &res, std::string *fragment = nullptr) {
+    if (res.status == 204) {
+      return true;
+    } else if (res.status != 200) {
       // todo: do we always get 200?
       std::cout << "service response NOK " << res.status << std::endl;
       return false;
@@ -89,6 +91,10 @@ struct StateThingy final {
     jv_object_foreach(jv_dict, jv_id, jv_val) {
       auto id = std::string(jv_string_value(jv_id));
       jv_free(jv_id);
+
+      if (fragment) {
+        *fragment = id;
+      }
 
       if (auto kind = jv_get_kind(jv_val); kind == JV_KIND_OBJECT) {
         auto &state = _states[id];
@@ -157,7 +163,12 @@ struct StateThingy final {
         }
         jv_free(jv_behavior);
       } else if (kind == JV_KIND_NULL) {
-        _states.erase(id);
+        if (auto it = _states.find(id); it != _states.end()) {
+          if (it->second.display) {
+            _presenter.erase(*it->second.display);
+          }
+          _states.erase(it);
+        }
       }
       jv_free(jv_val);
     }
@@ -233,21 +244,34 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
   // todo: more factors?
   auto is_service_response = req.method == http::Method::POST;
 
-  return _http.request(std::move(req), {.post_to = _main_scheduler,
-                                        .on_response =
-                                            [this, is_service_response, on_response](auto res) {
-                                              if (is_service_response) {
-                                                _state_thingy->onServiceResponse(res);
-                                              }
-                                              on_response(std::move(res));
-                                            },
-                                        .on_bytes = std::move(on_bytes)});
+  if (is_service_response) {
+    req.headers["accept-encoding"] = "identity";
+  }
+
+  return _http.request(
+      std::move(req),
+      {.post_to = _main_scheduler,
+       .on_response =
+           [this, is_service_response, on_response](auto res) {
+             std::string fragment;
+             if (is_service_response && _state_thingy->onServiceResponse(res, &fragment)) {
+               if (fragment.empty()) {
+                 on_response(204);
+               } else {
+                 on_response(http::Response{303, {{"location", "/#" + fragment}}});
+               }
+             } else {
+               on_response(std::move(res));
+             }
+           },
+       .on_bytes = std::move(on_bytes)});
 }
 
 void WebProxy::updateState(std::string id, State &state) {
   state.work = _http.request(
       {.method = http::Method::POST,
        .url = _base_url + "/" + id,
+       .headers = {{"content-type", "application/json"}},
        .body = makeJSON("data", jv_string(state.data.c_str()))},
       {.post_to = _main_scheduler, .on_response = [this, id, &state](auto res) {
          if (!_state_thingy->onServiceResponse(res)) {

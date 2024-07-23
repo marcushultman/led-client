@@ -36,6 +36,7 @@ struct Response {
   Response();
   Response(int status);
   Response(std::string body);
+  Response(int status, Headers, std::string body = {});
 };
 
 struct RequestOptions {

@@ -52,6 +52,9 @@ Response::Response(int status) : status{status} {}
 
 Response::Response(std::string body) : status{200}, body{std::move(body)} {}
 
+Response::Response(int status, Headers headers, std::string body)
+    : status{status}, headers{std::move(headers)}, body{std::move(body)} {}
+
 struct RequestState {
   RequestState(async::Scheduler &http_scheduler, Request &&request, RequestOptions &&opts)
       : request{std::move(request)}, opts{std::move(opts)}, _http_scheduler{http_scheduler} {}
