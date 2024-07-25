@@ -269,7 +269,7 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
 void WebProxy::updateState(std::string id, State &state) {
   state.work = _http.request(
       {.method = http::Method::POST,
-       .url = _base_url + "/" + id,
+       .url = _base_url + (id.starts_with('/') ? id : "/" + id),
        .headers = {{"content-type", "application/json"}},
        .body = makeJSON("data", jv_string(state.data.c_str()))},
       {.post_to = _main_scheduler, .on_response = [this, id, &state](auto res) {
