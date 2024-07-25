@@ -259,11 +259,7 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
            [this, is_service_response, on_response](auto res) {
              std::string fragment;
              if (is_service_response && _state_thingy->onServiceResponse(res, &fragment)) {
-               if (fragment.empty()) {
-                 on_response(204);
-               } else {
-                 on_response(http::Response{303, {{"location", "/#" + fragment}}});
-               }
+               on_response(http::Response{303, {{"location", "/#" + fragment}}});
              } else {
                on_response(std::move(res));
              }
