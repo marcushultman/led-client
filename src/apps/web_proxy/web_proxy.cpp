@@ -51,7 +51,7 @@ struct StateThingy final {
       auto split = entry.find('\n');
       auto id = entry.substr(0, split);
       _states[id].data = entry.substr(split + 1);
-      std::cout << id << " loaded (" << _states[id].data << ")" << std::endl;
+      std::cout << id << ": loaded (" << _states[id].data << ")" << std::endl;
       _poll(id, _states[id], {});
     }
     _save_work = _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min});
@@ -66,7 +66,7 @@ struct StateThingy final {
     auto out = std::ofstream(kStatesFilename);
     storage::saveSet(set, out);
 
-    _states.empty() ? (std::cout << "States cleared" << std::endl)
+    _states.empty() ? (std::cout << "states cleared" << std::endl)
                     : (std::cout << _states.size() << " states saved" << std::endl);
   }
 
@@ -203,6 +203,11 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
           [this](auto id, auto &state, auto delay) {
+            std::cout << id << ": schedule update in "
+                      << (delay < 1min
+                              ? std::chrono::duration_cast<std::chrono::seconds>(delay).count()
+                              : std::chrono::duration_cast<std::chrono::minutes>(delay).count())
+                      << (delay < 1min ? " seconds" : " minutes") << std::endl;
             state.work = _main_scheduler.schedule(
                 [this, id, &state] { updateState(std::move(id), state); }, {.delay = delay});
           },
@@ -267,6 +272,7 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
 }
 
 void WebProxy::updateState(std::string id, State &state) {
+  std::cout << id << ": update state" << std::endl;
   state.work = _http.request(
       {.method = http::Method::POST,
        .url = _base_url + (id.starts_with('/') ? id : "/" + id),
