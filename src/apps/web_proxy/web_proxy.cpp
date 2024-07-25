@@ -92,12 +92,12 @@ struct StateThingy final {
       auto id = std::string(jv_string_value(jv_id));
       jv_free(jv_id);
 
-      if (fragment) {
-        *fragment = id;
-      }
-
       if (auto kind = jv_get_kind(jv_val); kind == JV_KIND_OBJECT) {
         auto &state = _states[id];
+
+        if (fragment) {
+          *fragment = id;
+        }
 
         // data
         auto jv_data = jv_object_get(jv_copy(jv_val), jv_string("data"));
