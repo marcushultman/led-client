@@ -51,6 +51,8 @@ class RequestParser {
   };
 
  public:
+  explicit RequestParser(std::string base_url) : _base_url{base_url} {}
+
   struct Input {
     std::string &buffer;
     size_t hint = 0;
@@ -76,6 +78,13 @@ class RequestParser {
     auto buffer = p.req.url.substr(end + 1);
     auto path_end = p.req.url.find(' ');
     p.req.url.resize(path_end == std::string::npos ? 0 : path_end);
+
+    if (p.req.url[0] == '*') {
+      p.req.url = _base_url;
+    } else if (p.req.url[0] == '/') {
+      p.req.url = _base_url + p.req.url;
+    }
+
     _state = PendingHeader{.req = std::move(p.req), .buffer = std::move(buffer)};
     return {};
   }
@@ -118,6 +127,7 @@ class RequestParser {
  private:
   using State = std::variant<PendingMethod, PendingUrl, PendingHeader, PendingBody>;
   State _state;
+  std::string _base_url;
 };
 
 struct Connection : public std::enable_shared_from_this<Connection> {
@@ -128,12 +138,14 @@ struct Connection : public std::enable_shared_from_this<Connection> {
              RequestHandler &handler,
              asio::io_context &ctx,
              tcp::socket &&peer,
-             OnDone on_done)
+             OnDone on_done,
+             std::string base_url)
       : _main_scheduler{main_scheduler},
         _handler{handler},
         _ctx{ctx},
         _peer{std::move(peer)},
-        _on_done{std::move(on_done)} {}
+        _on_done{std::move(on_done)},
+        _request_parser{std::move(base_url)} {}
 
   void start() { parseSome(); }
 
@@ -326,9 +338,10 @@ struct Connection : public std::enable_shared_from_this<Connection> {
 struct ServerImpl : Server {
   using tcp = asio::ip::tcp;
 
-  ServerImpl(async::Scheduler &main_scheduler, RequestHandler handler)
+  ServerImpl(async::Scheduler &main_scheduler, RequestHandler handler, std::string base_url)
       : _main_scheduler{main_scheduler},
         _handler{std::move(handler)},
+        _base_url{std::move(base_url)},
         _thread{async::Thread::create("asio")} {
     _acceptor.set_option(tcp::acceptor::reuse_address(true));
     _acceptor.listen();
@@ -349,9 +362,9 @@ struct ServerImpl : Server {
         return;
       }
       if (!err) {
-        auto connection =
-            std::make_shared<Connection>(_main_scheduler, _handler, _ctx, std::move(peer),
-                                         [this](auto conn) { _connections.erase(conn); });
+        auto connection = std::make_shared<Connection>(
+            _main_scheduler, _handler, _ctx, std::move(peer),
+            [this](auto conn) { _connections.erase(conn); }, _base_url);
         _connections.insert(connection);
         connection->start();
       } else {
@@ -364,6 +377,7 @@ struct ServerImpl : Server {
 
   async::Scheduler &_main_scheduler;
   RequestHandler _handler;
+  std::string _base_url;
 
   asio::io_context _ctx;
   tcp::acceptor _acceptor{_ctx, tcp::endpoint(tcp::v4(), 8080)};
@@ -376,8 +390,10 @@ struct ServerImpl : Server {
 
 }  // namespace
 
-std::unique_ptr<Server> makeServer(async::Scheduler &main_scheduler, RequestHandler handler) {
-  return std::make_unique<ServerImpl>(main_scheduler, handler);
+std::unique_ptr<Server> makeServer(async::Scheduler &main_scheduler,
+                                   RequestHandler handler,
+                                   std::string base_url) {
+  return std::make_unique<ServerImpl>(main_scheduler, std::move(handler), std::move(base_url));
 }
 
 }  // namespace http

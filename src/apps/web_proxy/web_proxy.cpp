@@ -214,7 +214,6 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
                                        http::RequestOptions::OnResponse on_response,
                                        http::RequestOptions::OnBytes on_bytes) {
   auto url = url::Url(req.url);
-  req.url = _base_url + std::string(url.host.end(), url.end());
 
   if (auto it = req.headers.find(kHostHeader); it != req.headers.end()) {
     it->second = _base_host;
