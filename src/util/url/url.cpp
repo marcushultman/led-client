@@ -5,10 +5,9 @@
 namespace url {
 
 inline auto split(std::string_view str, size_t pos, bool include, bool rev) {
-  auto [end, start] = pos != std::string_view::npos
-                          ? std::make_pair(pos, pos + (include ? 0 : 1))
-                          : rev ? std::array<decltype(pos), 2>{str.size(), str.size()}
-                                : std::array<decltype(pos), 2>{0, 0};
+  auto [end, start] = pos != std::string_view::npos ? std::make_pair(pos, pos + (include ? 0 : 1))
+                                                    : rev ? std::make_pair(str.size(), str.size())
+                                                          : std::make_pair<size_t, size_t>(0, 0);
   return std::make_pair(str.substr(0, end), str.substr(start));
 }
 
