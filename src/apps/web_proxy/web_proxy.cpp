@@ -72,7 +72,7 @@ struct StateThingy final {
 
   const std::unordered_map<std::string, State> &states() { return _states; }
 
-  bool onServiceResponse(const http::Response &res, std::string *fragment = nullptr) {
+  bool onServiceResponse(const http::Response &res) {
     if (res.status == 204) {
       return true;
     } else if (res.status != 200) {
@@ -94,10 +94,6 @@ struct StateThingy final {
 
       if (auto kind = jv_get_kind(jv_val); kind == JV_KIND_OBJECT) {
         auto &state = _states[id];
-
-        if (fragment) {
-          *fragment = id;
-        }
 
         // data
         auto jv_data = jv_object_get(jv_copy(jv_val), jv_string("data"));
@@ -252,19 +248,17 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
     req.headers["accept-encoding"] = "identity";
   }
 
-  return _http.request(
-      std::move(req),
-      {.post_to = _main_scheduler,
-       .on_response =
-           [this, is_service_response, on_response](auto res) {
-             std::string fragment;
-             if (is_service_response && _state_thingy->onServiceResponse(res, &fragment)) {
-               on_response(http::Response{303, {{"location", "/#" + fragment}}});
-             } else {
-               on_response(std::move(res));
-             }
-           },
-       .on_bytes = std::move(on_bytes)});
+  return _http.request(std::move(req),
+                       {.post_to = _main_scheduler,
+                        .on_response =
+                            [this, is_service_response, on_response](auto res) {
+                              if (is_service_response && _state_thingy->onServiceResponse(res)) {
+                                on_response(204);
+                              } else {
+                                on_response(std::move(res));
+                              }
+                            },
+                        .on_bytes = std::move(on_bytes)});
 }
 
 void WebProxy::updateState(std::string id, State &state) {
