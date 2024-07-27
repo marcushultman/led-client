@@ -38,36 +38,50 @@ struct State {
 };
 
 struct StateThingy final {
-  using Poll = std::function<void(std::string id, State &, std::chrono::milliseconds)>;
+  using UpdateState = std::function<void(std::string id, State &)>;
 
-  StateThingy(async::Scheduler &main_scheduler, Poll poll, present::PresenterQueue &presenter)
-      : _main_scheduler(main_scheduler), _poll(poll), _presenter(presenter) {
+  StateThingy(async::Scheduler &main_scheduler,
+              UpdateState update_state,
+              present::PresenterQueue &presenter)
+      : _main_scheduler(main_scheduler),
+        _update_state(std::move(update_state)),
+        _presenter(presenter),
+        _load_work{_main_scheduler.schedule([this] { loadStates(); })},
+        _save_work{
+            _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min})} {}
+  ~StateThingy() { saveStates(); }
+
+  void loadStates() {
     std::unordered_set<std::string> set;
     storage::loadSet(set, std::ifstream(kStatesFilename));
 
-    std::cout << (set.empty() ? "No states" : "Loading states:") << std::endl;
+    set.empty() ? (std::cout << "No states" << std::endl)
+                : (std::cout << "Loading " << set.size() << " states" << std::endl);
 
-    for (auto entry : set) {
+    for (auto &entry : set) {
       auto split = entry.find('\n');
       auto id = entry.substr(0, split);
-      _states[id].data = entry.substr(split + 1);
-      std::cout << id << ": loaded (" << _states[id].data << ")" << std::endl;
-      _poll(id, _states[id], {});
+      auto &state = _states[id];
+      state.data = entry.substr(split + 1);
+      std::cout << id << ": loaded (" << state.data << ")" << std::endl;
+      _update_state(std::move(id), state);
     }
-    _save_work = _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min});
+    _snapshot = set;
   }
-  ~StateThingy() { saveStates(); }
 
   void saveStates() {
     std::unordered_set<std::string> set;
     for (auto &[id, state] : _states) {
       set.insert(id + "\n" + state.data);
     }
-    auto out = std::ofstream(kStatesFilename);
-    storage::saveSet(set, out);
 
-    _states.empty() ? (std::cout << "states cleared" << std::endl)
-                    : (std::cout << _states.size() << " states saved" << std::endl);
+    if (set != _snapshot) {
+      auto out = std::ofstream(kStatesFilename);
+      storage::saveSet(set, out);
+      _snapshot = set;
+      _states.empty() ? (std::cout << "states cleared" << std::endl)
+                      : (std::cout << _states.size() << " states saved" << std::endl);
+    }
   }
 
   const std::unordered_map<std::string, State> &states() { return _states; }
@@ -77,7 +91,6 @@ struct StateThingy final {
       return true;
     } else if (res.status != 200) {
       // todo: do we always get 200?
-      std::cout << "service response NOK " << res.status << std::endl;
       return false;
     }
     auto jv_dict = jv_parse(res.body.c_str());
@@ -151,10 +164,17 @@ struct StateThingy final {
           auto jv_poll = jv_object_get(jv_copy(jv_behavior), jv_string("poll"));
           if (jv_get_kind(jv_poll) == JV_KIND_NUMBER) {
             auto delay = std::chrono::milliseconds{static_cast<int64_t>(jv_number_value(jv_poll))};
-            _poll(id, state, delay);
+            std::cout << id << ": updated, poll in "
+                      << (delay < 1min
+                              ? std::chrono::duration_cast<std::chrono::seconds>(delay).count()
+                              : std::chrono::duration_cast<std::chrono::minutes>(delay).count())
+                      << (delay < 1min ? "s" : "min") << std::endl;
+            state.work = _main_scheduler.schedule(
+                [this, id, &state] { _update_state(std::move(id), state); }, {.delay = delay});
           }
           jv_free(jv_poll);
         } else {
+          std::cout << id << ": updated" << std::endl;
           state.work = {};
         }
         jv_free(jv_behavior);
@@ -164,6 +184,7 @@ struct StateThingy final {
             _presenter.erase(*it->second.display);
           }
           _states.erase(it);
+          std::cout << id << ": erased" << std::endl;
         }
       }
       jv_free(jv_val);
@@ -175,10 +196,11 @@ struct StateThingy final {
 
  private:
   async::Scheduler &_main_scheduler;
-  Poll _poll;
+  UpdateState _update_state;
   present::PresenterQueue &_presenter;
   std::unordered_map<std::string, State> _states;
-  async::Lifetime _save_work;
+  async::Lifetime _load_work, _save_work;
+  std::unordered_set<std::string> _snapshot;
 };
 
 //
@@ -198,15 +220,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _base_host{url::Url(_base_url).host},
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
-          [this](auto id, auto &state, auto delay) {
-            std::cout << id << ": schedule update in "
-                      << (delay < 1min
-                              ? std::chrono::duration_cast<std::chrono::seconds>(delay).count()
-                              : std::chrono::duration_cast<std::chrono::minutes>(delay).count())
-                      << (delay < 1min ? " seconds" : " minutes") << std::endl;
-            state.work = _main_scheduler.schedule(
-                [this, id, &state] { updateState(std::move(id), state); }, {.delay = delay});
-          },
+          [this](auto id, auto &state) { updateState(std::move(id), state); },
           _presenter)} {}
 
 WebProxy::~WebProxy() = default;
@@ -262,17 +276,19 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
 }
 
 void WebProxy::updateState(std::string id, State &state) {
-  std::cout << id << ": update state" << std::endl;
+  auto url = _base_url + (id.starts_with('/') ? "" : "/") + std::string(id);
   state.work = _http.request(
       {.method = http::Method::POST,
-       .url = _base_url + (id.starts_with('/') ? id : "/" + id),
+       .url = std::move(url),
        .headers = {{"content-type", "application/json"}},
        .body = makeJSON("data", jv_string(state.data.c_str()))},
-      {.post_to = _main_scheduler, .on_response = [this, id, &state](auto res) {
+      {.post_to = _main_scheduler, .on_response = [this, id = std::move(id), &state](auto res) {
          if (!_state_thingy->onServiceResponse(res)) {
-           std::cerr << "retry " << id << " in 5s" << std::endl;
+           std::cerr << id << ": update failed (status " << res.status << ") retrying in 5s"
+                     << std::endl;
            state.work = _main_scheduler.schedule(
-               [this, id, &state] { updateState(std::move(id), state); }, {.delay = 5s});
+               [this, id = std::move(id), &state] { updateState(std::move(id), state); },
+               {.delay = 5s});
          }
        }});
 }
