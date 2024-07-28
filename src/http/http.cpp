@@ -134,7 +134,8 @@ class HttpImpl final : public Http {
     int msgq = 0;
     while (auto info = curl_multi_info_read(_curlm.get(), &msgq)) {
       if (info->msg == CURLMSG_DONE) {
-        finishRequest(info->easy_handle, std::move(_requests[info->easy_handle]));
+        finishRequest(info->easy_handle, info->data.result,
+                      std::move(_requests[info->easy_handle]));
         _requests.erase(info->easy_handle);
       }
     }
@@ -223,8 +224,12 @@ class HttpImpl final : public Http {
     process();
   }
 
-  void finishRequest(CURL *curl, std::shared_ptr<RequestState> state) {
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &state->response.status);
+  void finishRequest(CURL *curl, CURLcode code, std::shared_ptr<RequestState> state) {
+    if (code == CURLE_OK) {
+      curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &state->response.status);
+    } else {
+      std::cerr << "curl failed: " << curl_easy_strerror(code) << std::endl;
+    }
     curl_multi_remove_handle(_curlm.get(), curl);
     curl_easy_cleanup(curl);
 
