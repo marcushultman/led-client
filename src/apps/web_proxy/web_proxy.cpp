@@ -86,6 +86,12 @@ struct StateThingy final {
 
   const std::unordered_map<std::string, State> &states() { return _states; }
 
+  void updateState(url::Url url) {
+    auto id = std::string{url.path.full.begin(), url.end()};
+    auto &state = _states[id.substr(0, url.path.full.size())];
+    _update_state(id, state);
+  }
+
   bool onServiceResponse(const http::Response &res) {
     if (res.status == 204) {
       return true;
@@ -228,51 +234,39 @@ WebProxy::~WebProxy() = default;
 http::Lifetime WebProxy::handleRequest(http::Request req,
                                        http::RequestOptions::OnResponse on_response,
                                        http::RequestOptions::OnBytes on_bytes) {
-  auto url = url::Url(req.url);
+  if (req.method == http::Method::POST) {  // todo: more factors?
+    _state_thingy->updateState(url::Url(req.url));
+    return _main_scheduler.schedule([on_response] { on_response(204); });
+  }
 
   if (auto it = req.headers.find(kHostHeader); it != req.headers.end()) {
     it->second = _base_host;
   }
 
-  if (req.method == http::Method::GET) {
-    auto sp = jv_object();
-    sp = jv_object_set(sp, jv_string("isAuthenticating"),
-                       _spotify.isAuthenticating() ? jv_true() : jv_false());
-    sp = jv_object_set(sp, jv_string("tokens"), _spotify.getTokens());
+  auto sp = jv_object();
+  sp = jv_object_set(sp, jv_string("isAuthenticating"),
+                     _spotify.isAuthenticating() ? jv_true() : jv_false());
+  sp = jv_object_set(sp, jv_string("tokens"), _spotify.getTokens());
 
-    auto states = jv_object();
-    for (auto &[id, state] : _state_thingy->states()) {
-      states = jv_object_set(states, jv_string(id.c_str()), jv_string(state.data.c_str()));
-    }
-
-    auto jv = jv_object();
-    jv = jv_object_set(jv, jv_string("brightness"), jv_number(_brightness.brightness()));
-    jv = jv_object_set(jv, jv_string("hue"), jv_number(_brightness.hue()));
-    jv = jv_object_set(jv, jv_string("spotify"), sp);
-    jv = jv_object_set(jv, jv_string("states"), states);
-    jv = jv_dump_string(jv, 0);
-    req.headers["x-spotiled"] = encoding::base64::encode(jv_string_value(jv));
-    jv_free(jv);
+  auto states = jv_object();
+  for (auto &[id, state] : _state_thingy->states()) {
+    states = jv_object_set(states, jv_string(id.c_str()), jv_string(state.data.c_str()));
   }
 
-  // todo: more factors?
-  auto is_service_response = req.method == http::Method::POST;
+  auto jv = jv_object();
+  jv = jv_object_set(jv, jv_string("brightness"), jv_number(_brightness.brightness()));
+  jv = jv_object_set(jv, jv_string("hue"), jv_number(_brightness.hue()));
+  jv = jv_object_set(jv, jv_string("spotify"), sp);
+  jv = jv_object_set(jv, jv_string("states"), states);
+  jv = jv_dump_string(jv, 0);
+  req.headers["x-spotiled"] = encoding::base64::encode(jv_string_value(jv));
+  jv_free(jv);
 
-  if (is_service_response) {
-    req.headers["accept-encoding"] = "identity";
-  }
-
-  return _http.request(std::move(req),
-                       {.post_to = _main_scheduler,
-                        .on_response =
-                            [this, is_service_response, on_response](auto res) {
-                              if (is_service_response && _state_thingy->onServiceResponse(res)) {
-                                on_response(204);
-                              } else {
-                                on_response(std::move(res));
-                              }
-                            },
-                        .on_bytes = std::move(on_bytes)});
+  return _http.request(
+      std::move(req),
+      {.post_to = _main_scheduler,
+       .on_response = [this, on_response](auto res) { on_response(std::move(res)); },
+       .on_bytes = std::move(on_bytes)});
 }
 
 void WebProxy::updateState(std::string id, State &state) {
@@ -280,7 +274,7 @@ void WebProxy::updateState(std::string id, State &state) {
   state.work = _http.request(
       {.method = http::Method::POST,
        .url = std::move(url),
-       .headers = {{"content-type", "application/json"}},
+       .headers = {{"content-type", "application/json"}, {"accept-encoding", "identity"}},
        .body = makeJSON("data", jv_string(state.data.c_str()))},
       {.post_to = _main_scheduler, .on_response = [this, id = std::move(id), &state](auto res) {
          if (!_state_thingy->onServiceResponse(res)) {
