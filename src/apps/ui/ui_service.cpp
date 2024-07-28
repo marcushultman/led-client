@@ -73,7 +73,7 @@ http::Response UIServiceImpl::handleRequest(http::Request req) {
     return 204;
   }
   auto url = url::Url(req.url);
-  auto path = std::string(url.path[0].end(), url.end());
+  auto path = std::string(url.path.segments[0].end(), url.end());
   _lifetime = _http.request({.url = std::string(_base_url) + path},
                             {.post_to = _main_scheduler, .on_response = [this, path](auto res) {
                                onResponse(path, std::move(res));

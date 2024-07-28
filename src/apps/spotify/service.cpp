@@ -71,16 +71,16 @@ SpotifyService::SpotifyService(async::Scheduler &main_scheduler,
 
 http::Response SpotifyService::handleRequest(http::Request req) {
   auto url = url::Url(req.url);
-  if (url.path.size() < 2) {
+  if (url.path.segments.size() < 2) {
     return 404;
   }
 
   using namespace std::string_literals;
-  if (url.path[1] == "tokens") {
+  if (url.path.segments[1] == "tokens") {
     if (req.method == http::Method::GET) {
       return makeJSON("tokens", getTokens());
     }
-  } else if (url.path[1] == "auth") {
+  } else if (url.path.segments[1] == "auth") {
     if (req.method == http::Method::GET) {
       return makeJSON("isAuthenticating", _authenticator ? jv_true() : jv_false());
     }

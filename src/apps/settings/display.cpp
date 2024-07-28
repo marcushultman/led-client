@@ -57,7 +57,7 @@ DisplayService::~DisplayService() { save(); }
 
 http::Response DisplayService::operator()(http::Request req) {
   auto url = url::Url(req.url);
-  auto &setting = url.path.back();
+  auto &setting = url.path.segments.back();
 
   if (req.method == http::Method::GET) {
     if (setting == "brightness") {

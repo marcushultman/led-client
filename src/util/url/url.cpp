@@ -37,15 +37,15 @@ Url::Url(std::string_view url) {
   }
 
   // path
-  path.emplace_back();
-  std::tie(path.back(), url) = split(url.starts_with('/') ? url.substr(1) : url, "?#", true);
+  std::tie(path.full, url) = split(url, "?#", true);
+  path.segments.push_back(path.full.starts_with('/') ? path.full.substr(1) : path.full);
 
   for (std::string_view p;;) {
-    std::tie(path.back(), p) = split(path.back(), '/', true);
+    std::tie(path.segments.back(), p) = split(path.segments.back(), '/', true);
     if (p.empty()) {
       break;
     }
-    path.push_back(p);
+    path.segments.push_back(p);
   }
 
   // query
