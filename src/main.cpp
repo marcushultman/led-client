@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
       },
   };
 
-  auto server = http::makeServer(main_scheduler, mapper, opts.base_url);
+  auto server = http::makeServer(main_scheduler, mapper);
   std::cout << "Listening on port: " << server->port() << std::endl;
 
   auto interrupt = std::promise<int>();

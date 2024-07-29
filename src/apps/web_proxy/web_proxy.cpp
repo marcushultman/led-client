@@ -234,6 +234,12 @@ WebProxy::~WebProxy() = default;
 http::Lifetime WebProxy::handleRequest(http::Request req,
                                        http::RequestOptions::OnResponse on_response,
                                        http::RequestOptions::OnBytes on_bytes) {
+  if (req.url[0] == '*') {
+    req.url = _base_url;
+  } else if (req.url[0] == '/') {
+    req.url = _base_url + req.url;
+  }
+
   if (req.method == http::Method::POST) {  // todo: more factors?
     _state_thingy->updateState(url::Url(req.url));
     return _main_scheduler.schedule([on_response] { on_response(204); });

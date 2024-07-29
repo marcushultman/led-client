@@ -21,6 +21,6 @@ using AsyncHandler =
 
 using RequestHandler = std::variant<SyncHandler, AsyncHandler>;
 
-std::unique_ptr<Server> makeServer(async::Scheduler &, RequestHandler, std::string base_url);
+std::unique_ptr<Server> makeServer(async::Scheduler &, RequestHandler);
 
 }  // namespace http
