@@ -26,7 +26,7 @@ class WebProxy {
                                http::RequestOptions::OnBytes);
 
  private:
-  void updateState(std::string id, State &);
+  void updateState(std::string id, State &, bool retry_allowed);
 
   async::Scheduler &_main_scheduler;
   http::Http &_http;

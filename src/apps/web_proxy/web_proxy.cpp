@@ -38,7 +38,7 @@ struct State {
 };
 
 struct StateThingy final {
-  using UpdateState = std::function<void(std::string id, State &)>;
+  using UpdateState = std::function<void(std::string id, State &, bool retry_allowed)>;
 
   StateThingy(async::Scheduler &main_scheduler,
               UpdateState update_state,
@@ -64,7 +64,7 @@ struct StateThingy final {
       auto &state = _states[id];
       state.data = entry.substr(split + 1);
       std::cout << id << ": loaded (" << state.data << ")" << std::endl;
-      _update_state(std::move(id), state);
+      _update_state(std::move(id), state, true);
     }
     _snapshot = set;
   }
@@ -89,10 +89,10 @@ struct StateThingy final {
   void updateState(url::Url url) {
     auto id = std::string{url.path.full.begin(), url.end()};
     auto &state = _states[id.substr(0, url.path.full.size())];
-    _update_state(id, state);
+    _update_state(id, state, true);
   }
 
-  bool onServiceResponse(const http::Response &res) {
+  bool handleServiceResponse(const http::Response &res) {
     if (res.status == 204) {
       return true;
     } else if (res.status != 200) {
@@ -176,7 +176,8 @@ struct StateThingy final {
                               : std::chrono::duration_cast<std::chrono::minutes>(delay).count())
                       << (delay < 1min ? "s" : "min") << std::endl;
             state.work = _main_scheduler.schedule(
-                [this, id, &state] { _update_state(std::move(id), state); }, {.delay = delay});
+                [this, id, &state] { _update_state(std::move(id), state, true); },
+                {.delay = delay});
           }
           jv_free(jv_poll);
         } else {
@@ -198,6 +199,25 @@ struct StateThingy final {
     jv_free(jv_dict);
 
     return true;
+  }
+
+  void onServiceResponse(const http::Response &res,
+                         std::string id,
+                         State &state,
+                         bool retry_allowed) {
+    if (handleServiceResponse(res)) {
+      return;
+    }
+
+    if (retry_allowed) {
+      std::cerr << id << ": update failed (status " << res.status << "), retrying in 5s"
+                << std::endl;
+      state.work = _main_scheduler.schedule(
+          [this, id = std::move(id), &state] { _update_state(std::move(id), state, false); },
+          {.delay = 5s});
+    } else {
+      std::cerr << id << ": update failed (status " << res.status << "), suspending" << std::endl;
+    }
   }
 
  private:
@@ -226,7 +246,9 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _base_host{url::Url(_base_url).host},
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
-          [this](auto id, auto &state) { updateState(std::move(id), state); },
+          [this](auto id, auto &state, auto retry_allowed) {
+            updateState(std::move(id), state, retry_allowed);
+          },
           _presenter)} {}
 
 WebProxy::~WebProxy() = default;
@@ -275,21 +297,16 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
        .on_bytes = std::move(on_bytes)});
 }
 
-void WebProxy::updateState(std::string id, State &state) {
+void WebProxy::updateState(std::string id, State &state, bool retry_allowed) {
   auto url = _base_url + (id.starts_with('/') ? "" : "/") + std::string(id);
   state.work = _http.request(
       {.method = http::Method::POST,
        .url = std::move(url),
        .headers = {{"content-type", "application/json"}, {"accept-encoding", "identity"}},
        .body = makeJSON("data", jv_string(state.data.c_str()))},
-      {.post_to = _main_scheduler, .on_response = [this, id = std::move(id), &state](auto res) {
-         if (!_state_thingy->onServiceResponse(res)) {
-           std::cerr << id << ": update failed (status " << res.status << ") retrying in 5s"
-                     << std::endl;
-           state.work = _main_scheduler.schedule(
-               [this, id = std::move(id), &state] { updateState(std::move(id), state); },
-               {.delay = 5s});
-         }
+      {.post_to = _main_scheduler,
+       .on_response = [this, id = std::move(id), &state, retry_allowed](auto res) {
+         _state_thingy->onServiceResponse(res, std::move(id), state, retry_allowed);
        }});
 }
 
