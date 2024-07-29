@@ -19,9 +19,15 @@ inline auto split(std::string_view str, std::string_view first_of, bool rev = fa
   return split(str, str.find_first_of(first_of), true, rev);
 }
 
+inline auto splitOrSkip(std::string_view str, std::string_view first_of) {
+  auto [a, b] = split(str, first_of);
+  return b.starts_with(first_of[0]) ? std::make_pair(a, b.substr(1))
+                                    : std::make_pair(a.substr(0, 0), str);
+}
+
 Url::Url(std::string_view url) {
   // scheme
-  std::tie(scheme, url) = split(url, ':');
+  std::tie(scheme, url) = splitOrSkip(url, ":/?#");
 
   // authority
   if (url.starts_with("//")) {
