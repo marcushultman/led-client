@@ -14,7 +14,6 @@
 #include "apps/settings/display.h"
 #include "apps/spotify/service.h"
 #include "apps/text/text_service.h"
-#include "apps/ui/ui_service.h"
 #include "apps/web_proxy/web_proxy.h"
 #include "http/http.h"
 #include "http/server/server.h"
@@ -82,7 +81,6 @@ int main(int argc, char *argv[]) {
   auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
   auto flag_service = std::make_unique<FlagService>(*presenter);
   auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
-  auto ui_service = makeUIService(main_scheduler, *http, *presenter, opts.base_url);
   auto spotify_service =
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
   auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, brightness, *presenter,
@@ -95,7 +93,6 @@ int main(int argc, char *argv[]) {
   PathMapper mapper{
       {{"ping", [](auto) { return 200; }},
        {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
-       {"ui", [&](auto req) { return ui_service->handleRequest(std::move(req)); }},
        {"spotify", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
        {"murica", [&](auto req) { return flag_service->handleRequest(std::move(req)); }},
        {"settings", [&](auto req) { return display_service(std::move(req)); }},
