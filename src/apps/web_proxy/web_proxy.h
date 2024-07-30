@@ -31,7 +31,6 @@ class WebProxy {
   async::Scheduler &_main_scheduler;
   http::Http &_http;
   spotiled::BrightnessProvider &_brightness;
-  present::PresenterQueue &_presenter;
   spotify::SpotifyService &_spotify;
   std::string _base_url;
   std::string_view _base_host;

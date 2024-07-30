@@ -252,7 +252,6 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
     : _main_scheduler{main_scheduler},
       _http{http},
       _brightness{brightness},
-      _presenter{presenter},
       _spotify{spotify},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)},
       _base_host{url::Url(_base_url).host},
@@ -261,7 +260,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
           [this](auto id, auto &state, auto retry_allowed) {
             updateState(std::move(id), state, retry_allowed);
           },
-          _presenter)} {}
+          presenter)} {}
 
 WebProxy::~WebProxy() = default;
 
