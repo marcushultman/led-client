@@ -38,13 +38,13 @@ struct State {
 };
 
 struct StateThingy final {
-  using UpdateState = std::function<void(std::string id, State &, bool retry_allowed)>;
+  using RequestUpdate = std::function<void(std::string id, State &, bool retry_allowed)>;
 
   StateThingy(async::Scheduler &main_scheduler,
-              UpdateState update_state,
+              RequestUpdate request_update,
               present::PresenterQueue &presenter)
       : _main_scheduler(main_scheduler),
-        _update_state(std::move(update_state)),
+        _request_update(std::move(request_update)),
         _presenter(presenter),
         _load_work{_main_scheduler.schedule([this] { loadStates(); })},
         _save_work{
@@ -64,7 +64,7 @@ struct StateThingy final {
       auto &state = _states[id];
       state.data = entry.substr(split + 1);
       std::cout << id << ": loaded (" << state.data << ")" << std::endl;
-      _update_state(std::move(id), state, true);
+      _request_update(std::move(id), state, true);
     }
     _snapshot = set;
   }
@@ -86,20 +86,15 @@ struct StateThingy final {
 
   const std::unordered_map<std::string, State> &states() { return _states; }
 
-  void updateState(url::Url url) {
+  void handleRequest(http::Request req) {
+    auto url = url::Url(req.url);
     auto id = std::string{url.path.full.begin(), url.end()};
     auto &state = _states[id.substr(0, url.path.full.size())];
-    _update_state(id, state, true);
+    _request_update(id, state, true);
   }
 
-  bool handleServiceResponse(const http::Response &res) {
-    if (res.status == 204) {
-      return true;
-    } else if (res.status != 200) {
-      // todo: do we always get 200?
-      return false;
-    }
-    auto jv_dict = jv_parse(res.body.c_str());
+  bool handleStateUpdate(const std::string &json) {
+    auto jv_dict = jv_parse(json.c_str());
 
     if (jv_get_kind(jv_dict) != JV_KIND_OBJECT) {
       jv_free(jv_dict);
@@ -188,7 +183,7 @@ struct StateThingy final {
                               : std::chrono::duration_cast<std::chrono::minutes>(delay).count())
                       << (delay < 1min ? "s" : "min") << std::endl;
             state.work = _main_scheduler.schedule(
-                [this, id, &state] { _update_state(std::move(id), state, true); },
+                [this, id, &state] { _request_update(std::move(id), state, true); },
                 {.delay = delay});
           }
           jv_free(jv_poll);
@@ -217,24 +212,27 @@ struct StateThingy final {
                          std::string id,
                          State &state,
                          bool retry_allowed) {
-    if (handleServiceResponse(res)) {
+    if (res.status == 204) {
+      return;
+    }
+    if (res.status == 200 && handleStateUpdate(res.body)) {
+      // todo: do we always get 200?
       return;
     }
 
+    std::cerr << id << ": update failed (status " << res.status << "), "
+              << (retry_allowed ? "retrying in 5s" : "suspending") << std::endl;
+
     if (retry_allowed) {
-      std::cerr << id << ": update failed (status " << res.status << "), retrying in 5s"
-                << std::endl;
       state.work = _main_scheduler.schedule(
-          [this, id = std::move(id), &state] { _update_state(std::move(id), state, false); },
+          [this, id = std::move(id), &state] { _request_update(std::move(id), state, false); },
           {.delay = 5s});
-    } else {
-      std::cerr << id << ": update failed (status " << res.status << "), suspending" << std::endl;
     }
   }
 
  private:
   async::Scheduler &_main_scheduler;
-  UpdateState _update_state;
+  RequestUpdate _request_update;
   present::PresenterQueue &_presenter;
   std::unordered_map<std::string, State> _states;
   async::Lifetime _load_work, _save_work;
@@ -258,7 +256,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
           [this](auto id, auto &state, auto retry_allowed) {
-            updateState(std::move(id), state, retry_allowed);
+            requestStateUpdate(std::move(id), state, retry_allowed);
           },
           presenter)} {}
 
@@ -274,7 +272,7 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
   }
 
   if (req.method == http::Method::POST) {  // todo: more factors?
-    _state_thingy->updateState(url::Url(req.url));
+    _state_thingy->handleRequest(std::move(req));
     return _main_scheduler.schedule([on_response] { on_response(204); });
   }
 
@@ -308,7 +306,7 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
        .on_bytes = std::move(on_bytes)});
 }
 
-void WebProxy::updateState(std::string id, State &state, bool retry_allowed) {
+void WebProxy::requestStateUpdate(std::string id, State &state, bool retry_allowed) {
   auto url = _base_url + (id.starts_with('/') ? "" : "/") + std::string(id);
   state.work = _http.request(
       {.method = http::Method::POST,
