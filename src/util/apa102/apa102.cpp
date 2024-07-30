@@ -13,7 +13,10 @@
 namespace apa102 {
 namespace {
 
-inline uint8_t luminance(int r, int g, int b) { return ((299 * r) + (587 * g) + (114 * b)) / 1000; }
+inline uint8_t luminance(int r, int g, int b) {
+  auto p = (299 * r) + (587 * g) + (114 * b);
+  return p ? std::max(p / 1000, 1) : 0;
+}
 
 }  // namespace
 
