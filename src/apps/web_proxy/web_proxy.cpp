@@ -267,7 +267,7 @@ WebProxy::~WebProxy() = default;
 http::Lifetime WebProxy::handleRequest(http::Request req,
                                        http::RequestOptions::OnResponse on_response,
                                        http::RequestOptions::OnBytes on_bytes) {
-  if (req.url[0] == '*') {
+  if (req.url.empty() || req.url[0] == '*') {
     req.url = _base_url;
   } else if (req.url[0] == '/') {
     req.url = _base_url + req.url;
