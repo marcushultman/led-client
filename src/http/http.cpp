@@ -156,7 +156,8 @@ class HttpImpl final : public Http {
       return;
     }
 
-    _work = still_running ? _thread->scheduler().schedule([this] { process(); }) : nullptr;
+    _work =
+        still_running && _thread ? _thread->scheduler().schedule([this] { process(); }) : nullptr;
   }
 
   void setupRequest(std::shared_ptr<RequestState> state) {
