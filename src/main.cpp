@@ -10,7 +10,6 @@
 #include <string>
 
 #include "apps/draw/draw_service.h"
-#include "apps/flag/flag_service.h"
 #include "apps/settings/display.h"
 #include "apps/spotify/service.h"
 #include "apps/text/text_service.h"
@@ -79,7 +78,6 @@ int main(int argc, char *argv[]) {
   auto presenter = present::makePresenterQueue(main_scheduler, brightness);
 
   auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
-  auto flag_service = std::make_unique<FlagService>(*presenter);
   auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
   auto spotify_service =
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
@@ -94,7 +92,6 @@ int main(int argc, char *argv[]) {
       {{"ping", [](auto) { return 200; }},
        {"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
        {"spotify", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
-       {"murica", [&](auto req) { return flag_service->handleRequest(std::move(req)); }},
        {"settings", [&](auto req) { return display_service(std::move(req)); }},
        {"draw", [&](auto req) { return drawer->handleRequest(std::move(req)); }}},
       [&](auto req, auto on_response, auto on_bytes) {

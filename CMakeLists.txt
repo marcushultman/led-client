@@ -43,7 +43,6 @@ target_link_libraries(spoticode
   color
   csignal
   draw
-  flag
   font
   http
   http_server
