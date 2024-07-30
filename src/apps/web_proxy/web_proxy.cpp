@@ -90,7 +90,12 @@ struct StateThingy final {
     auto url = url::Url(req.url);
     auto id = std::string{url.path.full.begin(), url.end()};
     auto &state = _states[id.substr(0, url.path.full.size())];
-    _request_update(id, state, true);
+
+    if (req.body.empty()) {
+      _request_update(id, state, true);
+    } else {
+      handleStateUpdate(req.body);
+    }
   }
 
   bool handleStateUpdate(const std::string &json) {
