@@ -123,8 +123,9 @@ struct StateThingy final {
         // Display
         auto jv_display = jv_object_get(jv_copy(jv_val), jv_string("display"));
         if (jv_get_kind(jv_display) == JV_KIND_OBJECT) {
-          auto jv_logo = jv_object_get(jv_copy(jv_display), jv_string("logo"));
           auto display = Display();
+
+          auto jv_logo = jv_object_get(jv_copy(jv_display), jv_string("logo"));
           if (jv_get_kind(jv_logo) == JV_KIND_ARRAY) {
             display.logo = Color{
                 static_cast<uint8_t>(jv_number_value(jv_array_get(jv_copy(jv_logo), 0))),
@@ -153,8 +154,19 @@ struct StateThingy final {
           }
           jv_free(jv_bytes);
 
+          auto jv_prio = jv_object_get(jv_copy(jv_display), jv_string("prio"));
+          if (jv_get_kind(jv_prio) == JV_KIND_NUMBER) {
+            display.prio = static_cast<present::Prio>(jv_number_value(jv_prio));
+          }
+          jv_free(jv_prio);
+
+          if (state.display && state.display->prio != display.prio) {
+            _presenter.erase(*state.display);
+            state.display = {};
+          }
+
           if (!std::exchange(state.display, std::move(display))) {
-            _presenter.add(*state.display);
+            _presenter.add(*state.display, {.prio = state.display->prio});
           } else {
             _presenter.notify();
           }
