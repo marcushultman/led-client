@@ -187,13 +187,11 @@ struct StateThingy final {
           if (jv_get_kind(jv_poll) == JV_KIND_NUMBER) {
             auto delay = std::chrono::milliseconds{static_cast<int64_t>(jv_number_value(jv_poll))};
             std::cout << id << ": updated, poll in "
-                      << (delay < 1min
-                              ? std::chrono::duration_cast<std::chrono::seconds>(delay).count()
-                              : std::chrono::duration_cast<std::chrono::minutes>(delay).count())
+                      << (delay < 1min ? duration_cast<std::chrono::seconds>(delay).count()
+                                       : duration_cast<std::chrono::minutes>(delay).count())
                       << (delay < 1min ? "s" : "min") << std::endl;
             state.work = _main_scheduler.schedule(
-                [this, id, &state] { _request_update(std::move(id), state); },
-                {.delay = delay});
+                [this, id, &state] { _request_update(std::move(id), state); }, {.delay = delay});
           }
           jv_free(jv_poll);
         } else {
