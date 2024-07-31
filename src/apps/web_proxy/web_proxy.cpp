@@ -93,7 +93,7 @@ struct StateThingy final {
   void handleRequest(http::Request req) {
     auto url = url::Url(req.url);
     auto id = std::string{url.path.full.begin(), url.end()};
-    auto &state = _states[id.substr(0, url.path.full.size())];
+    auto &state = _states[std::string(url.path.full)];
 
     if (req.body.empty()) {
       _request_update(id, state);
@@ -112,7 +112,7 @@ struct StateThingy final {
 
     // todo: split up this massive function?
     jv_object_foreach(jv_dict, jv_id, jv_val) {
-      auto id = std::string(jv_string_value(jv_id));
+      auto id = std::string(url::Url(jv_string_value(jv_id)).path.full);
       jv_free(jv_id);
 
       if (auto kind = jv_get_kind(jv_val); kind == JV_KIND_OBJECT) {
