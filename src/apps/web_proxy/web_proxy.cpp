@@ -1,5 +1,6 @@
 #include "web_proxy.h"
 
+#include <charconv>
 #include <fstream>
 #include <iostream>
 #include <unordered_set>
@@ -22,6 +23,8 @@ constexpr auto kDefaultBaseUrl = "https://spotiled.deno.dev";
 constexpr auto kHostHeader = "host";
 constexpr auto kStatesFilename = "states";
 
+constexpr auto kInitialRetryBackoff = 5s;
+
 std::string makeJSON(const char *key, jv value) {
   auto jv = jv_dump_string(jv_object_set(jv_object(), jv_string(key), value), 0);
   std::string ret = jv_string_value(jv);
@@ -34,11 +37,12 @@ std::string makeJSON(const char *key, jv value) {
 struct State {
   std::string data;
   std::optional<Display> display;
+  std::chrono::milliseconds retry_backoff = {};
   async::Lifetime work;
 };
 
 struct StateThingy final {
-  using RequestUpdate = std::function<void(std::string id, State &, bool retry_allowed)>;
+  using RequestUpdate = std::function<void(std::string id, State &)>;
 
   StateThingy(async::Scheduler &main_scheduler,
               RequestUpdate request_update,
@@ -64,7 +68,7 @@ struct StateThingy final {
       auto &state = _states[id];
       state.data = entry.substr(split + 1);
       std::cout << id << ": loaded (" << state.data << ")" << std::endl;
-      _request_update(std::move(id), state, true);
+      _request_update(std::move(id), state);
     }
     _snapshot = set;
   }
@@ -92,9 +96,9 @@ struct StateThingy final {
     auto &state = _states[id.substr(0, url.path.full.size())];
 
     if (req.body.empty()) {
-      _request_update(id, state, true);
-    } else {
-      handleStateUpdate(req.body);
+      _request_update(id, state);
+    } else if (!handleStateUpdate(req.body)) {
+      std::cerr << id << ": update failed (explicit)" << std::endl;
     }
   }
 
@@ -188,7 +192,7 @@ struct StateThingy final {
                               : std::chrono::duration_cast<std::chrono::minutes>(delay).count())
                       << (delay < 1min ? "s" : "min") << std::endl;
             state.work = _main_scheduler.schedule(
-                [this, id, &state] { _request_update(std::move(id), state, true); },
+                [this, id, &state] { _request_update(std::move(id), state); },
                 {.delay = delay});
           }
           jv_free(jv_poll);
@@ -213,26 +217,37 @@ struct StateThingy final {
     return true;
   }
 
-  void onServiceResponse(const http::Response &res,
-                         std::string id,
-                         State &state,
-                         bool retry_allowed) {
+  void onServiceResponse(http::Response res, std::string id, State &state) {
     if (res.status == 204) {
       return;
     }
-    if (res.status == 200 && handleStateUpdate(res.body)) {
-      // todo: do we always get 200?
-      return;
+    if (res.status == 200) {
+      state.retry_backoff = {};
+      if (handleStateUpdate(res.body)) {
+        // todo: do we always get 200?
+        return;
+      }
     }
 
-    std::cerr << id << ": update failed (status " << res.status << "), "
-              << (retry_allowed ? "retrying in 5s" : "suspending") << std::endl;
-
-    if (retry_allowed) {
-      state.work = _main_scheduler.schedule(
-          [this, id = std::move(id), &state] { _request_update(std::move(id), state, false); },
-          {.delay = 5s});
+    if (res.status == 429 || res.status == 503) {
+      if (auto it = res.headers.find("retry-after"); it != res.headers.end()) {
+        auto &str = it->second;
+        if (int s = 0; std::from_chars(str.data(), str.data() + str.size(), s).ec == std::errc{}) {
+          state.retry_backoff = std::chrono::seconds(s);
+        }
+      }
+    } else {
+      state.retry_backoff = state.retry_backoff.count() ? std::min<std::chrono::milliseconds>(
+                                                              2 * state.retry_backoff, 10min)
+                                                        : kInitialRetryBackoff;
     }
+
+    std::cerr << id << ": update failed (status " << res.status << "), retrying in "
+              << duration_cast<std::chrono::seconds>(state.retry_backoff).count() << "s"
+              << std::endl;
+    state.work = _main_scheduler.schedule(
+        [this, id = std::move(id), &state] { _request_update(std::move(id), state); },
+        {.delay = state.retry_backoff});
   }
 
  private:
@@ -260,9 +275,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _base_host{url::Url(_base_url).host},
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
-          [this](auto id, auto &state, auto retry_allowed) {
-            requestStateUpdate(std::move(id), state, retry_allowed);
-          },
+          [this](auto id, auto &state) { requestStateUpdate(std::move(id), state); },
           presenter)} {}
 
 WebProxy::~WebProxy() = default;
@@ -311,16 +324,15 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
        .on_bytes = std::move(on_bytes)});
 }
 
-void WebProxy::requestStateUpdate(std::string id, State &state, bool retry_allowed) {
+void WebProxy::requestStateUpdate(std::string id, State &state) {
   auto url = _base_url + (id.starts_with('/') ? "" : "/") + std::string(id);
   state.work = _http.request(
       {.method = http::Method::POST,
        .url = std::move(url),
        .headers = {{"content-type", "application/json"}, {"accept-encoding", "identity"}},
        .body = makeJSON("data", jv_string(state.data.c_str()))},
-      {.post_to = _main_scheduler,
-       .on_response = [this, id = std::move(id), &state, retry_allowed](auto res) {
-         _state_thingy->onServiceResponse(res, std::move(id), state, retry_allowed);
+      {.post_to = _main_scheduler, .on_response = [this, id = std::move(id), &state](auto res) {
+         _state_thingy->onServiceResponse(std::move(res), std::move(id), state);
        }});
 }
 
