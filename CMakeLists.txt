@@ -42,7 +42,6 @@ target_link_libraries(spoticode
   async
   color
   csignal
-  draw
   font
   http
   http_server
