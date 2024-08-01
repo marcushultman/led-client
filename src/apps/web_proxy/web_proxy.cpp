@@ -32,6 +32,12 @@ std::string makeJSON(const char *key, jv value) {
   return ret;
 }
 
+auto toNumber(jv jv_val) {
+  auto number = jv_get_kind(jv_val) == JV_KIND_NUMBER ? jv_number_value(jv_val) : 0;
+  jv_free(jv_val);
+  return number;
+}
+
 }  // namespace
 
 struct State {
@@ -158,29 +164,11 @@ struct StateThingy final {
           }
           jv_free(jv_bytes);
 
-          auto jv_prio = jv_object_get(jv_copy(jv_display), jv_string("prio"));
-          if (jv_get_kind(jv_prio) == JV_KIND_NUMBER) {
-            display.prio = static_cast<present::Prio>(jv_number_value(jv_prio));
-          }
-          jv_free(jv_prio);
-
-          auto jv_width = jv_object_get(jv_copy(jv_display), jv_string("width"));
-          if (jv_get_kind(jv_width) == JV_KIND_NUMBER) {
-            display.width = jv_number_value(jv_width);
-          }
-          jv_free(jv_width);
-
-          auto jv_height = jv_object_get(jv_copy(jv_display), jv_string("height"));
-          if (jv_get_kind(jv_height) == JV_KIND_NUMBER) {
-            display.height = jv_number_value(jv_height);
-          }
-          jv_free(jv_height);
-
-          auto jv_xscroll = jv_object_get(jv_copy(jv_display), jv_string("xscroll"));
-          if (jv_get_kind(jv_xscroll) == JV_KIND_NUMBER) {
-            display.xscroll = jv_number_value(jv_xscroll);
-          }
-          jv_free(jv_xscroll);
+          display.prio = static_cast<present::Prio>(
+              toNumber(jv_object_get(jv_copy(jv_display), jv_string("prio"))));
+          display.width = toNumber(jv_object_get(jv_copy(jv_display), jv_string("width")));
+          display.height = toNumber(jv_object_get(jv_copy(jv_display), jv_string("height")));
+          display.xscroll = toNumber(jv_object_get(jv_copy(jv_display), jv_string("xscroll")));
 
           if (state.display &&
               (state.display->prio != display.prio || state.display->xscroll != display.xscroll)) {
