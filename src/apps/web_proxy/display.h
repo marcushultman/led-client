@@ -13,6 +13,10 @@ struct Display final : present::Presentable {
   std::string bytes;
   present::Prio prio = present::Prio::kApp;
 
+  size_t width = {};
+  size_t height = {};
+  int xscroll = {};
+
   void onRenderPass(spotiled::LED &, std::chrono::milliseconds) final;
 };
 

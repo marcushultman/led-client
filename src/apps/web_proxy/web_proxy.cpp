@@ -164,13 +164,32 @@ struct StateThingy final {
           }
           jv_free(jv_prio);
 
+          auto jv_width = jv_object_get(jv_copy(jv_display), jv_string("width"));
+          if (jv_get_kind(jv_width) == JV_KIND_NUMBER) {
+            display.width = jv_number_value(jv_width);
+          }
+          jv_free(jv_width);
+
+          auto jv_height = jv_object_get(jv_copy(jv_display), jv_string("height"));
+          if (jv_get_kind(jv_height) == JV_KIND_NUMBER) {
+            display.height = jv_number_value(jv_height);
+          }
+          jv_free(jv_height);
+
+          auto jv_xscroll = jv_object_get(jv_copy(jv_display), jv_string("xscroll"));
+          if (jv_get_kind(jv_xscroll) == JV_KIND_NUMBER) {
+            display.xscroll = jv_number_value(jv_xscroll);
+          }
+          jv_free(jv_xscroll);
+
           if (state.display && state.display->prio != display.prio) {
             _presenter.erase(*state.display);
             state.display = {};
           }
 
           if (!std::exchange(state.display, std::move(display))) {
-            _presenter.add(*state.display, {.prio = state.display->prio});
+            _presenter.add(*state.display, {.prio = state.display->prio,
+                                            .render_period = display.xscroll ? 100ms : 1h});
           } else {
             _presenter.notify();
           }
