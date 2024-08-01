@@ -182,7 +182,8 @@ struct StateThingy final {
           }
           jv_free(jv_xscroll);
 
-          if (state.display && state.display->prio != display.prio) {
+          if (state.display &&
+              (state.display->prio != display.prio || state.display->xscroll != display.xscroll)) {
             _presenter.erase(*state.display);
             state.display = {};
           }
