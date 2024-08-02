@@ -98,13 +98,19 @@ struct StateThingy final {
 
   void handleRequest(http::Request req) {
     auto url = url::Url(req.url);
-    auto id = std::string{url.path.full.begin(), url.end()};
-    auto &state = _states[std::string(url.path.full)];
+    auto id = std::string(url.path.full);
+    auto &state = _states[id];
 
-    if (req.body.empty()) {
-      _request_update(id, state);
-    } else if (!handleStateUpdate(req.body)) {
-      std::cerr << id << ": update failed (explicit)" << std::endl;
+    auto &content_type = req.headers["content-type"];
+
+    if (content_type == "application/json") {
+      if (!handleStateUpdate(req.body)) {
+        std::cerr << id << ": update failed (explicit)" << std::endl;
+      }
+    } else if (!req.body.empty() && content_type == "application/x-www-form-urlencoded") {
+      _request_update(id + "?" + req.body, state);
+    } else {
+      _request_update(std::string{url.path.full.begin(), url.end()}, state);
     }
   }
 
