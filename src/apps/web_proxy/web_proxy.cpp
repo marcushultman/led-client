@@ -184,7 +184,7 @@ struct StateThingy final {
 
           if (!std::exchange(state.display, std::move(display))) {
             _presenter.add(*state.display, {.prio = state.display->prio,
-                                            .render_period = display.xscroll ? 100ms : 1h});
+                                            .render_period = state.display->xscroll ? 100ms : 1h});
           } else {
             _presenter.notify();
           }
