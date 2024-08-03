@@ -10,15 +10,13 @@ namespace {
 void Display::onRenderPass(spotiled::LED &led, std::chrono::milliseconds elapsed) {
   led.setLogo(logo);
 
-  auto w = width ? width : 23;
-  auto h = height ? height : 16;
-  auto offset = xscroll ? int(xscroll * elapsed.count() / 1000 % w) : 0;
+  auto w = std::max<int>(width, 23);
+  int h = height ? height : 16;
+  int t = xscroll ? xscroll * elapsed.count() / 1000 : 0;
 
   for (auto i = 0; i < bytes.size() / 4; ++i) {
-    auto x = int(i / h);
-    auto y = int(i % h);
-
-    x += -offset + ((x < offset) * w);
+    int x = xscroll ? 23 + (i / h - t) % w : i / h;
+    int y = i % h;
 
     auto *p = reinterpret_cast<uint8_t *>(bytes.data() + 4 * i);
     auto [r, g, b, a] = std::tie(p[0], p[1], p[2], p[3]);
