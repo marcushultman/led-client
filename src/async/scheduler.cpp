@@ -44,7 +44,9 @@ class SchedulerImpl final : public Scheduler {
 
   void run() {
     auto lock = std::unique_lock(_mutex);
-    auto stop_waiting = [this] { return !_queue.empty() || _stop; };
+    auto stop_waiting = [this] {
+      return _stop || !_queue.empty() && std::chrono::system_clock::now() >= _queue.begin()->at;
+    };
 
     for (;;) {
       if (_queue.empty()) {
