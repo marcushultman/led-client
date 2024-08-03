@@ -267,8 +267,8 @@ struct StateThingy final {
   RequestUpdate _request_update;
   present::PresenterQueue &_presenter;
   std::unordered_map<std::string, State> _states;
-  async::Lifetime _load_work, _save_work;
   std::unordered_set<std::string> _snapshot;
+  async::Lifetime _load_work, _save_work;
 };
 
 //
