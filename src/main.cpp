@@ -80,8 +80,8 @@ int main(int argc, char *argv[]) {
   auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
   auto spotify_service =
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
-  auto web_proxy = web_proxy::WebProxy(main_scheduler, *http, brightness, *presenter,
-                                       *spotify_service, opts.base_url);
+  auto web_proxy = std::make_unique<web_proxy::WebProxy>(
+      main_scheduler, *http, brightness, *presenter, *spotify_service, opts.base_url);
 
   // todo: proxy and route settings
 
@@ -90,7 +90,8 @@ int main(int argc, char *argv[]) {
        {"spotify", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
        {"settings", [&](auto req) { return display_service(std::move(req)); }}},
       [&](auto req, auto on_response, auto on_bytes) {
-        return web_proxy.handleRequest(std::move(req), std::move(on_response), std::move(on_bytes));
+        return web_proxy->handleRequest(std::move(req), std::move(on_response),
+                                        std::move(on_bytes));
       },
   };
 
@@ -104,6 +105,7 @@ int main(int argc, char *argv[]) {
     if (signal == SIGINT) {
       presenter->clear();
       server.reset();
+      web_proxy.reset();
       interrupt.set_value(0);
     }
     return signal == SIGINT;
