@@ -96,12 +96,21 @@ struct StateThingy final {
 
   const std::unordered_map<std::string, State> &states() { return _states; }
 
-  void handleRequest(http::Request req) {
+  bool handleRequest(const http::Request &req) {
+    if (req.method == http::Method::POST) {  // todo: more factors?
+      handleUpdateRequest(req);
+      return true;
+    }
+    return false;
+  }
+
+  void handleUpdateRequest(const http::Request &req) {
     auto url = url::Url(req.url);
     auto id = std::string(url.path.full);
     auto &state = _states[id];
 
-    auto &content_type = req.headers["content-type"];
+    auto it = req.headers.find("content-type");
+    auto content_type = it != req.headers.end() ? it->second : std::string_view();
 
     if (content_type == "application/json") {
       if (!handleStateUpdate(req.body)) {
@@ -301,8 +310,7 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
     req.url = _base_url + req.url;
   }
 
-  if (req.method == http::Method::POST) {  // todo: more factors?
-    _state_thingy->handleRequest(std::move(req));
+  if (_state_thingy->handleRequest(req)) {
     return _main_scheduler.schedule([on_response] { on_response(204); });
   }
 
