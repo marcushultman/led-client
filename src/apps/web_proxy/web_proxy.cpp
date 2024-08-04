@@ -96,15 +96,25 @@ struct StateThingy final {
 
   const std::unordered_map<std::string, State> &states() { return _states; }
 
-  bool handleRequest(const http::Request &req) {
-    if (req.method == http::Method::POST) {  // todo: more factors?
-      handleUpdateRequest(req);
-      return true;
+  std::optional<http::Response> handleRequest(const http::Request &req) {
+    if (req.method == http::Method::GET) {
+      return handleGetRequest(req);
     }
-    return false;
+    if (req.method == http::Method::POST) {  // todo: more factors?
+      return handlePostRequest(req);
+    }
+    return {};
   }
 
-  void handleUpdateRequest(const http::Request &req) {
+  std::optional<http::Response> handleGetRequest(const http::Request &req) {
+    auto url = url::Url(req.url);
+    if (auto it = _states.find(std::string(url.path.full)); it != _states.end()) {
+      return it->second.data;
+    }
+    return {};
+  }
+
+  http::Response handlePostRequest(const http::Request &req) {
     auto url = url::Url(req.url);
     auto id = std::string(url.path.full);
     auto &state = _states[id];
@@ -115,12 +125,14 @@ struct StateThingy final {
     if (content_type == "application/json") {
       if (!handleStateUpdate(req.body)) {
         std::cerr << id << ": update failed (explicit)" << std::endl;
+        return 400;
       }
     } else if (!req.body.empty() && content_type == "application/x-www-form-urlencoded") {
       _request_update(id + "?" + req.body, state);
     } else {
       _request_update(std::string{url.path.full.begin(), url.end()}, state);
     }
+    return 204;
   }
 
   bool handleStateUpdate(const std::string &json) {
@@ -310,8 +322,9 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
     req.url = _base_url + req.url;
   }
 
-  if (_state_thingy->handleRequest(req)) {
-    return _main_scheduler.schedule([on_response] { on_response(204); });
+  if (auto res = _state_thingy->handleRequest(req)) {
+    return _main_scheduler.schedule(
+        [res = std::move(res), on_response] { on_response(std::move(*res)); });
   }
 
   if (auto it = req.headers.find(kHostHeader); it != req.headers.end()) {
