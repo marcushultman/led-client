@@ -23,8 +23,6 @@ void Display::onRenderPass(spotiled::LED &led, std::chrono::milliseconds elapsed
 
     led.set({x, y}, {r, g, b}, {.src = uint8_t(a) / 255.0});
   }
-
-  // renderRolling(led, elapsed, page);
 }
 
 }  // namespace web_proxy
