@@ -4,6 +4,7 @@ project(spoticode)
 
 if (PI)
   add_subdirectory(spidev-lib)
+  add_compile_definitions("-Wno-psabi")
 endif()
 
 include(FetchContent)
