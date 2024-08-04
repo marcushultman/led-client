@@ -50,7 +50,6 @@ target_link_libraries(spoticode
   settings
   spotify
   spotiled
-  text
   url
   web_proxy
   # 3rd party

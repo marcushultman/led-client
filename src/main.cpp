@@ -3,22 +3,18 @@
 
 #include <cpptrace/cpptrace.hpp>
 #include <csignal>
-#include <cstdio>
-#include <cstdlib>
 #include <future>
 #include <iostream>
 #include <string>
 
 #include "apps/settings/display.h"
 #include "apps/spotify/service.h"
-#include "apps/text/text_service.h"
 #include "apps/web_proxy/web_proxy.h"
 #include "http/http.h"
 #include "http/server/server.h"
 #include "present/presenter.h"
 #include "util/csignal/signal_handler.h"
 #include "util/spotiled/brightness_provider.h"
-#include "util/spotiled/spotiled.h"
 #include "util/url/url.h"
 
 struct Options {
@@ -77,7 +73,6 @@ int main(int argc, char *argv[]) {
   auto presenter = present::makePresenterQueue(main_scheduler, brightness);
 
   auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
-  auto text_service = std::make_unique<TextService>(main_scheduler, *presenter);
   auto spotify_service =
       std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
@@ -86,8 +81,7 @@ int main(int argc, char *argv[]) {
   // todo: proxy and route settings
 
   PathMapper mapper{
-      {{"text", [&](auto req) { return text_service->handleRequest(std::move(req)); }},
-       {"spotify", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
+      {{"spotify", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
        {"settings", [&](auto req) { return display_service(std::move(req)); }}},
       [&](auto req, auto on_response, auto on_bytes) {
         return web_proxy->handleRequest(std::move(req), std::move(on_response),
