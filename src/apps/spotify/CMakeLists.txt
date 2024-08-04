@@ -18,6 +18,7 @@ target_include_directories(spotify PRIVATE
 )
 target_link_libraries(spotify
   async
+  font
   http
   jq_util
   present
