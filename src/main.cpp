@@ -8,7 +8,6 @@
 #include <string>
 
 #include "apps/settings/display.h"
-#include "apps/spotify/service.h"
 #include "apps/web_proxy/web_proxy.h"
 #include "http/http.h"
 #include "http/server/server.h"
@@ -73,16 +72,13 @@ int main(int argc, char *argv[]) {
   auto presenter = present::makePresenterQueue(main_scheduler, brightness);
 
   auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
-  auto spotify_service =
-      std::make_unique<spotify::SpotifyService>(main_scheduler, *http, *presenter, opts.verbose);
-  auto web_proxy = std::make_unique<web_proxy::WebProxy>(
-      main_scheduler, *http, brightness, *presenter, *spotify_service, opts.base_url);
+  auto web_proxy = std::make_unique<web_proxy::WebProxy>(main_scheduler, *http, brightness,
+                                                         *presenter, opts.base_url);
 
   // todo: proxy and route settings
 
   PathMapper mapper{
-      {{"spotify", [&](auto req) { return spotify_service->handleRequest(std::move(req)); }},
-       {"settings", [&](auto req) { return display_service(std::move(req)); }}},
+      {{"settings", [&](auto req) { return display_service(std::move(req)); }}},
       [&](auto req, auto on_response, auto on_bytes) {
         return web_proxy->handleRequest(std::move(req), std::move(on_response),
                                         std::move(on_bytes));

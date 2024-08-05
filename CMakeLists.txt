@@ -49,7 +49,6 @@ target_link_libraries(spoticode
   page
   present
   settings
-  spotify
   spotiled
   url
   web_proxy

@@ -17,6 +17,7 @@ target_link_libraries(web_proxy
   encoding
   http
   ${JQ}
-  spotify
+  present
+  storage
   url
 )

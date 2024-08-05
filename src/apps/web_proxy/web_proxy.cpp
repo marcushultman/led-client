@@ -298,12 +298,10 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
                    http::Http &http,
                    spotiled::BrightnessProvider &brightness,
                    present::PresenterQueue &presenter,
-                   spotify::SpotifyService &spotify,
                    std::string base_url)
     : _main_scheduler{main_scheduler},
       _http{http},
       _brightness{brightness},
-      _spotify{spotify},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)},
       _base_host{url::Url(_base_url).host},
       _state_thingy{std::make_unique<StateThingy>(
@@ -331,11 +329,6 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
     it->second = _base_host;
   }
 
-  auto sp = jv_object();
-  sp = jv_object_set(sp, jv_string("isAuthenticating"),
-                     _spotify.isAuthenticating() ? jv_true() : jv_false());
-  sp = jv_object_set(sp, jv_string("tokens"), _spotify.getTokens());
-
   auto states = jv_object();
   for (auto &[id, state] : _state_thingy->states()) {
     states = jv_object_set(states, jv_string(id.c_str()), jv_string(state.data.c_str()));
@@ -344,7 +337,6 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
   auto jv = jv_object();
   jv = jv_object_set(jv, jv_string("brightness"), jv_number(_brightness.brightness()));
   jv = jv_object_set(jv, jv_string("hue"), jv_number(_brightness.hue()));
-  jv = jv_object_set(jv, jv_string("spotify"), sp);
   jv = jv_object_set(jv, jv_string("states"), states);
   jv = jv_dump_string(jv, 0);
   req.headers["x-spotiled"] = encoding::base64::encode(jv_string_value(jv));
