@@ -8,9 +8,23 @@
 #include "brightness_provider.h"
 #include "util/apa102/apa102.h"
 #include "util/color/color.h"
-#include "util/gfx/gfx.h"
 
 namespace spotiled {
+
+struct Coord {
+  int x = 0;
+  int y = 0;
+};
+
+constexpr Coord operator+(const Coord &lhs, const Coord &rhs) {
+  return {lhs.x + rhs.x, lhs.y + rhs.y};
+}
+constexpr Coord operator*(const Coord &lhs, const Coord &rhs) {
+  return {lhs.x * rhs.x, lhs.y * rhs.y};
+}
+constexpr Coord operator/(const Coord &lhs, const Coord &rhs) {
+  return {lhs.x / rhs.x, lhs.y / rhs.y};
+}
 
 struct LED {
   using Options = apa102::SetOptions;
