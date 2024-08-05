@@ -1,5 +1,6 @@
 #pragma once
 
+#include <async/scheduler.h>
 #include <util/spotiled/spotiled.h>
 
 #include <chrono>

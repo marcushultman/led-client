@@ -1,6 +1,5 @@
 add_subdirectory(async)
 add_subdirectory(apps)
-add_subdirectory(font)
 add_subdirectory(http)
 add_subdirectory(present)
 add_subdirectory(util)

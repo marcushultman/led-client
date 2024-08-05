@@ -43,10 +43,8 @@ target_link_libraries(spoticode
   async
   color
   csignal
-  font
   http
   http_server
-  page
   present
   settings
   spotiled
