@@ -6,9 +6,9 @@
 #include <unordered_set>
 
 #include "display.h"
-#include "util/encoding/base64.h"
-#include "util/storage/string_set.h"
-#include "util/url/url.h"
+#include "encoding/base64.h"
+#include "storage/string_set.h"
+#include "url/url.h"
 
 extern "C" {
 #include <jq.h>

@@ -3,8 +3,8 @@
 #include "async/scheduler.h"
 #include "http/http.h"
 #include "present/presenter.h"
-#include "util/spotiled/brightness_provider.h"
-#include "util/spotiled/spotiled.h"
+#include "spotiled/brightness_provider.h"
+#include "spotiled/spotiled.h"
 
 namespace settings {
 

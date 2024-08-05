@@ -4,10 +4,10 @@
 #include <functional>
 #include <memory>
 
+#include "apa102/apa102.h"
 #include "async/scheduler.h"
 #include "brightness_provider.h"
-#include "util/apa102/apa102.h"
-#include "util/color/color.h"
+#include "color/color.h"
 
 namespace spotiled {
 

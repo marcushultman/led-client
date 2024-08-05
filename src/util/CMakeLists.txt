@@ -1,8 +1,0 @@
-add_subdirectory(apa102)
-add_subdirectory(color)
-add_subdirectory(csignal)
-add_subdirectory(encoding)
-add_subdirectory(jq)
-add_subdirectory(spotiled)
-add_subdirectory(storage)
-add_subdirectory(url)

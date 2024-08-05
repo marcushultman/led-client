@@ -5,7 +5,7 @@
 #include "async/scheduler.h"
 #include "http/http.h"
 #include "present/presenter.h"
-#include "util/spotiled/brightness_provider.h"
+#include "spotiled/brightness_provider.h"
 
 namespace web_proxy {
 

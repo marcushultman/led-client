@@ -4,9 +4,9 @@
 #include <fstream>
 #include <iostream>
 
-#include "util/color/color.h"
-#include "util/spotiled/spotiled.h"
-#include "util/url/url.h"
+#include "color/color.h"
+#include "spotiled/spotiled.h"
+#include "url/url.h"
 
 namespace settings {
 namespace {

@@ -1,5 +1,6 @@
-#include "util/storage/string_set.h"
+#include "storage/string_set.h"
 
+#include <cassert>
 #include <sstream>
 #include <string>
 

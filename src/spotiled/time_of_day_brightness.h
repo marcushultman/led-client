@@ -6,7 +6,7 @@
 #include <cstdint>
 
 #include "brightness_provider.h"
-#include "util/color/color.h"
+#include "color/color.h"
 
 namespace spotiled {
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <async/scheduler.h>
-#include <util/spotiled/spotiled.h>
+#include <spotiled/spotiled.h>
 
 #include <chrono>
 #include <memory>

@@ -1,10 +1,9 @@
-#include "util/spotiled/spotiled.h"
+#include "spotiled/spotiled.h"
 
-#include <iostream>
 #include <queue>
 
+#include "color/color.h"
 #include "time_of_day_brightness.h"
-#include "util/color/color.h"
 
 namespace spotiled {
 namespace {
