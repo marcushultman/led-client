@@ -14,7 +14,7 @@
 #include "http/server/server.h"
 #include "present/presenter.h"
 #include "spotiled/brightness_provider.h"
-#include "url/url.h"
+#include "uri/uri.h"
 
 struct Options {
   bool verbose = false;
@@ -43,7 +43,7 @@ struct PathMapper {
   http::Lifetime operator()(http::Request req,
                             http::RequestOptions::OnResponse on_response,
                             http::RequestOptions::OnBytes on_bytes) {
-    auto key = std::string(url::Url(req.url).path.segments.front());
+    auto key = std::string(uri::Uri(req.url).path.segments.front());
     if (auto it = _map.find(key); it != _map.end()) {
       if (auto *handler = std::get_if<http::AsyncHandler>(&it->second)) {
         return (*handler)(std::move(req), std::move(on_response), std::move(on_bytes));

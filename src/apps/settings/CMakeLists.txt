@@ -13,5 +13,5 @@ target_link_libraries(settings
   http
   present
   spotiled
-  url
+  uri
 )

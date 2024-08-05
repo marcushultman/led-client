@@ -48,7 +48,7 @@ target_link_libraries(spoticode
   present
   settings
   spotiled
-  url
+  uri
   web_proxy
   # 3rd party
   cpptrace::cpptrace

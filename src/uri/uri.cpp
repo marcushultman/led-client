@@ -1,8 +1,8 @@
-#include "url.h"
+#include "uri.h"
 
 #include <charconv>
 
-namespace url {
+namespace uri {
 
 inline auto split(std::string_view str, size_t pos, bool include, bool rev) {
   auto [end, start] = pos != std::string_view::npos ? std::make_pair(pos, pos + (include ? 0 : 1))
@@ -25,7 +25,7 @@ inline auto splitOrSkip(std::string_view str, std::string_view first_of) {
                                     : std::make_pair(a.substr(0, 0), str);
 }
 
-Url::Url(std::string_view url) {
+Uri::Uri(std::string_view url) {
   // scheme
   std::tie(scheme, url) = splitOrSkip(url, ":/?#");
 
@@ -75,4 +75,4 @@ Url::Url(std::string_view url) {
   fragment = url.size() ? url.substr(1) : url;
 }
 
-}  // namespace url
+}  // namespace uri

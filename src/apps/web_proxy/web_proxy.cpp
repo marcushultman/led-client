@@ -8,7 +8,7 @@
 #include "display.h"
 #include "encoding/base64.h"
 #include "storage/string_set.h"
-#include "url/url.h"
+#include "uri/uri.h"
 
 extern "C" {
 #include <jq.h>
@@ -107,7 +107,7 @@ struct StateThingy final {
   }
 
   std::optional<http::Response> handleGetRequest(const http::Request &req) {
-    auto url = url::Url(req.url);
+    auto url = uri::Uri(req.url);
     if (auto it = _states.find(std::string(url.path.full)); it != _states.end()) {
       return it->second.data;
     }
@@ -115,7 +115,7 @@ struct StateThingy final {
   }
 
   http::Response handlePostRequest(const http::Request &req) {
-    auto url = url::Url(req.url);
+    auto url = uri::Uri(req.url);
     auto id = std::string(url.path.full);
     auto &state = _states[id];
 
@@ -145,7 +145,7 @@ struct StateThingy final {
 
     // todo: split up this massive function?
     jv_object_foreach(jv_dict, jv_id, jv_val) {
-      auto id = std::string(url::Url(jv_string_value(jv_id)).path.full);
+      auto id = std::string(uri::Uri(jv_string_value(jv_id)).path.full);
       jv_free(jv_id);
 
       if (auto kind = jv_get_kind(jv_val); kind == JV_KIND_OBJECT) {
@@ -303,7 +303,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _http{http},
       _brightness{brightness},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)},
-      _base_host{url::Url(_base_url).host},
+      _base_host{uri::Uri(_base_url).host},
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
           [this](auto id, auto &state) { requestStateUpdate(std::move(id), state); },

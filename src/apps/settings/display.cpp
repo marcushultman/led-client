@@ -6,7 +6,7 @@
 
 #include "color/color.h"
 #include "spotiled/spotiled.h"
-#include "url/url.h"
+#include "uri/uri.h"
 
 namespace settings {
 namespace {
@@ -56,7 +56,7 @@ DisplayService::DisplayService(async::Scheduler &main_scheduler,
 DisplayService::~DisplayService() { save(); }
 
 http::Response DisplayService::operator()(http::Request req) {
-  auto url = url::Url(req.url);
+  auto url = uri::Uri(req.url);
   auto &setting = url.path.segments.back();
 
   if (req.method == http::Method::GET) {

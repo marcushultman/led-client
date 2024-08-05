@@ -19,5 +19,5 @@ target_link_libraries(web_proxy
   ${JQ}
   present
   storage
-  url
+  uri
 )
