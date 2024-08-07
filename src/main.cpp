@@ -43,7 +43,7 @@ struct PathMapper {
   http::Lifetime operator()(http::Request req,
                             http::RequestOptions::OnResponse on_response,
                             http::RequestOptions::OnBytes on_bytes) {
-    auto key = std::string(uri::Uri(req.url).path.segments.front());
+    auto key = std::string(uri::Uri::Path(req.url).front());
     if (auto it = _map.find(key); it != _map.end()) {
       if (auto *handler = std::get_if<http::AsyncHandler>(&it->second)) {
         return (*handler)(std::move(req), std::move(on_response), std::move(on_bytes));

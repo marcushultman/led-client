@@ -56,8 +56,7 @@ DisplayService::DisplayService(async::Scheduler &main_scheduler,
 DisplayService::~DisplayService() { save(); }
 
 http::Response DisplayService::operator()(http::Request req) {
-  auto url = uri::Uri(req.url);
-  auto &setting = url.path.segments.back();
+  auto setting = uri::Uri::Path(req.url).back();
 
   if (req.method == http::Method::GET) {
     if (setting == "brightness") {
