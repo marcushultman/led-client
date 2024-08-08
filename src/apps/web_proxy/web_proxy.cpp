@@ -130,7 +130,7 @@ struct StateThingy final {
     } else if (!req.body.empty() && content_type == "application/x-www-form-urlencoded") {
       _request_update(id + "?" + req.body, state);
     } else {
-      _request_update(std::string{url.path.full.begin(), url.end()}, state);
+      _request_update({url.path.full.begin(), url.end()}, state);
     }
     return 204;
   }
