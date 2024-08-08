@@ -7,10 +7,10 @@ namespace uri {
 
 using Split = std::pair<std::string_view, std::string_view>;
 
-inline std::optional<Split> split(std::string_view str, size_t pos, int start = 1, int end = 0) {
+inline auto split(std::string_view str, size_t pos, int start = 1, int end = 0) {
   return pos != std::string_view::npos
-             ? std::make_pair(str.substr(0, pos + end), str.substr(pos + start))
-             : std::optional<Split>{};
+             ? std::make_optional<Split>(str.substr(0, pos + end), str.substr(pos + start))
+             : std::nullopt;
 }
 
 inline auto split(std::string_view str, char c) {
@@ -21,12 +21,13 @@ inline auto rsplit(std::string_view str, char c) {
   return split(str, str.find(c)).value_or(Split{str, str.substr(str.size())});
 }
 
-inline auto split(std::string_view str, std::string_view first_of) {
-  return split(str, str.find_first_of(first_of), 0).value_or(Split{str.substr(0, 0), str});
+inline auto split(std::string_view str, std::string_view first_of, int start = 0) {
+  return split(str, str.find_first_of(first_of), start).value_or(Split{str.substr(0, 0), str});
 }
 
-inline auto rsplit(std::string_view str, std::string_view first_of) {
-  return split(str, str.find_first_of(first_of), 0).value_or(Split{str, str.substr(str.size())});
+inline auto rsplit(std::string_view str, std::string_view first_of, int start = 0) {
+  return split(str, str.find_first_of(first_of), start)
+      .value_or(Split{str, str.substr(str.size())});
 }
 
 Uri::Uri(std::string_view url) {
@@ -82,7 +83,7 @@ Uri::Path::Iterator Uri::Path::Iterator::operator++(int) {
 }
 
 Uri::Query::Iterator::Iterator(std::string_view query) {
-  std::tie(_segment, _tail) = rsplit(query, '&');
+  std::tie(_segment, _tail) = rsplit(query, "&?", 1);
 }
 
 Uri::Query::Iterator::value_type Uri::Query::Iterator::operator*() const {
@@ -93,7 +94,7 @@ Uri::Query::Iterator &Uri::Query::Iterator::operator++() {
   if (_tail.empty()) {
     _segment.reset();
   } else {
-    std::tie(_segment, _tail) = rsplit(_tail, '&');
+    std::tie(_segment, _tail) = rsplit(_tail, "&?", 1);
   }
   return *this;
 }

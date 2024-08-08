@@ -26,6 +26,7 @@ int main(int argc, char *argv[]) {
     assert(authority.port == 1234);
     assert(path.full == "/forum/questions/");
     assert(path == std::vector({"forum", "questions"}));
+    assert(query.full == "tag=networking&order=newest");
     assert(query == std::vector({std::make_pair("tag"sv, "networking"sv),
                                  std::make_pair("order"sv, "newest"sv)}));
     assert(query.find("tag") == "networking");
@@ -56,6 +57,9 @@ int main(int argc, char *argv[]) {
     assert(authority.port == 0);
     assert(path.full == "/c=GB");
     assert(path == std::vector({"c=GB"}));
+    assert(query.full == "objectClass?one");
+    assert(query.has("objectClass"));
+    assert(query.has("one"));
     assert(fragment.empty());
   }
   {
@@ -64,6 +68,8 @@ int main(int argc, char *argv[]) {
     assert(scheme == "mailto");
     assert(path.full == "John.Doe@example.com");
     assert(path == std::vector({"John.Doe@example.com"}));
+    assert(query.full.empty());
+    assert(fragment.empty());
   }
   {
     const auto &[scheme, authority, path, query, fragment] =
@@ -71,12 +77,16 @@ int main(int argc, char *argv[]) {
     assert(scheme == "news");
     assert(path.full == "comp.infosystems.www.servers.unix");
     assert(path == std::vector({"comp.infosystems.www.servers.unix"}));
+    assert(query.full.empty());
+    assert(fragment.empty());
   }
   {
     const auto &[scheme, authority, path, query, fragment] = uri::Uri("tel:+1-816-555-1212");
     assert(scheme == "tel");
     assert(path.full == "+1-816-555-1212");
     assert(path == std::vector({"+1-816-555-1212"}));
+    assert(query.full.empty());
+    assert(fragment.empty());
   }
   {
     const auto &[scheme, authority, path, query, fragment] = uri::Uri("telnet://192.0.2.16:80/");
@@ -86,6 +96,8 @@ int main(int argc, char *argv[]) {
     assert(authority.port == 80);
     assert(path.full == "/");
     assert(path == std::vector({""}));
+    assert(query.full.empty());
+    assert(fragment.empty());
   }
   {
     const auto &[scheme, authority, path, query, fragment] =
@@ -96,6 +108,8 @@ int main(int argc, char *argv[]) {
     assert(authority.port == 0);
     assert(path.full == "oasis:names:specification:docbook:dtd:xml:4.1.2");
     assert(path == std::vector({"oasis:names:specification:docbook:dtd:xml:4.1.2"}));
+    assert(query.full.empty());
+    assert(fragment.empty());
   }
 
   {
@@ -106,42 +120,5 @@ int main(int argc, char *argv[]) {
     assert(query.full.empty());
     assert(fragment == "bar");
   }
-
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("");
-  //   assert(path == std::vector{""});
-  // }
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("/");
-  //   assert(path == std::vector{""});
-  // }
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("//");
-  //   assert(path == std::vector{""});
-  // }
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("://///");
-  //   assert(path == std::vector({"", ""}));
-  // }
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("file:/");
-  //   assert(path == std::vector{""});
-  // }
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("/foo/bar/baz");
-  //   assert(path == std::vector({"foo", "bar", "baz"}));
-  // }
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("file:foo/bar/baz");
-  //   assert(path == std::vector({"foo", "bar", "baz"}));
-  // }
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("/foo/bar/baz/?");
-  //   assert(path == std::vector({"foo", "bar", "baz"}));
-  // }
-  // {
-  //   const auto &[scheme, _, path, q, f] = uri::Uri("/foo/bar/baz/#");
-  //   assert(path == std::vector({"foo", "bar", "baz"}));
-  // }
   std::cout << "OK" << std::endl;
 }
