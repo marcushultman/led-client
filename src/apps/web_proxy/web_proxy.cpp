@@ -25,13 +25,6 @@ constexpr auto kStatesFilename = "states";
 
 constexpr auto kInitialRetryBackoff = 5s;
 
-std::string makeJSON(const char *key, jv value) {
-  auto jv = jv_dump_string(jv_object_set(jv_object(), jv_string(key), value), 0);
-  std::string ret = jv_string_value(jv);
-  jv_free(jv);
-  return ret;
-}
-
 auto toNumber(jv jv_val) {
   auto number = jv_get_kind(jv_val) == JV_KIND_NUMBER ? jv_number_value(jv_val) : 0;
   jv_free(jv_val);
@@ -355,7 +348,7 @@ void WebProxy::requestStateUpdate(std::string id, State &state) {
       {.method = http::Method::POST,
        .url = std::move(url),
        .headers = {{"content-type", "application/json"}, {"accept-encoding", "identity"}},
-       .body = makeJSON("data", jv_string(state.data.c_str()))},
+       .body = state.data},
       {.post_to = _main_scheduler, .on_response = [this, id = std::move(id), &state](auto res) {
          _state_thingy->onServiceResponse(std::move(res), std::move(id), state);
        }});
