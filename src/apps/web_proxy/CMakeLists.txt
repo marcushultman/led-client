@@ -2,6 +2,8 @@
 set(SOURCES
   display.h
   display.cpp
+  state_thingy.h
+  state_thingy.cpp
   web_proxy.h
   web_proxy.cpp
 )

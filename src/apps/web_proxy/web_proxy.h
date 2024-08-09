@@ -6,11 +6,9 @@
 #include "http/http.h"
 #include "present/presenter.h"
 #include "spotiled/brightness_provider.h"
+#include "state_thingy.h"
 
 namespace web_proxy {
-
-struct State;
-struct StateThingy;
 
 class WebProxy {
  public:
