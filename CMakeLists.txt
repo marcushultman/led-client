@@ -7,14 +7,6 @@ if (PI)
   # add_compile_definitions("-Wno-psabi")
 endif()
 
-include(FetchContent)
-
-FetchContent_Declare(cpptrace
-  GIT_REPOSITORY https://github.com/jeremy-rifkin/cpptrace.git
-  GIT_TAG        v0.4.1
-)
-FetchContent_MakeAvailable(cpptrace)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -51,7 +43,6 @@ target_link_libraries(spoticode
   uri
   web_proxy
   # 3rd party
-  cpptrace::cpptrace
   pthread
   ${CURL_LIBRARIES}
   ${JQ}

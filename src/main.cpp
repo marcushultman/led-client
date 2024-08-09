@@ -1,7 +1,6 @@
 #include <execinfo.h>
 #include <unistd.h>
 
-#include <cpptrace/cpptrace.hpp>
 #include <csignal>
 #include <future>
 #include <iostream>
@@ -99,12 +98,6 @@ int main(int argc, char *argv[]) {
       interrupt.set_value(0);
     }
     return signal == SIGINT;
-  });
-
-  std::signal(SIGSEGV, [](auto) {
-    cpptrace::generate_trace().print();
-    std::signal(SIGSEGV, nullptr);
-    std::raise(SIGSEGV);
   });
 
   const auto status = interrupt.get_future().get();
