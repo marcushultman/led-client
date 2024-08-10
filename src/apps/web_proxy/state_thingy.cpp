@@ -241,6 +241,11 @@ void StateThingy::onServiceResponse(http::Response res, std::string id, State &s
     }
   }
 
+  if (res.status == 404) {
+    std::cerr << id << ": update failed (status " << res.status << "), erasing" << std::endl;
+    _states.erase(id);
+    return;
+  }
   if (res.status == 429 || res.status == 503) {
     if (auto it = res.headers.find("retry-after"); it != res.headers.end()) {
       auto &str = it->second;
