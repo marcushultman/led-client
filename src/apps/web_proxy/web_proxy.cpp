@@ -19,7 +19,8 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
                    http::Http &http,
                    spotiled::BrightnessProvider &brightness,
                    present::PresenterQueue &presenter,
-                   std::string base_url)
+                   std::string base_url,
+                   StateThingy::Callbacks callbacks)
     : _main_scheduler{main_scheduler},
       _http{http},
       _brightness{brightness},
@@ -28,7 +29,8 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
           [this](auto id, auto &state) { requestStateUpdate(std::move(id), state); },
-          presenter)} {}
+          presenter,
+          std::move(callbacks))} {}
 
 WebProxy::~WebProxy() = default;
 

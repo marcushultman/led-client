@@ -31,10 +31,12 @@ auto toNumber(jv jv_val) {
 
 StateThingy::StateThingy(async::Scheduler &main_scheduler,
                          RequestUpdate request_update,
-                         present::PresenterQueue &presenter)
+                         present::PresenterQueue &presenter,
+                         Callbacks callbacks)
     : _main_scheduler(main_scheduler),
       _request_update(std::move(request_update)),
       _presenter(presenter),
+      _state_callbacks{std::move(callbacks)},
       _load_work{_main_scheduler.schedule([this] { loadStates(); })},
       _save_work{
           _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min})} {}
@@ -53,6 +55,7 @@ void StateThingy::loadStates() {
     auto &state = _states[id];
     state.data = entry.substr(split + 1);
     std::cout << id << ": loaded (" << state.data << ")" << std::endl;
+    onState(id, state.data, true);
     _request_update(std::move(id), state);
   }
   _snapshot = set;
@@ -132,8 +135,13 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
 
       // data
       auto jv_data = jv_object_get(jv_copy(jv_val), jv_string("data"));
-      state.data =
-          jv_get_kind(jv_data) == JV_KIND_STRING ? jv_string_value(jv_data) : std::string();
+
+      if (auto data =
+              jv_get_kind(jv_data) == JV_KIND_STRING ? jv_string_value(jv_data) : std::string();
+          data != state.data) {
+        state.data = std::move(data);
+        onState(id, state.data, false);
+      }
       jv_free(jv_data);
 
       // Display
@@ -264,6 +272,12 @@ void StateThingy::onServiceResponse(http::Response res, std::string id, State &s
   state.work = _main_scheduler.schedule(
       [this, id = std::move(id), &state] { _request_update(std::move(id), state); },
       {.delay = state.retry_backoff});
+}
+
+void StateThingy::onState(std::string_view id, std::string_view data, bool on_load) {
+  for (auto [it, end] = _state_callbacks.equal_range(std::string(id)); it != end; ++it) {
+    it->second(data, on_load);
+  }
 }
 
 }  // namespace web_proxy

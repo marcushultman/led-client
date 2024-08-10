@@ -13,11 +13,13 @@ struct DisplayService : present::Presentable {
   ~DisplayService();
 
   http::Response operator()(http::Request);
+  void handleUpdate(std::string_view data, bool on_load);
 
   void onRenderPass(spotiled::LED &, std::chrono::milliseconds elapsed) final;
   void onStop() final;
 
  private:
+  void onSettingsUpdated();
   void save();
 
   async::Scheduler &_main_scheduler;

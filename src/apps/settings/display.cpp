@@ -5,8 +5,13 @@
 #include <iostream>
 
 #include "color/color.h"
+#include "encoding/base64.h"
 #include "spotiled/spotiled.h"
 #include "uri/uri.h"
+
+extern "C" {
+#include <jq.h>
+}
 
 namespace settings {
 namespace {
@@ -74,6 +79,40 @@ http::Response DisplayService::operator()(http::Request req) {
   } else if (setting == "hue") {
     _brightness.setHue(std::clamp(std::stoi(req.body), kMinHue, kMaxHue));
   }
+  onSettingsUpdated();
+  return 204;
+}
+
+void DisplayService::handleUpdate(std::string_view data, bool on_load) {
+  auto jv_dict = jv_parse(encoding::base64::decode(data).c_str());
+  if (jv_get_kind(jv_dict) != JV_KIND_OBJECT) {
+    jv_free(jv_dict);
+    return;
+  }
+  auto jv_brightness = jv_object_get(jv_copy(jv_dict), jv_string("brightness"));
+  auto jv_hue = jv_object_get(jv_copy(jv_dict), jv_string("hue"));
+
+  if (jv_get_kind(jv_brightness) == JV_KIND_NUMBER) {
+    _brightness.setBrightness(
+        std::clamp(int(jv_number_value(jv_brightness)), kMinBrightness, kMaxBrightness));
+  }
+  if (jv_get_kind(jv_hue) == JV_KIND_NUMBER) {
+    _brightness.setHue(std::clamp(int(jv_number_value(jv_hue)), kMinHue, kMaxHue));
+  }
+
+  jv_free(jv_hue);
+  jv_free(jv_brightness);
+  jv_free(jv_dict);
+
+  if (!on_load) {
+    onSettingsUpdated();
+  } else {
+    std::cout << "DisplayService brightness (load): " << int(_brightness.brightness())
+              << " hue: " << int(_brightness.hue()) << std::endl;
+  }
+}
+
+void DisplayService::onSettingsUpdated() {
   std::cout << "DisplayService brightness: " << int(_brightness.brightness())
             << " hue: " << int(_brightness.hue()) << std::endl;
   save();
@@ -82,7 +121,6 @@ http::Response DisplayService::operator()(http::Request req) {
     _presenter.add(*this, {.prio = present::Prio::kNotification, .render_period = 1000ms / 15});
   }
   _notified = true;
-  return 204;
 }
 
 void DisplayService::onRenderPass(spotiled::LED &led, std::chrono::milliseconds elapsed) {

@@ -16,7 +16,8 @@ class WebProxy {
            http::Http &,
            spotiled::BrightnessProvider &,
            present::PresenterQueue &,
-           std::string base_url);
+           std::string base_url,
+           StateThingy::Callbacks);
   ~WebProxy();
   http::Lifetime handleRequest(http::Request,
                                http::RequestOptions::OnResponse,
