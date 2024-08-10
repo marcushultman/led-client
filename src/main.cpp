@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
   // todo: proxy and route settings
 
   PathMapper mapper{
-      {{"settings", [&](auto req) { return display_service(std::move(req)); }}},
+      {},
       [&](auto req, auto on_response, auto on_bytes) {
         return web_proxy->handleRequest(std::move(req), std::move(on_response),
                                         std::move(on_bytes));

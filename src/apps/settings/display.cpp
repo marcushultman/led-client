@@ -7,7 +7,6 @@
 #include "color/color.h"
 #include "encoding/base64.h"
 #include "spotiled/spotiled.h"
-#include "uri/uri.h"
 
 extern "C" {
 #include <jq.h>
@@ -59,29 +58,6 @@ DisplayService::DisplayService(async::Scheduler &main_scheduler,
 }
 
 DisplayService::~DisplayService() { save(); }
-
-http::Response DisplayService::operator()(http::Request req) {
-  auto setting = uri::Uri::Path(req.url).back();
-
-  if (req.method == http::Method::GET) {
-    if (setting == "brightness") {
-      return std::to_string(_brightness.brightness());
-    } else if (setting == "hue") {
-      return std::to_string(_brightness.hue());
-    }
-  }
-  if (req.method != http::Method::POST || req.body.empty()) {
-    return 400;
-  }
-
-  if (setting == "brightness") {
-    _brightness.setBrightness(std::clamp(std::stoi(req.body), kMinBrightness, kMaxBrightness));
-  } else if (setting == "hue") {
-    _brightness.setHue(std::clamp(std::stoi(req.body), kMinHue, kMaxHue));
-  }
-  onSettingsUpdated();
-  return 204;
-}
 
 void DisplayService::handleUpdate(std::string_view data, bool on_load) {
   auto jv_dict = jv_parse(encoding::base64::decode(data).c_str());
