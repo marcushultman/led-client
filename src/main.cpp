@@ -13,7 +13,6 @@
 #include "http/server/server.h"
 #include "present/presenter.h"
 #include "spotiled/brightness_provider.h"
-#include "uri/uri.h"
 
 struct Options {
   bool verbose = false;
@@ -32,31 +31,6 @@ Options parseOptions(int argc, char *argv[]) {
   }
   return opts;
 }
-
-struct PathMapper {
-  using Map = std::unordered_map<std::string, http::RequestHandler>;
-
-  PathMapper(Map map, http::AsyncHandler index = {})
-      : _map{std::move(map)}, _index{std::move(index)} {}
-
-  http::Lifetime operator()(http::Request req,
-                            http::RequestOptions::OnResponse on_response,
-                            http::RequestOptions::OnBytes on_bytes) {
-    auto key = std::string(uri::Uri::Path(req.url).front());
-    if (auto it = _map.find(key); it != _map.end()) {
-      if (auto *handler = std::get_if<http::AsyncHandler>(&it->second)) {
-        return (*handler)(std::move(req), std::move(on_response), std::move(on_bytes));
-      }
-      on_response(std::get<http::SyncHandler>(it->second)(std::move(req)));
-      return {};
-    }
-    return _index(req, std::move(on_response), std::move(on_bytes));
-  }
-
- private:
-  Map _map;
-  http::AsyncHandler _index;
-};
 
 int main(int argc, char *argv[]) {
   auto http = http::Http::create();
@@ -77,17 +51,9 @@ int main(int argc, char *argv[]) {
                                            display_service.handleUpdate(data, on_load);
                                          }}});
 
-  // todo: proxy and route settings
-
-  PathMapper mapper{
-      {},
-      [&](auto req, auto on_response, auto on_bytes) {
-        return web_proxy->handleRequest(std::move(req), std::move(on_response),
-                                        std::move(on_bytes));
-      },
-  };
-
-  auto server = http::makeServer(main_scheduler, mapper);
+  auto server = http::makeServer(main_scheduler, [&](auto req, auto on_response, auto on_bytes) {
+    return web_proxy->handleRequest(std::move(req), std::move(on_response), std::move(on_bytes));
+  });
   std::cout << "Listening on port: " << server->port() << std::endl;
 
   auto interrupt = std::promise<int>();
