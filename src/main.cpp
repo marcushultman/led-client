@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
   auto brightness = spotiled::BrightnessProvider();
   auto presenter = present::makePresenterQueue(main_scheduler, brightness);
 
-  auto display_service = settings::DisplayService(main_scheduler, brightness, *presenter);
+  auto display_service = settings::DisplayService(brightness, *presenter);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
       main_scheduler, *http, brightness, *presenter, opts.base_url,
       web_proxy::StateThingy::Callbacks{{"/settings2", [&](auto data, auto on_load) {

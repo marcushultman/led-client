@@ -37,10 +37,9 @@ std::pair<int, int> waveIndices(
 
 }  // namespace
 
-DisplayService::DisplayService(async::Scheduler &main_scheduler,
-                               spotiled::BrightnessProvider &brightness,
+DisplayService::DisplayService(spotiled::BrightnessProvider &brightness,
                                present::PresenterQueue &presenter)
-    : _main_scheduler{main_scheduler}, _presenter{presenter}, _brightness(brightness) {}
+    : _presenter{presenter}, _brightness(brightness) {}
 
 void DisplayService::handleUpdate(std::string_view data, bool on_load) {
   auto jv_dict = jv_parse(encoding::base64::decode(data).c_str());
