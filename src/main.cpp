@@ -54,7 +54,8 @@ int main(int argc, char *argv[]) {
   auto server = http::makeServer(main_scheduler, [&](auto req, auto on_response, auto on_bytes) {
     return web_proxy->handleRequest(std::move(req), std::move(on_response), std::move(on_bytes));
   });
-  std::cout << "Listening on port: " << server->port() << std::endl;
+  auto _ = main_scheduler.schedule(
+      [port = server->port()] { std::cout << "Listening on port: " << port << std::endl; });
 
   auto interrupt = std::promise<int>();
   auto sig = csignal::SignalHandler(main_scheduler, [&](auto signal) {
