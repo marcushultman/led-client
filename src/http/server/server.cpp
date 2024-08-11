@@ -336,7 +336,10 @@ struct ServerImpl : Server {
     _asio_work = _thread->scheduler().schedule([this] { _ctx.run(); });
   }
   ~ServerImpl() {
-    _acceptor.close();
+    asio::error_code err;
+    if ((void)_acceptor.close(err); err) {
+      std::cerr << "Failed to close server: " << err << std::endl;
+    }
     _ctx.stop();
   }
 
@@ -345,7 +348,7 @@ struct ServerImpl : Server {
  private:
   void accept() {
     _acceptor.async_accept(_ctx, [this](auto err, tcp::socket peer) {
-      if (!_acceptor.is_open()) {
+      if (!_acceptor.is_open() || err == asio::error::operation_aborted) {
         return;
       }
       if (!err) {
