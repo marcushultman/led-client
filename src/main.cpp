@@ -6,13 +6,13 @@
 #include <iostream>
 #include <string>
 
-#include "apps/settings/display.h"
-#include "apps/web_proxy/web_proxy.h"
 #include "csignal/signal_handler.h"
 #include "http/http.h"
 #include "http/server/server.h"
 #include "present/presenter.h"
+#include "settings/display.h"
 #include "spotiled/brightness_provider.h"
+#include "web_proxy/web_proxy.h"
 
 struct Options {
   bool verbose = false;
