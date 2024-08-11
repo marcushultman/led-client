@@ -17,13 +17,11 @@ constexpr auto kDefaultBaseUrl = "https://spotiled.deno.dev";
 
 WebProxy::WebProxy(async::Scheduler &main_scheduler,
                    http::Http &http,
-                   spotiled::BrightnessProvider &brightness,
                    present::PresenterQueue &presenter,
                    std::string base_url,
                    StateThingy::Callbacks callbacks)
     : _main_scheduler{main_scheduler},
       _http{http},
-      _brightness{brightness},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)},
       _base_host{uri::Uri(_base_url).authority.host},
       _state_thingy{std::make_unique<StateThingy>(
@@ -58,8 +56,6 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
   }
 
   auto jv = jv_object();
-  jv = jv_object_set(jv, jv_string("brightness"), jv_number(_brightness.brightness()));
-  jv = jv_object_set(jv, jv_string("hue"), jv_number(_brightness.hue()));
   jv = jv_object_set(jv, jv_string("states"), states);
   jv = jv_dump_string(jv, 0);
   req.headers["x-spotiled"] = encoding::base64::encode(jv_string_value(jv));

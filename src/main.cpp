@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 
   auto display_service = settings::DisplayService(brightness, *presenter);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
-      main_scheduler, *http, brightness, *presenter, opts.base_url,
+      main_scheduler, *http, *presenter, opts.base_url,
       web_proxy::StateThingy::Callbacks{{"/settings2", [&](auto data, auto on_load) {
                                            display_service.handleUpdate(data, on_load);
                                          }}});
