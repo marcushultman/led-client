@@ -1,7 +1,6 @@
 #include "display.h"
 
 #include <cmath>
-#include <fstream>
 #include <iostream>
 
 #include "color/color.h"
@@ -23,7 +22,6 @@ constexpr auto kMaxBrightness = 64 - 1;
 constexpr auto kMinHue = 0;
 constexpr auto kMaxHue = 255;
 
-constexpr auto kFilename = "brightness0";
 constexpr auto kTimeout = 3s;
 
 std::pair<int, int> waveIndices(
@@ -42,22 +40,7 @@ std::pair<int, int> waveIndices(
 DisplayService::DisplayService(async::Scheduler &main_scheduler,
                                spotiled::BrightnessProvider &brightness,
                                present::PresenterQueue &presenter)
-    : _main_scheduler{main_scheduler}, _presenter{presenter}, _brightness(brightness) {
-  if (auto stream = std::ifstream(kFilename); stream.good()) {
-    std::string line(64, '\0');
-    stream.getline(line.data(), line.size());
-    _brightness.setBrightness(std::stoi(line));
-    stream.getline(line.data(), line.size());
-    _brightness.setHue(std::stoi(line));
-  } else {
-    _brightness.setBrightness(kMaxBrightness);
-    _brightness.setHue(kMaxHue);
-  }
-  std::cout << "DisplayService brightness: " << int(_brightness.brightness())
-            << " hue: " << int(_brightness.hue()) << std::endl;
-}
-
-DisplayService::~DisplayService() { save(); }
+    : _main_scheduler{main_scheduler}, _presenter{presenter}, _brightness(brightness) {}
 
 void DisplayService::handleUpdate(std::string_view data, bool on_load) {
   auto jv_dict = jv_parse(encoding::base64::decode(data).c_str());
@@ -91,7 +74,6 @@ void DisplayService::handleUpdate(std::string_view data, bool on_load) {
 void DisplayService::onSettingsUpdated() {
   std::cout << "DisplayService brightness: " << int(_brightness.brightness())
             << " hue: " << int(_brightness.hue()) << std::endl;
-  save();
 
   if (!_notified && !_timeout.count()) {
     _presenter.add(*this, {.prio = present::Prio::kNotification, .render_period = 1000ms / 15});
@@ -128,12 +110,6 @@ void DisplayService::onRenderPass(spotiled::LED &led, std::chrono::milliseconds 
 void DisplayService::onStop() {
   _timeout = {};
   _notified = false;
-}
-
-void DisplayService::save() {
-  auto line =
-      std::to_string(_brightness.brightness()) + "\n" + std::to_string(_brightness.hue()) + "\n";
-  std::ofstream(kFilename).write(line.data(), line.size());
 }
 
 }  // namespace settings

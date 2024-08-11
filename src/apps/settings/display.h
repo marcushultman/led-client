@@ -9,7 +9,6 @@ namespace settings {
 
 struct DisplayService : present::Presentable {
   DisplayService(async::Scheduler &, spotiled::BrightnessProvider &, present::PresenterQueue &);
-  ~DisplayService();
 
   void handleUpdate(std::string_view data, bool on_load);
 
@@ -18,7 +17,6 @@ struct DisplayService : present::Presentable {
 
  private:
   void onSettingsUpdated();
-  void save();
 
   async::Scheduler &_main_scheduler;
   spotiled::BrightnessProvider &_brightness;
