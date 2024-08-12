@@ -24,11 +24,10 @@ constexpr auto kMaxHue = 255;
 
 constexpr auto kTimeout = 3s;
 
-std::pair<int, int> waveIndices(
-    double speed, uint8_t percent, int x, int width, int top, int bottom) {
+std::pair<int, int> waveIndices(double t, uint8_t percent, int x, int width, int top, int bottom) {
   auto x_percent = 100 * double(x) / 23;
   auto f = x_percent < percent ? (percent - x_percent) / double(percent) : 0;
-  auto w = f * std::sin(2 * M_PI * (0.002 * speed + x) / width);
+  auto w = f * std::sin(2 * M_PI * (t + x) / width);
   auto y1 = 8 + top * w;
   auto y2 = 8 + bottom * w;
   return {std::min<int>(std::floor(y1), std::floor(y2)),
@@ -94,13 +93,13 @@ void DisplayService::onRenderPass(spotiled::LED &led, std::chrono::milliseconds 
   auto percent = 100 * _brightness.brightness() / kMaxBrightness;
 
   for (auto x = 0; x < 23; ++x) {
-    for (auto [y, end] = waveIndices(10 * elapsed.count(), percent, x, 20, 8, 3); y < end; y++) {
+    for (auto [y, end] = waveIndices(.02 * elapsed.count(), percent, x, 20, 8, 3); y < end; y++) {
       led.set({x, y}, Color(0, 128, 255));
     }
-    for (auto [y, end] = waveIndices(15 * elapsed.count(), percent, x, 25, 6, 3); y < end; y++) {
+    for (auto [y, end] = waveIndices(.03 * elapsed.count(), percent, x, 25, 6, 3); y < end; y++) {
       led.set({x, y}, Color(128, 0, 255));
     }
-    for (auto [y, end] = waveIndices(20 * elapsed.count(), percent, x, 30, 4, 2); y < end; y++) {
+    for (auto [y, end] = waveIndices(.04 * elapsed.count(), percent, x, 30, 4, 2); y < end; y++) {
       led.set({x, y}, color::kWhite);
     }
   }
