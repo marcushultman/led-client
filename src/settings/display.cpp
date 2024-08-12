@@ -73,7 +73,7 @@ void DisplayService::onSettingsUpdated() {
   std::cout << "DisplayService brightness: " << int(_brightness.brightness())
             << " hue: " << int(_brightness.hue()) << std::endl;
 
-  if (!_notified && !_timeout.count()) {
+  if (!_notified && !_timeout.count() && 0) {
     _presenter.add(*this, {.prio = present::Prio::kNotification, .render_period = 1000ms / 15});
   }
   _notified = true;
