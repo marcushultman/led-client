@@ -17,7 +17,7 @@ constexpr auto kDefaultBaseUrl = "https://spotiled.deno.dev";
 
 WebProxy::WebProxy(async::Scheduler &main_scheduler,
                    http::Http &http,
-                   present::PresenterQueue &presenter,
+                   present::Presenter &presenter,
                    std::string base_url,
                    StateThingy::Callbacks callbacks)
     : _main_scheduler{main_scheduler},

@@ -13,7 +13,7 @@ class WebProxy {
  public:
   WebProxy(async::Scheduler &,
            http::Http &,
-           present::PresenterQueue &,
+           present::Presenter &,
            std::string base_url,
            StateThingy::Callbacks);
   ~WebProxy();

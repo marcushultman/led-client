@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
   auto brightness = spotiled::BrightnessProvider();
-  auto presenter = present::makePresenterQueue(main_scheduler, brightness);
+  auto presenter = present::makePresenter(spotiled::Renderer::create(main_scheduler, brightness));
 
   auto display_service = settings::DisplayService(brightness, *presenter);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(

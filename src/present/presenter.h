@@ -19,20 +19,20 @@ enum class Prio {
   kApp = 0,
   kNotification,
 };
+
 struct Options {
   Prio prio = Prio::kApp;
   std::chrono::milliseconds render_period = std::chrono::hours{1};
 };
 
-struct PresenterQueue {
-  virtual ~PresenterQueue() = default;
+struct Presenter {
+  virtual ~Presenter() = default;
   virtual void add(Presentable &, const Options & = {}) = 0;
   virtual void erase(Presentable &) = 0;
   virtual void clear() = 0;
   virtual void notify() = 0;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(async::Scheduler &,
-                                                   spotiled::BrightnessProvider &);
+std::unique_ptr<Presenter> makePresenter(std::unique_ptr<spotiled::Renderer>);
 
 }  // namespace present

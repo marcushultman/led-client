@@ -7,7 +7,7 @@
 namespace settings {
 
 struct DisplayService : present::Presentable {
-  DisplayService(spotiled::BrightnessProvider &, present::PresenterQueue &);
+  DisplayService(spotiled::BrightnessProvider &, present::Presenter &);
 
   void handleUpdate(std::string_view data, bool on_load);
 
@@ -18,7 +18,7 @@ struct DisplayService : present::Presentable {
   void onSettingsUpdated();
 
   spotiled::BrightnessProvider &_brightness;
-  present::PresenterQueue &_presenter;
+  present::Presenter &_presenter;
 
   std::chrono::milliseconds _timeout = {};
   bool _notified = false;

@@ -28,7 +28,7 @@ struct StateThingy final {
 
   StateThingy(async::Scheduler &main_scheduler,
               RequestUpdate request_update,
-              present::PresenterQueue &presenter,
+              present::Presenter &presenter,
               Callbacks);
   ~StateThingy();
 
@@ -50,7 +50,7 @@ struct StateThingy final {
 
   async::Scheduler &_main_scheduler;
   RequestUpdate _request_update;
-  present::PresenterQueue &_presenter;
+  present::Presenter &_presenter;
   std::unordered_map<std::string, State> _states;
   std::unordered_set<std::string> _snapshot;
   Callbacks _state_callbacks;

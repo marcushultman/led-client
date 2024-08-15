@@ -38,9 +38,8 @@ struct RenderHandle {
   std::shared_ptr<void> _alive = std::make_shared<bool>(1);
 };
 
-struct PresenterQueueImpl final : PresenterQueue {
-  PresenterQueueImpl(async::Scheduler &main_scheduler, spotiled::BrightnessProvider &brightness)
-      : _renderer{spotiled::Renderer::create(main_scheduler, brightness)} {}
+struct PresenterImpl final : Presenter {
+  PresenterImpl(std::unique_ptr<spotiled::Renderer> renderer) : _renderer{std::move(renderer)} {}
 
   void add(Presentable &presentable, const Options &options = {}) final {
     if (_current && _current->entry.options.prio < options.prio) {
@@ -53,6 +52,7 @@ struct PresenterQueueImpl final : PresenterQueue {
       presentNext();
     }
   }
+
   void erase(Presentable &presentable) final {
     std::cout << "erase " << &presentable << std::endl;
 
@@ -90,9 +90,8 @@ struct PresenterQueueImpl final : PresenterQueue {
   std::unique_ptr<RenderHandle> _current;
 };
 
-std::unique_ptr<PresenterQueue> makePresenterQueue(async::Scheduler &main_scheduler,
-                                                   spotiled::BrightnessProvider &brightness) {
-  return std::make_unique<PresenterQueueImpl>(main_scheduler, brightness);
+std::unique_ptr<Presenter> makePresenter(std::unique_ptr<spotiled::Renderer> renderer) {
+  return std::make_unique<PresenterImpl>(std::move(renderer));
 }
 
 }  // namespace present

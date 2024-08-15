@@ -37,7 +37,7 @@ std::pair<int, int> waveIndices(double t, uint8_t percent, int x, int width, int
 }  // namespace
 
 DisplayService::DisplayService(spotiled::BrightnessProvider &brightness,
-                               present::PresenterQueue &presenter)
+                               present::Presenter &presenter)
     : _presenter{presenter}, _brightness(brightness) {}
 
 void DisplayService::handleUpdate(std::string_view data, bool on_load) {

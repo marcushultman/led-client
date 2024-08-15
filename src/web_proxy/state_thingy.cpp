@@ -31,7 +31,7 @@ auto toNumber(jv jv_val) {
 
 StateThingy::StateThingy(async::Scheduler &main_scheduler,
                          RequestUpdate request_update,
-                         present::PresenterQueue &presenter,
+                         present::Presenter &presenter,
                          Callbacks callbacks)
     : _main_scheduler(main_scheduler),
       _request_update(std::move(request_update)),
