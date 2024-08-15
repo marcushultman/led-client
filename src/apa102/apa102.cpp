@@ -4,11 +4,10 @@
 #include "spidev_lib++.h"
 #else
 #include <fstream>
-#include <vector>
 #endif
 
 #include <algorithm>
-#include <cassert>
+#include <vector>
 
 namespace apa102 {
 namespace {
@@ -20,7 +19,21 @@ inline uint8_t luminance(int r, int g, int b) {
 
 }  // namespace
 
-Buffer::Buffer(size_t num_leds) : _num_leds{num_leds} {
+struct BufferImpl final : Buffer {
+  explicit BufferImpl(size_t num_leds);
+
+  void clear() final;
+  void set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions &options = {}) final;
+
+  const uint8_t *data() const final;
+  size_t size() const final;
+
+ private:
+  size_t _num_leds;
+  std::vector<uint8_t> _buf;
+};
+
+BufferImpl::BufferImpl(size_t num_leds) : _num_leds{num_leds} {
   auto trailing = _num_leds / 16;
   if (_num_leds % 16 != 0) {
     ++trailing;
@@ -33,7 +46,7 @@ Buffer::Buffer(size_t num_leds) : _num_leds{num_leds} {
   clear();
 }
 
-void Buffer::clear() {
+void BufferImpl::clear() {
   for (auto i = 0; i < _num_leds; ++i) {
     _buf[4 + 4 * i] = 0xff;
     _buf[4 + 4 * i + 1] = 0;
@@ -42,7 +55,7 @@ void Buffer::clear() {
   }
 }
 
-void Buffer::set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions &options) {
+void BufferImpl::set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions &options) {
   if (i >= _num_leds) {
     return;
   }
@@ -66,10 +79,8 @@ void Buffer::set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions &op
   dst_r = sum_r * lum_ratio;
 }
 
-size_t Buffer::numLeds() const { return _num_leds; }
-
-uint8_t *Buffer::data() { return _buf.data(); }
-size_t Buffer::size() const { return _buf.size(); }
+const uint8_t *BufferImpl::data() const { return _buf.data(); }
+size_t BufferImpl::size() const { return _buf.size(); }
 
 #if __arm__
 
@@ -89,7 +100,11 @@ class SPILED final : public LED {
     }
   }
 
-  void show(Buffer &buffer) final {
+  std::unique_ptr<Buffer> createBuffer() final {
+    return std::make_unique<BufferImpl>(19 + 16 * 23);
+  }
+
+  void show(const Buffer &buffer) final {
     if (_spi) {
       _spi->write(buffer.data(), buffer.size());
     }
@@ -126,8 +141,11 @@ class Simulator final : public LED {
  public:
   Simulator() : _pipe("./simulator_out") {}
 
-  void show(Buffer &buffer) final {
-    assert(buffer.numLeds() == 19 + 16 * 23);
+  std::unique_ptr<Buffer> createBuffer() final {
+    return std::make_unique<BufferImpl>(19 + 16 * 23);
+  }
+
+  void show(const Buffer &buffer) final {
     auto *data = buffer.data();
     _pipe << "\n\n\n\n\n\n";
 

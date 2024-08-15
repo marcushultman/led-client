@@ -11,7 +11,7 @@ namespace {
 struct RendererImpl final : public Renderer, LED {
   RendererImpl(async::Scheduler &main_scheduler, BrightnessProvider &brightness)
       : _main_scheduler{main_scheduler}, _brightness{brightness} {
-    _led->show(_buffer);
+    _led->show(*_buffer);
   }
 
   void add(RenderCallback callback) final {
@@ -27,13 +27,13 @@ struct RendererImpl final : public Renderer, LED {
   void setLogo(Color color, const Options &options) final {
     auto [r, g, b] = color * timeOfDayBrightness(_brightness);
     for (auto i = 0; i < 19; ++i) {
-      _buffer.set(i, r, g, b, options);
+      _buffer->set(i, r, g, b, options);
     }
   }
   void set(Coord pos, Color color, const Options &options) final {
     if (pos.x >= 0 && pos.x < 23 && pos.y >= 0 && pos.y < 16) {
       auto [r, g, b] = color * timeOfDayBrightness(_brightness);
-      _buffer.set(19 + offset(pos), r, g, b, options);
+      _buffer->set(19 + offset(pos), r, g, b, options);
     }
   }
 
@@ -48,7 +48,7 @@ struct RendererImpl final : public Renderer, LED {
 
     auto delay = std::chrono::milliseconds(1min);
 
-    _buffer.clear();
+    _buffer->clear();
     for (auto it = _callbacks.begin(); it != _callbacks.end();) {
       auto &callback = it->first;
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second);
@@ -60,7 +60,7 @@ struct RendererImpl final : public Renderer, LED {
         it = _callbacks.erase(it);
       }
     }
-    _led->show(_buffer);
+    _led->show(*_buffer);
 
     if (!_callbacks.empty()) {
       _render = _main_scheduler.schedule([this] { renderFrame(); }, {.delay = delay});
@@ -71,8 +71,8 @@ struct RendererImpl final : public Renderer, LED {
 
   async::Scheduler &_main_scheduler;
   BrightnessProvider &_brightness;
-  apa102::Buffer _buffer{19 + 16 * 23};
   std::unique_ptr<apa102::LED> _led = apa102::createLED();
+  std::unique_ptr<apa102::Buffer> _buffer = _led->createBuffer();
   std::vector<std::pair<RenderCallback, std::chrono::system_clock::time_point>> _callbacks;
   std::queue<RenderCallback> _pending_callbacks;
   async::Lifetime _render;
