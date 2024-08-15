@@ -42,8 +42,8 @@ struct Renderer {
   virtual ~Renderer() = default;
   virtual void add(RenderCallback) = 0;
   virtual void notify() = 0;
-
-  static std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler, BrightnessProvider &);
 };
+
+std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler, BrightnessProvider &);
 
 }  // namespace spotiled
