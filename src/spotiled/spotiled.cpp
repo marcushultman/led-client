@@ -1,5 +1,7 @@
 #include "spotiled/spotiled.h"
 
+#include <apa102/apa102.h>
+
 #include <queue>
 
 #include "color/color.h"
@@ -71,8 +73,8 @@ struct RendererImpl final : public Renderer, LED {
 
   async::Scheduler &_main_scheduler;
   BrightnessProvider &_brightness;
-  std::unique_ptr<apa102::LED> _led = apa102::createLED();
-  std::unique_ptr<apa102::Buffer> _buffer = _led->createBuffer();
+  std::unique_ptr<led::LED> _led = apa102::createLED();
+  std::unique_ptr<led::Buffer> _buffer = _led->createBuffer();
   std::vector<std::pair<RenderCallback, std::chrono::system_clock::time_point>> _callbacks;
   std::queue<RenderCallback> _pending_callbacks;
   async::Lifetime _render;

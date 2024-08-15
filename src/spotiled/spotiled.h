@@ -1,10 +1,11 @@
 #pragma once
 
+#include <led/led.h>
+
 #include <chrono>
 #include <functional>
 #include <memory>
 
-#include "apa102/apa102.h"
 #include "async/scheduler.h"
 #include "brightness_provider.h"
 #include "color/color.h"
@@ -27,7 +28,8 @@ constexpr Coord operator/(const Coord &lhs, const Coord &rhs) {
 }
 
 struct LED {
-  using Options = apa102::SetOptions;
+  using Options = led::SetOptions;
+
   virtual ~LED() = default;
   virtual void setLogo(Color, const Options & = {}) = 0;
   virtual void set(Coord, Color, const Options & = {}) = 0;

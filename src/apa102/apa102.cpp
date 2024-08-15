@@ -19,6 +19,8 @@ inline uint8_t luminance(int r, int g, int b) {
 
 }  // namespace
 
+using namespace led;
+
 struct BufferImpl final : Buffer {
   explicit BufferImpl(size_t num_leds);
 
