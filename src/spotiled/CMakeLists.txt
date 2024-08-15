@@ -1,6 +1,10 @@
 
 set(SOURCES
   brightness_provider.h
+  brightness_provider.cpp
+  renderer.h
+  renderer_impl.h
+  renderer_impl.cpp
   spotiled.h
   spotiled.cpp
   time_of_day_brightness.h
