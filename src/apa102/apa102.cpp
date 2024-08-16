@@ -27,7 +27,7 @@ struct BufferImpl final : Buffer {
   void clear() final;
   void set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions &options = {}) final;
 
-  const uint8_t *data() const final;
+  uint8_t *data() final;
   size_t size() const final;
 
  private:
@@ -81,7 +81,7 @@ void BufferImpl::set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions
   dst_r = sum_r * lum_ratio;
 }
 
-const uint8_t *BufferImpl::data() const { return _buf.data(); }
+uint8_t *BufferImpl::data() { return _buf.data(); }
 size_t BufferImpl::size() const { return _buf.size(); }
 
 #if __arm__
@@ -106,7 +106,7 @@ class SPILED final : public LED {
     return std::make_unique<BufferImpl>(19 + 16 * 23);
   }
 
-  void show(const Buffer &buffer) final {
+  void show(Buffer &buffer) final {
     if (_spi) {
       _spi->write(buffer.data(), buffer.size());
     }
@@ -147,7 +147,7 @@ class Simulator final : public LED {
     return std::make_unique<BufferImpl>(19 + 16 * 23);
   }
 
-  void show(const Buffer &buffer) final {
+  void show(Buffer &buffer) final {
     auto *data = buffer.data();
     _pipe << "\n\n\n\n\n\n";
 
