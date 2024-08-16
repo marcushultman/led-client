@@ -9,6 +9,7 @@
 #include "csignal/signal_handler.h"
 #include "http/http.h"
 #include "http/server/server.h"
+#include "ikea/ikea.h"
 #include "present/presenter.h"
 #include "settings/display.h"
 #include "spotiled/brightness_provider.h"
@@ -17,6 +18,7 @@
 struct Options {
   bool verbose = false;
   std::string base_url;
+  bool ikea = false;
 };
 
 Options parseOptions(int argc, char *argv[]) {
@@ -27,6 +29,8 @@ Options parseOptions(int argc, char *argv[]) {
       opts.verbose = true;
     } else if (arg.find("--base-url") == 0) {
       opts.base_url = arg.substr(11);
+    } else if (arg.find("--ikea") == 0) {
+      opts.ikea = true;
     }
   }
   return opts;
@@ -42,7 +46,9 @@ int main(int argc, char *argv[]) {
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
   auto brightness = spotiled::BrightnessProvider();
-  auto presenter = present::makePresenter(spotiled::create(main_scheduler, brightness));
+
+  auto presenter = present::makePresenter(opts.ikea ? ikea::create(main_scheduler, brightness)
+                                                    : spotiled::create(main_scheduler, brightness));
 
   auto display_service = settings::DisplayService(brightness, *presenter);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
