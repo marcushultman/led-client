@@ -1,5 +1,6 @@
 #include "uri.h"
 
+#include <algorithm>
 #include <charconv>
 #include <tuple>
 
