@@ -1,6 +1,6 @@
 #include "apa102.h"
 
-#if __arm__
+#if !WITH_SIMULATOR
 #include "spidev_lib++.h"
 #else
 #include <fstream>
@@ -84,7 +84,7 @@ void BufferImpl::set(size_t i, uint8_t r, uint8_t g, uint8_t b, const SetOptions
 uint8_t *BufferImpl::data() { return _buf.data(); }
 size_t BufferImpl::size() const { return _buf.size(); }
 
-#if __arm__
+#if !WITH_SIMULATOR
 
 class SPILED final : public LED {
  public:
@@ -202,7 +202,7 @@ class Simulator final : public LED {
 #endif
 
 std::unique_ptr<LED> createLED(int hz) {
-#if __arm__
+#if !WITH_SIMULATOR
   return std::make_unique<SPILED>(hz);
 #else
   return std::make_unique<Simulator>();

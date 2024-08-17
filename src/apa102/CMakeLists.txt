@@ -13,6 +13,10 @@ target_link_libraries(apa102
   led
 )
 
+if (APPLE)
+  target_compile_definitions(apa102 PUBLIC "WITH_SIMULATOR=1")
+endif()
+
 if (PI)
   target_link_libraries(apa102 spidev-lib++)
 endif()
