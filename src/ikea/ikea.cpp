@@ -19,7 +19,9 @@ constexpr size_t kHeight = 16;
 
 struct IkeaLED final : BufferedLED {
   explicit IkeaLED(BrightnessProvider &brightness) : _brightness{brightness} {
+    static_assert((kWidth * kHeight) % 4 == 0);
     _data.resize(kWidth * kHeight / 8);
+
 #if __arm__
     _spi = std::make_unique<SPI>("/dev/spidev0.0");
 
@@ -44,7 +46,7 @@ struct IkeaLED final : BufferedLED {
     for (auto y = 0; y < 16; ++y) {
       for (auto x = 0; x < 16; ++x) {
         auto i = offset({x, y});
-        auto val = _data[i >> 3] & (1 << (7 - (i & 0b111)));
+        auto val = _data[i >> 3] & bitMask(i);
         _pipe << (val ? "⚪️" : "⚫️") << " ";
       }
       _pipe << std::endl;
@@ -58,13 +60,26 @@ struct IkeaLED final : BufferedLED {
       auto [r, g, b] = color * timeOfDayBrightness(_brightness);
       auto i = offset(pos);
       if (r || g || b) {
-        _data[i >> 3] |= (1 << (7 - (i & 0b111)));
+        _data[i >> 3] |= bitMask(i);
       } else {
-        _data[i >> 3] &= (~(1 << (7 - (i & 0b111))));
+        _data[i >> 3] &= ~bitMask(i);
       }
     }
   }
-  size_t offset(Coord pos) { return 16 * pos.x + 15 - pos.y; }
+
+  // 20
+  // 31
+  // 46
+  // 57
+  size_t offset(Coord pos) {
+    auto sec = pos.y >> 2;
+    auto x = pos.x >> 3;  // 0-1
+    auto y = pos.y & 3;   // 0-4
+    auto lower = y >= 2;
+    auto index = 2 + lower * 2 + (lower * 4 * x - x * 2) + (y % 2);
+    return 64 * sec + 8 * index + (pos.x & 7);
+  }
+  uint8_t bitMask(size_t i) { return 1 << (7 - (i & 7)); }
 
   BrightnessProvider &_brightness;
   std::vector<uint8_t> _data;
@@ -74,9 +89,6 @@ struct IkeaLED final : BufferedLED {
 #else
   std::ofstream _pipe;
 #endif
-
-  // For reasons..?
-  static_assert((kWidth * kHeight) % 8 == 0);
 };
 
 }  // namespace
