@@ -16,7 +16,7 @@ set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 list(APPEND CMAKE_SYSTEM_PREFIX_PATH /opt/homebrew)
 
 find_package(CURL REQUIRED)
-find_library(JQ NAMES libjq.dylib REQUIRED)
+find_library(JQ NAMES libjq.dylib libjq.so REQUIRED)
 find_path(JQ_INCLUDE_DIR jq.h REQUIRED)
 find_path(ASIO_INCLUDE_DIR asio.hpp REQUIRED)
 
