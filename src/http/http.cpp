@@ -22,7 +22,7 @@ void setMethod(CURL *curl, Method method) {
       curl_easy_setopt(curl, CURLOPT_POST, 1);
       break;
     case Method::PUT:
-      curl_easy_setopt(curl, CURLOPT_PUT, 1);
+      curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
       break;
     case Method::DELETE:
       curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
