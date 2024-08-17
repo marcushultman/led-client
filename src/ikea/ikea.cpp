@@ -3,7 +3,7 @@
 #include <spotiled/renderer_impl.h>
 #include <spotiled/time_of_day_brightness.h>
 
-#if __arm__
+#if !WITH_SIMULATOR
 #include "spidev_lib++.h"
 #else
 #include <fstream>
@@ -22,7 +22,7 @@ struct IkeaLED final : BufferedLED {
     static_assert((kWidth * kHeight) % 4 == 0);
     _data.resize(kWidth * kHeight / 8);
 
-#if __arm__
+#if !WITH_SIMULATOR
     _spi = std::make_unique<SPI>("/dev/spidev0.0");
 
     if (!_spi->begin()) {
@@ -36,7 +36,7 @@ struct IkeaLED final : BufferedLED {
  private:
   void clear() final { std::fill(begin(_data), end(_data), 0); }
   void show() final {
-#if __arm__
+#if !WITH_SIMULATOR
     if (_spi) {
       _spi->write(_data.data(), _data.size());
     }
@@ -84,7 +84,7 @@ struct IkeaLED final : BufferedLED {
   BrightnessProvider &_brightness;
   std::vector<uint8_t> _data;
 
-#if __arm__
+#if !WITH_SIMULATOR
   std::unique_ptr<SPI> _spi;
 #else
   std::ofstream _pipe;
