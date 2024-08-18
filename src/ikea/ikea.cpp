@@ -29,7 +29,14 @@ struct IkeaLED final : BufferedLED {
     _data[1].resize(kWidth * kHeight / 8);
 
 #if !WITH_SIMULATOR
-    _spi = std::make_unique<SPI>("/dev/spidev0.0");
+    _config = spi_config_t{
+        .mode = 0,
+        .bits_per_word = 8,
+        .speed = 2000000,
+        .delay = 0,
+    };
+
+    _spi = std::make_unique<SPI>("/dev/spidev0.0", &_config);
     _gpio = pigpio_start(nullptr, nullptr);
 
     if (!_spi->begin()) {
@@ -134,6 +141,7 @@ struct IkeaLED final : BufferedLED {
   async::Lifetime _render_work;
 
 #if !WITH_SIMULATOR
+  spi_config_t _config;
   std::unique_ptr<SPI> _spi;
   int _gpio = -1;
 #else
