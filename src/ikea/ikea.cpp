@@ -32,8 +32,14 @@ struct IkeaLED final : BufferedLED {
     _spi = std::make_unique<SPI>("/dev/spidev0.0");
     _gpio = pigpio_start(nullptr, nullptr);
 
-    if (!_spi->begin() || _gpio < 0) {
-      std::cerr << "pigpio: " << _gpio << std::endl;
+    if (!_spi->begin()) {
+      std::cerr << "SPI error" << std::endl;
+      _spi.reset();
+      return;
+    }
+
+    if (_gpio < 0) {
+      std::cerr << "pigpio error: " << _gpio << std::endl;
       _spi.reset();
       return;
     }
