@@ -101,7 +101,7 @@ struct IkeaLED final : BufferedLED {
     auto y = pos.y & 3;   // 0-4
     auto lower = y >= 2;
     auto index = 2 + lower * 2 + (lower * 4 * x - x * 2) + (y % 2);
-    return 64 * sec + 8 * index + (pos.x & 7);
+    return 64 * sec + 8 * index + (index % 2 ? pos.x & 7 : 7 - pos.x & 7);
   }
   uint8_t bitMask(size_t i) { return 1 << (7 - (i & 7)); }
 
