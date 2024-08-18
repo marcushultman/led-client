@@ -5,6 +5,7 @@
 #include <spotiled/time_of_day_brightness.h>
 
 #include <atomic>
+#include <iostream>
 
 #if !WITH_SIMULATOR
 #include "pigpio.h"
@@ -36,6 +37,7 @@ struct IkeaLED final : BufferedLED {
     }
 
     gpioSetMode(22, PI_OUTPUT);
+    std::cout << "GPIO set up" << std::endl;
 #else
     _pipe = decltype(_pipe){"./simulator_out2"};
 #endif
