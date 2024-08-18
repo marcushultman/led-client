@@ -30,9 +30,10 @@ struct IkeaLED final : BufferedLED {
 
 #if !WITH_SIMULATOR
     _spi = std::make_unique<SPI>("/dev/spidev0.0");
-    auto err = gpioInitialise() < 0;
+    auto gpio_result = gpioInitialise();
 
-    if (!_spi->begin() || err) {
+    if (!_spi->begin() || gpio_result < 0) {
+      std::cout << "gpio_result: " << gpio_result << std::endl;
       _spi.reset();
       return;
     }
