@@ -36,7 +36,7 @@ struct IkeaLED final : BufferedLED {
       _spi.reset();
     }
 
-    gpioSetMode(22, PI_OUTPUT);
+    gpioSetMode(25, PI_OUTPUT);
     std::cout << "GPIO set up" << std::endl;
 #else
     _pipe = decltype(_pipe){"./simulator_out2"};
@@ -90,9 +90,9 @@ struct IkeaLED final : BufferedLED {
 
 #if !WITH_SIMULATOR
     if (_spi) {
-      gpioWrite(22, 0);
+      gpioWrite(25, 0);
       _spi->write(data.data(), data.size());
-      gpioWrite(22, 1);
+      gpioWrite(25, 1);
     }
     auto delay = 100us;
 #else
