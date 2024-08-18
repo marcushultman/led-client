@@ -8,8 +8,8 @@
 #include <iostream>
 
 #if !WITH_SIMULATOR
-#include "pigpio.h"
-#include "spidev_lib++.h"
+#include <pigpiod_if2.h>
+#include <spidev_lib++.h>
 #else
 #include <fstream>
 #endif
@@ -30,15 +30,15 @@ struct IkeaLED final : BufferedLED {
 
 #if !WITH_SIMULATOR
     _spi = std::make_unique<SPI>("/dev/spidev0.0");
-    auto gpio_result = gpioInitialise();
+    _gpio = pigpio_start(nullptr, nullptr);
 
-    if (!_spi->begin() || gpio_result < 0) {
-      std::cout << "gpio_result: " << gpio_result << std::endl;
+    if (!_spi->begin() || _gpio < 0) {
+      std::cerr << "pigpio: " << _gpio << std::endl;
       _spi.reset();
       return;
     }
 
-    gpioSetMode(25, PI_OUTPUT);
+    set_mode(_gpio, 25, PI_OUTPUT);
     std::cout << "GPIO set up" << std::endl;
 #else
     _pipe = decltype(_pipe){"./simulator_out2"};
@@ -47,7 +47,9 @@ struct IkeaLED final : BufferedLED {
   }
   ~IkeaLED() {
 #if !WITH_SIMULATOR
-    gpioTerminate();
+    if (_spi) {
+      pigpio_stop(_gpio);
+    }
 #endif
   }
 
@@ -97,9 +99,9 @@ struct IkeaLED final : BufferedLED {
 
 #if !WITH_SIMULATOR
     if (_spi) {
-      gpioWrite(25, 0);
+      gpio_write(_gpio, 25, 0);
       _spi->write(data.data(), data.size());
-      gpioWrite(25, 1);
+      gpio_write(_gpio, 25, 1);
     }
     auto delay = 100us;
 #else
@@ -127,6 +129,7 @@ struct IkeaLED final : BufferedLED {
 
 #if !WITH_SIMULATOR
   std::unique_ptr<SPI> _spi;
+  int _gpio = -1;
 #else
   std::ofstream _pipe;
 #endif

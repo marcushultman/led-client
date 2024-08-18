@@ -21,5 +21,8 @@ target_link_libraries(ikea
 )
 
 if (PI)
-  target_link_libraries(ikea spidev-lib++ pigpio)
+  target_link_libraries(ikea
+    pigpiod_if2
+    spidev-lib++
+  )
 endif()
