@@ -54,7 +54,6 @@ struct IkeaLED final : BufferedLED {
     }
 
     set_mode(_gpio, 25, PI_OUTPUT);
-    std::cout << "GPIO set up" << std::endl;
 #else
     _pipe = decltype(_pipe){"./simulator_out2"};
 #endif
@@ -121,19 +120,6 @@ struct IkeaLED final : BufferedLED {
       std::copy(begin(_data[read_buffer_index]), end(_data[read_buffer_index]), begin(_data[2]));
     }
     auto &data = _data[2];
-
-    static int ri = 0;
-#if !WITH_SIMULATOR
-    if (++ri % 1000 == 0) {
-#else
-    if (++ri % 10 == 0) {
-#endif
-      std::cout << "render() [";
-      for (auto &byte : data) {
-        std::cout << int(byte) << ", ";
-      }
-      std::cout << "]" << std::endl;
-    }
 
 #if !WITH_SIMULATOR
     if (_spi) {
