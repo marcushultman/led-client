@@ -88,6 +88,11 @@ struct IkeaLED final : BufferedLED {
     using namespace std::chrono_literals;
     auto &data = _data[!_buf];
 
+    static int ri = 0;
+    if (++ri % 1000 == 0) {
+      std::cout << "render() " << ri << std::endl;
+    }
+
 #if !WITH_SIMULATOR
     if (_spi) {
       gpioWrite(25, 0);
