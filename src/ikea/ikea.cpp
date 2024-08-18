@@ -4,6 +4,7 @@
 #include <spotiled/time_of_day_brightness.h>
 
 #if !WITH_SIMULATOR
+#include "pigpio.h"
 #include "spidev_lib++.h"
 #else
 #include <fstream>
@@ -24,12 +25,18 @@ struct IkeaLED final : BufferedLED {
 
 #if !WITH_SIMULATOR
     _spi = std::make_unique<SPI>("/dev/spidev0.0");
+    auto err = gpioInitialise() < 0;
 
-    if (!_spi->begin()) {
+    if (!_spi->begin() || err) {
       _spi.reset();
     }
 #else
     _pipe = decltype(_pipe){"./simulator_out2"};
+#endif
+  }
+  ~IkeaLED() {
+#if !WITH_SIMULATOR
+    gpioTerminate();
 #endif
   }
 
@@ -38,7 +45,9 @@ struct IkeaLED final : BufferedLED {
   void show() final {
 #if !WITH_SIMULATOR
     if (_spi) {
+      gpioWrite(22, 0);
       _spi->write(_data.data(), _data.size());
+      gpioWrite(22, 1);
     }
 #else
     _pipe << "\n\n\n\n\n\n";
