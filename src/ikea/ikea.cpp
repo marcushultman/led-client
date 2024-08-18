@@ -4,6 +4,7 @@
 #include <spotiled/renderer_impl.h>
 #include <spotiled/time_of_day_brightness.h>
 
+#include <atomic>
 #include <iostream>
 #include <mutex>
 
@@ -60,6 +61,9 @@ struct IkeaLED final : BufferedLED {
     _render_work = _render_thread->scheduler().schedule([this] { render(); });
   }
   ~IkeaLED() {
+    _shutdown = true;
+    _render_thread.reset();
+
 #if !WITH_SIMULATOR
     if (_spi) {
       pigpio_stop(_gpio);
@@ -106,6 +110,9 @@ struct IkeaLED final : BufferedLED {
   uint8_t bitMask(size_t i) { return 1 << (7 - (i & 7)); }
 
   void render() {
+    if (_shutdown) {
+      return;
+    }
     using namespace std::chrono_literals;
 
     {
@@ -158,6 +165,7 @@ struct IkeaLED final : BufferedLED {
   size_t _write_buffer_index = 0;
   std::unique_ptr<async::Thread> _render_thread = async::Thread::create("ikea");
   async::Lifetime _render_work;
+  std::atomic_bool _shutdown = false;
 
 #if !WITH_SIMULATOR
   spi_config_t _config;
