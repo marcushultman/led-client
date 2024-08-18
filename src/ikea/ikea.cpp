@@ -116,7 +116,11 @@ struct IkeaLED final : BufferedLED {
     auto &data = _data[2];
 
     static int ri = 0;
+#if !WITH_SIMULATOR
     if (++ri % 1000 == 0) {
+#else
+    if (++ri % 10 == 0) {
+#endif
       std::cout << "render() [";
       for (auto &byte : data) {
         std::cout << int(byte) << ", ";
