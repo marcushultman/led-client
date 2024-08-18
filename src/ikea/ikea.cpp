@@ -4,8 +4,8 @@
 #include <spotiled/renderer_impl.h>
 #include <spotiled/time_of_day_brightness.h>
 
-#include <atomic>
 #include <iostream>
+#include <mutex>
 
 #if !WITH_SIMULATOR
 #include <pigpiod_if2.h>
@@ -27,6 +27,7 @@ struct IkeaLED final : BufferedLED {
     static_assert((kWidth * kHeight) % 4 == 0);
     _data[0].resize(kWidth * kHeight / 8);
     _data[1].resize(kWidth * kHeight / 8);
+    _data[2].resize(kWidth * kHeight / 8);
 
 #if !WITH_SIMULATOR
     _config = spi_config_t{
@@ -68,15 +69,18 @@ struct IkeaLED final : BufferedLED {
 
  private:
   void clear() final {
-    auto &data = _data[_buf];
+    auto &data = _data[_write_buffer_index];
     std::fill(begin(data), end(data), 0);
   }
-  void show() final { _buf = !_buf; }
+  void show() final {
+    auto lock = std::unique_lock{_mutex};
+    _write_buffer_index = !_write_buffer_index;
+  }
 
   void setLogo(Color color, const Options &options) final {}
   void set(Coord pos, Color color, const Options &options) final {
     if (pos.x >= 0 && pos.x < 16 && pos.y >= 0 && pos.y < 16) {
-      auto &data = _data[_buf];
+      auto &data = _data[_write_buffer_index];
       auto [r, g, b] = color * timeOfDayBrightness(_brightness);
       auto i = offset(pos);
       if (r || g || b) {
@@ -103,7 +107,13 @@ struct IkeaLED final : BufferedLED {
 
   void render() {
     using namespace std::chrono_literals;
-    auto &data = _data[!_buf];
+
+    {
+      auto lock = std::unique_lock{_mutex};
+      auto read_buffer_index = !_write_buffer_index;
+      std::copy(begin(_data[read_buffer_index]), end(_data[read_buffer_index]), begin(_data[2]));
+    }
+    auto &data = _data[2];
 
     static int ri = 0;
     if (++ri % 1000 == 0) {
@@ -139,8 +149,9 @@ struct IkeaLED final : BufferedLED {
   }
 
   BrightnessProvider &_brightness;
-  std::array<std::vector<uint8_t>, 2> _data;
-  std::atomic_size_t _buf = 0;
+  std::mutex _mutex;
+  std::array<std::vector<uint8_t>, 3> _data;
+  size_t _write_buffer_index = 0;
   std::unique_ptr<async::Thread> _render_thread = async::Thread::create("ikea");
   async::Lifetime _render_work;
 
