@@ -34,6 +34,7 @@ struct IkeaLED final : BufferedLED {
 
     if (!_spi->begin() || err) {
       _spi.reset();
+      return;
     }
 
     gpioSetMode(25, PI_OUTPUT);
