@@ -68,14 +68,17 @@ class SchedulerImpl final : public Scheduler {
       for (auto it = queue.begin(); it != queue.end();) {
         if (auto alive = it->sentinel.lock()) {
           if (it->at > now) {
-            ++it;
-            continue;
-          }
-          if (it->fn) {
-            it->fn();
-          }
-          if (it->period.count()) {
-            schedulerNext(*it);
+            if (!_stop) {
+              ++it;
+              continue;
+            }
+          } else {
+            if (it->fn) {
+              it->fn();
+            }
+            if (!_stop && it->period.count()) {
+              scheduleNext(*it);
+            }
           }
         }
         it = queue.erase(it);
@@ -92,7 +95,7 @@ class SchedulerImpl final : public Scheduler {
   }
 
  private:
-  void schedulerNext(Entry entry) {
+  void scheduleNext(Entry entry) {
     entry.at += entry.period;
     auto lock = std::unique_lock(_mutex);
     _queue.insert(std::move(entry));
