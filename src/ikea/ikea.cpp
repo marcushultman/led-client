@@ -67,7 +67,7 @@ struct IkeaLED final : BufferedLED {
   void clear() final { std::fill(begin(_data), end(_data), 0); }
   void show() final {
 #if !WITH_SIMULATOR
-    set_PWM_dutycycle(_gpio, 8, 128);
+    set_PWM_dutycycle(_gpio, 8, 255 - timeOfDayBrightness(_brightness.brightness()));
 #endif
 
 #if !WITH_SIMULATOR

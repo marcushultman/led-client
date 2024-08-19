@@ -30,11 +30,12 @@ inline int getHour() {
   return std::localtime(&now)->tm_hour;
 }
 
+inline uint8_t timeOfDayBrightness(uint8_t b, int hour = getHour()) {
+  return b ? std::min<uint8_t>(b * brightnessForTimeOfDay(hour) + 1, b) : 0;
+}
+
 inline Color timeOfDayBrightness(BrightnessProvider &bp, int hour = getHour()) {
-  auto b = bp.brightness();
-  return b ? std::min<uint8_t>(b * brightnessForTimeOfDay(hour) + 1, b) *
-                 hueFactor(bp.hue() / 255.0)
-           : 0;
+  return timeOfDayBrightness(bp.brightness(), hour) * hueFactor(bp.hue() / 255.0);
 }
 
 }  // namespace spotiled
