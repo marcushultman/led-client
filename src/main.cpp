@@ -53,9 +53,8 @@ int main(int argc, char *argv[]) {
   auto display_service = settings::DisplayService(brightness);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
       main_scheduler, *http, *presenter, opts.base_url, opts.ikea ? "ikea" : "spotiled",
-      web_proxy::StateThingy::Callbacks{{"/settings2", [&](auto data, auto on_load) {
-                                           display_service.handleUpdate(data, on_load);
-                                         }}});
+      web_proxy::StateThingy::Callbacks{
+          {"/settings2", [&](auto data) { display_service.handleUpdate(data); }}});
 
   auto server = http::makeServer(main_scheduler, [&](auto req, auto on_response, auto on_bytes) {
     return web_proxy->handleRequest(std::move(req), std::move(on_response), std::move(on_bytes));

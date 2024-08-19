@@ -23,7 +23,7 @@ struct State {
 
 struct StateThingy final {
   using RequestUpdate = std::function<void(std::string id, State &)>;
-  using StateCallback = std::function<void(std::string_view data, bool on_load)>;
+  using StateCallback = std::function<void(std::string_view data)>;
   using Callbacks = std::unordered_multimap<std::string, StateCallback>;
 
   StateThingy(async::Scheduler &main_scheduler,
@@ -46,7 +46,7 @@ struct StateThingy final {
   std::optional<http::Response> handleGetRequest(const http::Request &req);
   http::Response handlePostRequest(const http::Request &req);
 
-  void onState(std::string_view id, std::string_view data, bool on_load);
+  void onState(std::string_view id, std::string_view data);
 
   async::Scheduler &_main_scheduler;
   RequestUpdate _request_update;

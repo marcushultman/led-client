@@ -56,7 +56,7 @@ void StateThingy::loadStates() {
     auto &state = _states[id];
     state.data = entry.substr(split + 1);
     std::cout << id << ": loaded (" << state.data << ")" << std::endl;
-    onState(id, state.data, true);
+    onState(id, state.data);
     _request_update(std::move(id), state);
   }
   _snapshot = set;
@@ -141,7 +141,7 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
               jv_get_kind(jv_data) == JV_KIND_STRING ? jv_string_value(jv_data) : std::string();
           data != state.data) {
         state.data = std::move(data);
-        onState(id, state.data, false);
+        onState(id, state.data);
       }
       jv_free(jv_data);
 
@@ -275,9 +275,9 @@ void StateThingy::onServiceResponse(http::Response res, std::string id, State &s
       {.delay = state.retry_backoff});
 }
 
-void StateThingy::onState(std::string_view id, std::string_view data, bool on_load) {
+void StateThingy::onState(std::string_view id, std::string_view data) {
   for (auto [it, end] = _state_callbacks.equal_range(std::string(id)); it != end; ++it) {
-    it->second(data, on_load);
+    it->second(data);
   }
 }
 
