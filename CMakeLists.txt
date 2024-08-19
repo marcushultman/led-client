@@ -39,6 +39,7 @@ target_link_libraries(spoticode
   http_server
   ikea
   present
+  program_options
   settings
   spotiled
   uri

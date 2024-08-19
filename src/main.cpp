@@ -1,10 +1,10 @@
 #include <execinfo.h>
+#include <program_options/program_options.h>
 #include <unistd.h>
 
 #include <csignal>
 #include <future>
 #include <iostream>
-#include <string>
 
 #include "csignal/signal_handler.h"
 #include "http/http.h"
@@ -14,34 +14,13 @@
 #include "settings/updater.h"
 #include "web_proxy/web_proxy.h"
 
-struct Options {
-  bool verbose = false;
-  std::string base_url;
-  bool ikea = false;
-};
-
-Options parseOptions(int argc, char *argv[]) {
-  Options opts;
-  for (auto i = 0; i < argc; ++i) {
-    auto arg = std::string_view(argv[i]);
-    if (arg.find("--verbose") == 0) {
-      opts.verbose = true;
-    } else if (arg.find("--base-url") == 0) {
-      opts.base_url = arg.substr(11);
-    } else if (arg.find("--ikea") == 0) {
-      opts.ikea = true;
-    }
-  }
-  return opts;
-}
-
 int main(int argc, char *argv[]) {
   auto http = http::Http::create();
   if (!http) {
     return 1;
   }
 
-  auto opts = parseOptions(argc, argv);
+  auto opts = program_options::parseOptions(argc, argv);
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
   auto settings = settings::Settings();
