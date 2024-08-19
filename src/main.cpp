@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
   auto presenter = present::makePresenter(opts.ikea ? ikea::create(main_scheduler, brightness)
                                                     : spotiled::create(main_scheduler, brightness));
 
-  auto display_service = settings::DisplayService(brightness, *presenter);
+  auto display_service = settings::DisplayService(brightness);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
       main_scheduler, *http, *presenter, opts.base_url,
       web_proxy::StateThingy::Callbacks{{"/settings2", [&](auto data, auto on_load) {
