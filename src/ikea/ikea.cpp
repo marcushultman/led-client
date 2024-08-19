@@ -4,9 +4,7 @@
 #include <spotiled/renderer_impl.h>
 #include <spotiled/time_of_day_brightness.h>
 
-#include <atomic>
 #include <iostream>
-#include <mutex>
 
 #if !WITH_SIMULATOR
 #include <pigpiod_if2.h>
@@ -26,9 +24,7 @@ constexpr size_t kHeight = 16;
 struct IkeaLED final : BufferedLED {
   explicit IkeaLED(BrightnessProvider &brightness) : _brightness{brightness} {
     static_assert((kWidth * kHeight) % 4 == 0);
-    _data[0].resize(kWidth * kHeight / 8);
-    _data[1].resize(kWidth * kHeight / 8);
-    _data[2].resize(kWidth * kHeight / 8);
+    _data.resize(kWidth * kHeight / 8);
 
 #if !WITH_SIMULATOR
     _config = spi_config_t{
@@ -53,16 +49,13 @@ struct IkeaLED final : BufferedLED {
       return;
     }
 
+    set_mode(_gpio, 8, PI_OUTPUT);
     set_mode(_gpio, 25, PI_OUTPUT);
 #else
     _pipe = decltype(_pipe){"./simulator_out2"};
 #endif
-    _render_work = _render_thread->scheduler().schedule([this] { render(); });
   }
   ~IkeaLED() {
-    _shutdown = true;
-    _render_thread.reset();
-
 #if !WITH_SIMULATOR
     if (_spi) {
       pigpio_stop(_gpio);
@@ -71,25 +64,41 @@ struct IkeaLED final : BufferedLED {
   }
 
  private:
-  void clear() final {
-    auto &data = _data[_write_buffer_index];
-    std::fill(begin(data), end(data), 0);
-  }
+  void clear() final { std::fill(begin(_data), end(_data), 0); }
   void show() final {
-    auto lock = std::unique_lock{_mutex};
-    _write_buffer_index = !_write_buffer_index;
+#if !WITH_SIMULATOR
+    set_PWM_dutycycle(_gpio, 8, 128);
+#endif
+
+#if !WITH_SIMULATOR
+    if (_spi) {
+      gpio_write(_gpio, 25, 0);
+      _spi->write(_data.data(), _data.size());
+      gpio_write(_gpio, 25, 1);
+    }
+#else
+    _pipe << "\n\n\n\n\n\n";
+
+    for (auto y = 0; y < 16; ++y) {
+      for (auto x = 0; x < 16; ++x) {
+        auto i = offset({x, y});
+        auto val = _data[i >> 3] & bitMask(i);
+        _pipe << (val ? "⚪️" : "⚫️") << " ";
+      }
+      _pipe << std::endl;
+    }
+#endif
   }
 
   void setLogo(Color color, const Options &options) final {}
   void set(Coord pos, Color color, const Options &options) final {
     if (pos.x >= 0 && pos.x < 16 && pos.y >= 0 && pos.y < 16) {
-      auto &data = _data[_write_buffer_index];
       auto [r, g, b] = color * timeOfDayBrightness(_brightness);
       auto i = offset(pos);
       if (r || g || b) {
-        data[i >> 3] |= bitMask(i);
+        _data[i >> 3] |= bitMask(i);
       } else {
-        data[i >> 3] &= ~bitMask(i);
+        _data[i >> 3] &= ~bitMask(i);
       }
     }
   }
@@ -108,50 +117,8 @@ struct IkeaLED final : BufferedLED {
   }
   uint8_t bitMask(size_t i) { return 1 << (7 - (i & 7)); }
 
-  void render() {
-    if (_shutdown) {
-      return;
-    }
-    using namespace std::chrono_literals;
-
-    {
-      auto lock = std::unique_lock{_mutex};
-      auto read_buffer_index = !_write_buffer_index;
-      std::copy(begin(_data[read_buffer_index]), end(_data[read_buffer_index]), begin(_data[2]));
-    }
-    auto &data = _data[2];
-
-#if !WITH_SIMULATOR
-    if (_spi) {
-      gpio_write(_gpio, 25, 0);
-      _spi->write(data.data(), data.size());
-      gpio_write(_gpio, 25, 1);
-    }
-    auto delay = 100us;
-#else
-    _pipe << "\n\n\n\n\n\n";
-
-    for (auto y = 0; y < 16; ++y) {
-      for (auto x = 0; x < 16; ++x) {
-        auto i = offset({x, y});
-        auto val = data[i >> 3] & bitMask(i);
-        _pipe << (val ? "⚪️" : "⚫️") << " ";
-      }
-      _pipe << std::endl;
-    }
-    auto delay = 100ms;
-#endif
-
-    _render_work = _render_thread->scheduler().schedule([this] { render(); }, {.delay = delay});
-  }
-
   BrightnessProvider &_brightness;
-  std::mutex _mutex;
-  std::array<std::vector<uint8_t>, 3> _data;
-  size_t _write_buffer_index = 0;
-  std::unique_ptr<async::Thread> _render_thread = async::Thread::create("ikea");
-  async::Lifetime _render_work;
-  std::atomic_bool _shutdown = false;
+  std::vector<uint8_t> _data;
 
 #if !WITH_SIMULATOR
   spi_config_t _config;
