@@ -15,6 +15,7 @@ class WebProxy {
            http::Http &,
            present::Presenter &,
            std::string base_url,
+           std::string_view device_id,
            StateThingy::Callbacks);
   ~WebProxy();
   http::Lifetime handleRequest(http::Request,
@@ -28,6 +29,7 @@ class WebProxy {
   http::Http &_http;
   std::string _base_url;
   std::string_view _base_host;
+  std::string_view _device_id;
   std::unique_ptr<StateThingy> _state_thingy;
 };
 

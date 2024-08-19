@@ -19,11 +19,13 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
                    http::Http &http,
                    present::Presenter &presenter,
                    std::string base_url,
+                   std::string_view device_id,
                    StateThingy::Callbacks callbacks)
     : _main_scheduler{main_scheduler},
       _http{http},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)},
       _base_host{uri::Uri(_base_url).authority.host},
+      _device_id{device_id},
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
           [this](auto id, auto &state) { requestStateUpdate(std::move(id), state); },
@@ -60,6 +62,8 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
   jv = jv_dump_string(jv, 0);
   req.headers["x-spotiled"] = encoding::base64::encode(jv_string_value(jv));
   jv_free(jv);
+
+  req.headers["x-device-id"] = _device_id;
 
   return _http.request(
       std::move(req),
