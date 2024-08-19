@@ -49,11 +49,10 @@ int main(int argc, char *argv[]) {
   auto presenter = present::makePresenter(opts.ikea ? ikea::create(main_scheduler, settings)
                                                     : spotiled::create(main_scheduler, settings));
 
-  auto settings_updater = settings::Updater(settings);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
       main_scheduler, *http, *presenter, opts.base_url, opts.ikea ? "ikea" : "spotiled",
       web_proxy::StateThingy::Callbacks{
-          {"/settings2", [&](auto data) { settings_updater.update(data); }}});
+          {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
 
   auto server = http::makeServer(main_scheduler, [&](auto req, auto on_response, auto on_bytes) {
     return web_proxy->handleRequest(std::move(req), std::move(on_response), std::move(on_bytes));

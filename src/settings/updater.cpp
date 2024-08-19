@@ -10,9 +10,7 @@ extern "C" {
 
 namespace settings {
 
-Updater::Updater(Settings &settings) : _settings(settings) {}
-
-void Updater::update(std::string_view data) {
+void updateSettings(Settings &settings, std::string_view data) {
   auto jv_dict = jv_parse(encoding::base64::decode(data).c_str());
   if (jv_get_kind(jv_dict) != JV_KIND_OBJECT) {
     jv_free(jv_dict);
@@ -22,18 +20,18 @@ void Updater::update(std::string_view data) {
   auto jv_hue = jv_object_get(jv_copy(jv_dict), jv_string("hue"));
 
   if (jv_get_kind(jv_brightness) == JV_KIND_NUMBER) {
-    _settings.brightness = jv_number_value(jv_brightness);
+    settings.brightness = jv_number_value(jv_brightness);
   }
   if (jv_get_kind(jv_hue) == JV_KIND_NUMBER) {
-    _settings.hue = jv_number_value(jv_hue);
+    settings.hue = jv_number_value(jv_hue);
   }
 
   jv_free(jv_hue);
   jv_free(jv_brightness);
   jv_free(jv_dict);
 
-  std::cout << "settings brightness: " << int(_settings.brightness)
-            << " hue: " << int(_settings.hue) << std::endl;
+  std::cout << "settings brightness: " << int(settings.brightness) << " hue: " << int(settings.hue)
+            << std::endl;
 }
 
 }  // namespace settings

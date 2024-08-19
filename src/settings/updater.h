@@ -6,13 +6,6 @@
 
 namespace settings {
 
-struct Updater {
-  explicit Updater(Settings &);
-
-  void update(std::string_view data);
-
- private:
-  Settings &_settings;
-};
+void updateSettings(Settings &, std::string_view data);
 
 }  // namespace settings
