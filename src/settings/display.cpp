@@ -1,5 +1,6 @@
 #include "display.h"
 
+#include <algorithm>
 #include <iostream>
 
 #include "encoding/base64.h"
