@@ -18,6 +18,7 @@ target_link_libraries(ikea
   async
   color
   spotiled
+  settings
 )
 
 if (PI)

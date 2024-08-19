@@ -10,7 +10,7 @@ namespace spotiled {
 namespace {
 
 struct SpotiLED final : BufferedLED {
-  explicit SpotiLED(BrightnessProvider &brightness) : _brightness{brightness} {
+  explicit SpotiLED(const settings::Settings &settings) : _settings{settings} {
     _led->show(*_buffer);
   }
 
@@ -19,28 +19,29 @@ struct SpotiLED final : BufferedLED {
   void show() final { _led->show(*_buffer); }
 
   void setLogo(Color color, const Options &options) final {
-    auto [r, g, b] = color * timeOfDayBrightness(_brightness);
+    auto [r, g, b] = color * timeOfDayBrightness(_settings);
     for (auto i = 0; i < 19; ++i) {
       _buffer->set(i, r, g, b, options);
     }
   }
   void set(Coord pos, Color color, const Options &options) final {
     if (pos.x >= 0 && pos.x < 23 && pos.y >= 0 && pos.y < 16) {
-      auto [r, g, b] = color * timeOfDayBrightness(_brightness);
+      auto [r, g, b] = color * timeOfDayBrightness(_settings);
       _buffer->set(19 + offset(pos), r, g, b, options);
     }
   }
   size_t offset(Coord pos) { return 16 * pos.x + 15 - pos.y; }
 
-  BrightnessProvider &_brightness;
+  const settings::Settings &_settings;
   std::unique_ptr<led::LED> _led = apa102::createLED();
   std::unique_ptr<led::Buffer> _buffer{_led->createBuffer()};
 };
 
 }  // namespace
 
-std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler, BrightnessProvider &brightness) {
-  return createRenderer(main_scheduler, std::make_unique<SpotiLED>(brightness));
+std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler,
+                                 const settings::Settings &settings) {
+  return createRenderer(main_scheduler, std::make_unique<SpotiLED>(settings));
 }
 
 }  // namespace spotiled

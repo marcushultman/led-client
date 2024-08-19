@@ -11,8 +11,7 @@
 #include "http/server/server.h"
 #include "ikea/ikea.h"
 #include "present/presenter.h"
-#include "settings/display.h"
-#include "spotiled/brightness_provider.h"
+#include "settings/updater.h"
 #include "web_proxy/web_proxy.h"
 
 struct Options {
@@ -45,16 +44,16 @@ int main(int argc, char *argv[]) {
   auto opts = parseOptions(argc, argv);
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
-  auto brightness = spotiled::BrightnessProvider();
+  auto settings = settings::Settings();
 
-  auto presenter = present::makePresenter(opts.ikea ? ikea::create(main_scheduler, brightness)
-                                                    : spotiled::create(main_scheduler, brightness));
+  auto presenter = present::makePresenter(opts.ikea ? ikea::create(main_scheduler, settings)
+                                                    : spotiled::create(main_scheduler, settings));
 
-  auto display_service = settings::DisplayService(brightness);
+  auto settings_updater = settings::Updater(settings);
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
       main_scheduler, *http, *presenter, opts.base_url, opts.ikea ? "ikea" : "spotiled",
       web_proxy::StateThingy::Callbacks{
-          {"/settings2", [&](auto data) { display_service.handleUpdate(data); }}});
+          {"/settings2", [&](auto data) { settings_updater.update(data); }}});
 
   auto server = http::makeServer(main_scheduler, [&](auto req, auto on_response, auto on_bytes) {
     return web_proxy->handleRequest(std::move(req), std::move(on_response), std::move(on_bytes));

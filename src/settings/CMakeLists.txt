@@ -1,7 +1,8 @@
 
 set(SOURCES
-  display.h
-  display.cpp
+  settings.h
+  updater.h
+  updater.cpp
 )
 
 add_library(settings ${SOURCES})
@@ -11,9 +12,6 @@ target_include_directories(settings PRIVATE
   ${JQ_INCLUDE_DIR}
 )
 target_link_libraries(settings
-  http
-  present
-  spotiled
-  uri
+  encoding
   ${JQ}
 )

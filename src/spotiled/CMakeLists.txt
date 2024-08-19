@@ -1,7 +1,5 @@
 
 set(SOURCES
-  brightness_provider.h
-  brightness_provider.cpp
   renderer.h
   renderer_impl.h
   renderer_impl.cpp
@@ -18,4 +16,5 @@ target_include_directories(spotiled PRIVATE
 target_link_libraries(spotiled
   apa102
   color
+  settings
 )

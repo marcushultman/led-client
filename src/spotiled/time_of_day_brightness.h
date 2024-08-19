@@ -1,11 +1,12 @@
 #pragma once
 
+#include <settings/settings.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 
-#include "brightness_provider.h"
 #include "color/color.h"
 
 namespace spotiled {
@@ -34,8 +35,8 @@ inline uint8_t timeOfDayBrightness(uint8_t b, int hour = getHour()) {
   return b ? std::min<uint8_t>(b * brightnessForTimeOfDay(hour) + 1, b) : 0;
 }
 
-inline Color timeOfDayBrightness(BrightnessProvider &bp, int hour = getHour()) {
-  return timeOfDayBrightness(bp.brightness(), hour) * hueFactor(bp.hue() / 255.0);
+inline Color timeOfDayBrightness(const settings::Settings &bp, int hour = getHour()) {
+  return timeOfDayBrightness(bp.brightness, hour) * hueFactor(bp.hue / 255.0);
 }
 
 }  // namespace spotiled
