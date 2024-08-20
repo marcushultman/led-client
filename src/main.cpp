@@ -33,8 +33,8 @@ int main(int argc, char *argv[]) {
       web_proxy::StateThingy::Callbacks{
           {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
 
-  auto server = http::makeServer(main_scheduler, [&](auto req, auto on_response, auto on_bytes) {
-    return web_proxy->handleRequest(std::move(req), std::move(on_response), std::move(on_bytes));
+  auto server = http::makeServer(main_scheduler, [&](auto req, auto opts) {
+    return web_proxy->handleRequest(std::move(req), std::move(opts));
   });
   auto _ = main_scheduler.schedule(
       [port = server->port()] { std::cout << "Listening on port: " << port << std::endl; });

@@ -1,12 +1,11 @@
 #pragma once
 
+#include <async/scheduler.h>
+#include <http/http.h>
+
 #include <functional>
 #include <memory>
-#include <unordered_map>
 #include <variant>
-
-#include "async/scheduler.h"
-#include "http/http.h"
 
 namespace http {
 
@@ -16,8 +15,7 @@ struct Server {
 };
 
 using SyncHandler = std::function<Response(Request)>;
-using AsyncHandler =
-    std::function<Lifetime(Request, RequestOptions::OnResponse, RequestOptions::OnBytes)>;
+using AsyncHandler = std::function<Lifetime(Request, RequestOptions)>;
 
 using RequestHandler = std::variant<SyncHandler, AsyncHandler>;
 

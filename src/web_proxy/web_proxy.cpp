@@ -34,9 +34,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
 
 WebProxy::~WebProxy() = default;
 
-http::Lifetime WebProxy::handleRequest(http::Request req,
-                                       http::RequestOptions::OnResponse on_response,
-                                       http::RequestOptions::OnBytes on_bytes) {
+http::Lifetime WebProxy::handleRequest(http::Request req, http::RequestOptions opts) {
   if (req.url.empty() || req.url[0] == '*') {
     req.url = _base_url;
   } else if (req.url[0] == '/') {
@@ -44,8 +42,8 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
   }
 
   if (auto res = _state_thingy->handleRequest(req)) {
-    return _main_scheduler.schedule(
-        [res = std::move(res), on_response] { on_response(std::move(*res)); });
+    return opts.post_to.schedule(
+        [res = std::move(res), opts = std::move(opts)] { opts.on_response(std::move(*res)); });
   }
 
   if (auto it = req.headers.find(kHostHeader); it != req.headers.end()) {
@@ -65,11 +63,7 @@ http::Lifetime WebProxy::handleRequest(http::Request req,
 
   req.headers["x-device-id"] = _device_id;
 
-  return _http.request(
-      std::move(req),
-      {.post_to = _main_scheduler,
-       .on_response = [this, on_response](auto res) { on_response(std::move(res)); },
-       .on_bytes = std::move(on_bytes)});
+  return _http.request(std::move(req), std::move(opts));
 }
 
 void WebProxy::requestStateUpdate(std::string id, State &state) {

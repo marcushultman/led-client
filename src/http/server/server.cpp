@@ -181,10 +181,12 @@ struct Connection : public std::enable_shared_from_this<Connection> {
 
           } else if (auto *handler = std::get_if<AsyncHandler>(&_handler)) {
             _main_work = (*handler)(
-                std::move(req), [this, self](auto res) mutable { sendResponse(std::move(res)); },
-                [this, self](auto offset, auto data, auto lifetime) mutable {
-                  sendData(data, std::move(lifetime));
-                });
+                std::move(req),
+                {.post_to = _main_scheduler,
+                 .on_response = [this, self](auto res) mutable { sendResponse(std::move(res)); },
+                 .on_bytes = [this, self](
+                                 auto, auto data,
+                                 auto lifetime) mutable { sendData(data, std::move(lifetime)); }});
           }
         });
 

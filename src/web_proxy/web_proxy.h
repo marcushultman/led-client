@@ -18,9 +18,7 @@ class WebProxy {
            std::string_view device_id,
            StateThingy::Callbacks);
   ~WebProxy();
-  http::Lifetime handleRequest(http::Request,
-                               http::RequestOptions::OnResponse,
-                               http::RequestOptions::OnBytes);
+  http::Lifetime handleRequest(http::Request, http::RequestOptions);
 
  private:
   void requestStateUpdate(std::string id, State &);
