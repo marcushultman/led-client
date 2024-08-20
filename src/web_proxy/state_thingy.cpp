@@ -191,6 +191,7 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
         display.width = toNumber(jv_object_get(jv_copy(jv_display), jv_string("width")));
         display.height = toNumber(jv_object_get(jv_copy(jv_display), jv_string("height")));
         display.xscroll = toNumber(jv_object_get(jv_copy(jv_display), jv_string("xscroll")));
+        display.wave = toNumber(jv_object_get(jv_copy(jv_display), jv_string("wave")));
 
         if (state.display &&
             (state.display->prio != display.prio || state.display->xscroll != display.xscroll)) {
@@ -199,8 +200,10 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
         }
 
         if (!std::exchange(state.display, std::move(display))) {
-          _presenter.add(*state.display, {.prio = state.display->prio,
-                                          .render_period = state.display->xscroll ? 100ms : 1h});
+          _presenter.add(
+              *state.display,
+              {.prio = state.display->prio,
+               .render_period = (state.display->xscroll || state.display->wave) ? 100ms : 1h});
         } else {
           _presenter.notify();
         }

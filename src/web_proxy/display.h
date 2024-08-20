@@ -16,6 +16,7 @@ struct Display final : present::Presentable {
   size_t width = {};
   size_t height = {};
   int xscroll = {};
+  double wave = {};
 
   void onRenderPass(render::LED &, std::chrono::milliseconds) final;
 };
