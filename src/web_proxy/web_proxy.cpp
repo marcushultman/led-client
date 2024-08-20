@@ -34,6 +34,10 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
 
 WebProxy::~WebProxy() = default;
 
+WebProxy::RequestHandler WebProxy::asRequestHandler() {
+  return [this](auto req, auto opts) { return handleRequest(std::move(req), std::move(opts)); };
+}
+
 http::Lifetime WebProxy::handleRequest(http::Request req, http::RequestOptions opts) {
   if (req.url.empty() || req.url[0] == '*') {
     req.url = _base_url;

@@ -11,6 +11,8 @@ namespace web_proxy {
 
 class WebProxy {
  public:
+  using RequestHandler = std::function<http::Lifetime(http::Request, http::RequestOptions)>;
+
   WebProxy(async::Scheduler &,
            http::Http &,
            present::Presenter &,
@@ -18,9 +20,11 @@ class WebProxy {
            std::string_view device_id,
            StateThingy::Callbacks);
   ~WebProxy();
-  http::Lifetime handleRequest(http::Request, http::RequestOptions);
+
+  RequestHandler asRequestHandler();
 
  private:
+  http::Lifetime handleRequest(http::Request, http::RequestOptions);
   void requestStateUpdate(std::string id, State &);
 
   async::Scheduler &_main_scheduler;
