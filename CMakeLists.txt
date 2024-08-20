@@ -13,7 +13,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-list(APPEND CMAKE_SYSTEM_PREFIX_PATH /opt/homebrew)
+list(APPEND CMAKE_PREFIX_PATH /opt/homebrew)
 
 find_package(CURL REQUIRED)
 find_library(JQ NAMES libjq.dylib libjq.so REQUIRED)
