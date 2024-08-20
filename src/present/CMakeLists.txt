@@ -11,5 +11,5 @@ target_include_directories(present PRIVATE
 )
 target_link_libraries(present
   async
-  spotiled
+  render
 )

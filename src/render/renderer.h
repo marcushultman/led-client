@@ -6,7 +6,7 @@
 #include <chrono>
 #include <functional>
 
-namespace spotiled {
+namespace render {
 
 struct Coord {
   int x = 0;
@@ -40,4 +40,4 @@ struct Renderer {
   virtual void notify() = 0;
 };
 
-}  // namespace spotiled
+}  // namespace render

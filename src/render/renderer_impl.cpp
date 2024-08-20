@@ -1,8 +1,8 @@
-#include <spotiled/renderer_impl.h>
+#include <render/renderer_impl.h>
 
 #include <queue>
 
-namespace spotiled {
+namespace render {
 namespace {
 
 struct RendererImpl final : public Renderer {
@@ -67,4 +67,4 @@ std::unique_ptr<Renderer> createRenderer(async::Scheduler &main_scheduler,
   return std::make_unique<RendererImpl>(main_scheduler, std::move(led));
 }
 
-}  // namespace spotiled
+}  // namespace render

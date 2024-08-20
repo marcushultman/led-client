@@ -16,7 +16,7 @@ struct Entry {
 };
 
 struct RenderHandle {
-  RenderHandle(spotiled::Renderer &renderer, Entry entry) : entry{std::move(entry)} {
+  RenderHandle(render::Renderer &renderer, Entry entry) : entry{std::move(entry)} {
     std::cout << "presentable onStart " << entry.presentable << std::endl;
     entry.presentable->onStart();
     renderer.add([this, alive = std::weak_ptr<void>(_alive)](
@@ -40,7 +40,7 @@ struct RenderHandle {
 };
 
 struct PresenterImpl final : Presenter {
-  PresenterImpl(std::unique_ptr<spotiled::Renderer> renderer) : _renderer{std::move(renderer)} {}
+  PresenterImpl(std::unique_ptr<render::Renderer> renderer) : _renderer{std::move(renderer)} {}
 
   void add(Presentable &presentable, const Options &options = {}) final {
     if (_current && _current->entry.options.prio < options.prio) {
@@ -81,12 +81,12 @@ struct PresenterImpl final : Presenter {
     _renderer->notify();
   }
 
-  std::unique_ptr<spotiled::Renderer> _renderer;
+  std::unique_ptr<render::Renderer> _renderer;
   std::map<Prio, std::deque<Entry>, std::greater<Prio>> _queue;
   std::unique_ptr<RenderHandle> _current;
 };
 
-std::unique_ptr<Presenter> makePresenter(std::unique_ptr<spotiled::Renderer> renderer) {
+std::unique_ptr<Presenter> makePresenter(std::unique_ptr<render::Renderer> renderer) {
   return std::make_unique<PresenterImpl>(std::move(renderer));
 }
 

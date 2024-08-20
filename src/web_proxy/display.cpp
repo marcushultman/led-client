@@ -7,7 +7,7 @@ namespace {
 
 }  // namespace
 
-void Display::onRenderPass(spotiled::LED &led, std::chrono::milliseconds elapsed) {
+void Display::onRenderPass(render::LED &led, std::chrono::milliseconds elapsed) {
   led.setLogo(logo);
 
   auto w = std::max<int>(width, 23);

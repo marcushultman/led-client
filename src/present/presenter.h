@@ -1,7 +1,7 @@
 #pragma once
 
 #include <async/scheduler.h>
-#include <spotiled/spotiled.h>
+#include <render/renderer.h>
 
 #include <chrono>
 #include <memory>
@@ -11,7 +11,7 @@ namespace present {
 struct Presentable {
   virtual ~Presentable() = default;
   virtual void onStart(){};
-  virtual void onRenderPass(spotiled::LED &, std::chrono::milliseconds elapsed){};
+  virtual void onRenderPass(render::LED &, std::chrono::milliseconds elapsed){};
   virtual void onStop(){};
 };
 
@@ -32,6 +32,6 @@ struct Presenter {
   virtual void notify() = 0;
 };
 
-std::unique_ptr<Presenter> makePresenter(std::unique_ptr<spotiled::Renderer>);
+std::unique_ptr<Presenter> makePresenter(std::unique_ptr<render::Renderer>);
 
 }  // namespace present

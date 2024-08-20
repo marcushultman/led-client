@@ -1,8 +1,8 @@
 #include <async/scheduler.h>
 #include <color/color.h>
 #include <ikea/ikea.h>
-#include <spotiled/renderer_impl.h>
-#include <spotiled/time_of_day_brightness.h>
+#include <render/renderer_impl.h>
+#include <render/time_of_day_brightness.h>
 
 #include <iostream>
 
@@ -16,7 +16,7 @@
 namespace ikea {
 namespace {
 
-using namespace spotiled;
+using namespace render;
 
 constexpr size_t kWidth = 16;
 constexpr size_t kHeight = 16;

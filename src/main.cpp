@@ -12,6 +12,7 @@
 #include "ikea/ikea.h"
 #include "present/presenter.h"
 #include "settings/updater.h"
+#include "spotiled/spotiled.h"
 #include "web_proxy/web_proxy.h"
 
 int main(int argc, char *argv[]) {

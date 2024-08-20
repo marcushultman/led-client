@@ -9,7 +9,7 @@
 
 #include "color/color.h"
 
-namespace spotiled {
+namespace render {
 
 constexpr auto kWarm = std::array<Color, 6>{{{155, 41, 72},
                                              {255, 114, 81},
@@ -39,7 +39,7 @@ inline Color timeOfDayBrightness(const settings::Settings &bp, int hour = getHou
   return timeOfDayBrightness(bp.brightness, hour) * hueFactor(bp.hue / 255.0);
 }
 
-}  // namespace spotiled
+}  // namespace render
 
 #if 0
 

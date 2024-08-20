@@ -1,13 +1,15 @@
 #include "spotiled/spotiled.h"
 
 #include <apa102/apa102.h>
+#include <render/renderer_impl.h>
+#include <render/time_of_day_brightness.h>
 
 #include "color/color.h"
-#include "renderer_impl.h"
-#include "time_of_day_brightness.h"
 
 namespace spotiled {
 namespace {
+
+using namespace render;
 
 struct SpotiLED final : BufferedLED {
   explicit SpotiLED(const settings::Settings &settings) : _settings{settings} {

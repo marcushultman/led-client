@@ -17,7 +17,7 @@ struct Display final : present::Presentable {
   size_t height = {};
   int xscroll = {};
 
-  void onRenderPass(spotiled::LED &, std::chrono::milliseconds) final;
+  void onRenderPass(render::LED &, std::chrono::milliseconds) final;
 };
 
 }  // namespace web_proxy
