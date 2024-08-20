@@ -22,7 +22,7 @@ find_path(ASIO_INCLUDE_DIR asio.hpp REQUIRED)
 
 add_subdirectory(src)
 
-add_executable(spoticode src/main.cpp)
+add_executable(spoticode src/spotiled/main.cpp)
 
 target_include_directories(spoticode PRIVATE
   ${CURL_INCLUDE_DIR}
