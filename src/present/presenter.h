@@ -29,7 +29,6 @@ struct Presenter {
   virtual ~Presenter() = default;
   virtual void add(Presentable &, const Options & = {}) = 0;
   virtual void erase(Presentable &) = 0;
-  virtual void clear() = 0;
   virtual void notify() = 0;
 };
 

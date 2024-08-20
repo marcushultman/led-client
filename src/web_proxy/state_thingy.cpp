@@ -41,7 +41,14 @@ StateThingy::StateThingy(async::Scheduler &main_scheduler,
       _load_work{_main_scheduler.schedule([this] { loadStates(); })},
       _save_work{
           _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min})} {}
-StateThingy::~StateThingy() { saveStates(); }
+StateThingy::~StateThingy() {
+  saveStates();
+  for (auto &[_, state] : _states) {
+    if (state.display) {
+      _presenter.erase(*state.display);
+    }
+  }
+}
 
 void StateThingy::loadStates() {
   std::unordered_set<std::string> set;

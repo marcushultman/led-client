@@ -8,6 +8,10 @@ namespace {
 struct RendererImpl final : public Renderer {
   RendererImpl(async::Scheduler &main_scheduler, std::unique_ptr<BufferedLED> led)
       : _main_scheduler{main_scheduler}, _led{std::move(led)} {}
+  ~RendererImpl() {
+    _led->clear();
+    _led->show();
+  }
 
   void add(RenderCallback callback) final {
     _pending_callbacks.push(std::move(callback));

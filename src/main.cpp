@@ -42,9 +42,9 @@ int main(int argc, char *argv[]) {
     std::cerr << "Signal received: " << signal << std::endl;
 
     if (signal == SIGINT) {
-      presenter->clear();
       server.reset();
       web_proxy.reset();
+      presenter.reset();
       interrupt.set_value(0);
     }
     return signal == SIGINT;

@@ -66,11 +66,6 @@ struct PresenterImpl final : Presenter {
     }
   }
 
-  void clear() final {
-    _queue.clear();
-    _current.reset();
-  }
-
   void notify() final { _renderer->notify(); }
 
  private:
