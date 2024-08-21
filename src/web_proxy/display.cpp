@@ -23,8 +23,8 @@ void Display::onRenderPass(render::LED &led, std::chrono::milliseconds elapsed) 
 
     if (wave) {
       y += roundUp((7.5 - y) * 0.5 *
-                   (1 + std::sin(-M_PI * std::sin(sx * M_PI_2 / 23) +
-                                 wave * (elapsed.count() * M_2_PI) / 1000)));
+                   (1 + std::cos(-M_PI * std::sin(sx * M_PI_2 / 23) +
+                                 wave * (elapsed.count() * 2 * M_PI) / (1000 * 60))));
     }
 
     auto *p = reinterpret_cast<uint8_t *>(bytes.data() + 4 * i);
