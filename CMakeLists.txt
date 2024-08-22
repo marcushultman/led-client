@@ -19,31 +19,3 @@ find_path(JQ_INCLUDE_DIR jq.h REQUIRED)
 find_path(ASIO_INCLUDE_DIR asio.hpp REQUIRED)
 
 add_subdirectory(src)
-
-add_executable(spoticode src/spotiled/main.cpp)
-
-target_include_directories(spoticode PRIVATE
-  ${CURL_INCLUDE_DIR}
-  ${JQ_INCLUDE_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-target_link_libraries(spoticode
-  # 1st party
-  async
-  color
-  csignal
-  http
-  http_server
-  ikea
-  present
-  program_options
-  settings
-  spotiled
-  uri
-  web_proxy
-  # 3rd party
-  pthread
-  ${CURL_LIBRARIES}
-  ${JQ}
-)
