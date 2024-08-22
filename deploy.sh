@@ -2,19 +2,31 @@
 
 set -eu
 
+if [ "$#" -ne 1 ]; then
+  >&2 echo "Target not provided"
+  exit 1
+fi
+
 cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null
+
 git fetch origin main
 git checkout origin/main
 
-pkill -SIGTERM spoticode || true
-# python3 scripts/clear.py
+mkdir -p build
+cd build
 
-mkdir -p ~/spoticode-apa102/build
-cd ~/spoticode-apa102/build
+BIN_PATH="./$1"
+TARGET=$( basename $1 )
 
 cmake -DPI=1 ..
-make spoticode
+make "$TARGET"
+pkill -SIGTERM $TARGET || true
 
-nohup bash -c "./spoticode $@ > >(/usr/bin/logger -t spoticode) 2> >(/usr/bin/logger -t spotcode-err)" 1>/dev/null 2>/dev/null &
+if [ ! -f "$BIN_PATH" ]; then
+  >&2 echo "Executable not found"
+  exit 1
+fi
+
+nohup bash -c "$BIN_PATH $@ > >(/usr/bin/logger -t $TARGET) 2> >(/usr/bin/logger -t $TARGET-err)" 1>/dev/null 2>/dev/null &
 
 echo "Done!"
