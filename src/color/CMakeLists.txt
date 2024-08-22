@@ -7,5 +7,5 @@ set(SOURCES
 add_library(color ${SOURCES})
 
 target_include_directories(color PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )

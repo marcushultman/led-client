@@ -7,5 +7,5 @@ set(SOURCES
 add_library(led ${SOURCES})
 
 target_include_directories(led PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )

@@ -7,7 +7,7 @@ set(SOURCES
 add_library(storage ${SOURCES})
 
 target_include_directories(storage PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 
 add_subdirectory(tests)

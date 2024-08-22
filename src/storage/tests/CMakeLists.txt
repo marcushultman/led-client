@@ -6,7 +6,7 @@ set(SOURCES
 add_executable(storage_test ${SOURCES})
 
 target_include_directories(storage_test PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(storage_test
   storage

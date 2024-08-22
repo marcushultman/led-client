@@ -7,7 +7,7 @@ set(SOURCES
 add_library(encoding ${SOURCES})
 
 target_include_directories(encoding PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(encoding
 )

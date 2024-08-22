@@ -10,7 +10,7 @@ add_library(http_server ${SOURCES})
 
 target_include_directories(http_server PRIVATE
   ${ASIO_INCLUDE_DIR}
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(http_server
   async

@@ -10,7 +10,7 @@ set(SOURCES
 add_library(http ${SOURCES})
 
 target_include_directories(http PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(http
   async

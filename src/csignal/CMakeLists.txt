@@ -7,7 +7,7 @@ set(SOURCES
 add_library(csignal ${SOURCES})
 
 target_include_directories(csignal PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(csignal
   async

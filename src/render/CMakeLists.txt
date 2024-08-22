@@ -9,7 +9,7 @@ set(SOURCES
 add_library(render ${SOURCES})
 
 target_include_directories(render PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(render
   async

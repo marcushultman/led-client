@@ -7,7 +7,7 @@ set(SOURCES
 add_library(present ${SOURCES})
 
 target_include_directories(present PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(present
   async

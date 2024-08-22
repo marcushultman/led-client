@@ -8,7 +8,7 @@ set(SOURCES
 add_library(settings ${SOURCES})
 
 target_include_directories(settings PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
   ${JQ_INCLUDE_DIR}
 )
 target_link_libraries(settings

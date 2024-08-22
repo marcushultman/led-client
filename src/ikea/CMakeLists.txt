@@ -7,7 +7,7 @@ set(SOURCES
 add_library(ikea ${SOURCES})
 
 target_include_directories(ikea PRIVATE
-  ${ROOT_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src
 )
 
 if (APPLE)
