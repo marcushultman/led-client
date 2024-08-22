@@ -18,4 +18,15 @@ find_library(JQ NAMES libjq.dylib libjq.so REQUIRED)
 find_path(JQ_INCLUDE_DIR jq.h REQUIRED)
 find_path(ASIO_INCLUDE_DIR asio.hpp REQUIRED)
 
+add_library(curl INTERFACE)
+target_include_directories(curl INTERFACE ${CURL_INCLUDE_DIR})
+target_link_libraries(curl INTERFACE ${CURL_LIBRARIES})
+
+add_library(jq INTERFACE)
+target_include_directories(jq INTERFACE ${JQ_INCLUDE_DIR})
+target_link_libraries(jq INTERFACE ${JQ})
+
+add_library(asio INTERFACE)
+target_include_directories(asio INTERFACE ${ASIO_INCLUDE_DIR})
+
 add_subdirectory(src)

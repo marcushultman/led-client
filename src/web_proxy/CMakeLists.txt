@@ -12,13 +12,12 @@ add_library(web_proxy ${SOURCES})
 
 target_include_directories(web_proxy PRIVATE
   ${PROJECT_SOURCE_DIR}/src
-  ${JQ_INCLUDE_DIR}
 )
 target_link_libraries(web_proxy
   async
   encoding
   http
-  ${JQ}
+  jq
   present
   storage
   uri

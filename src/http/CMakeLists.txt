@@ -14,7 +14,7 @@ target_include_directories(http PRIVATE
 )
 target_link_libraries(http
   async
-  ${CURL_LIBRARIES}
+  curl
 )
 
 add_subdirectory(tests)

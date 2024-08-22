@@ -19,8 +19,6 @@ target_link_libraries(spotiled
 add_executable(spoticode main.cpp)
 
 target_include_directories(spoticode PRIVATE
-  ${CURL_INCLUDE_DIR}
-  ${JQ_INCLUDE_DIR}
   ${PROJECT_SOURCE_DIR}/src
 )
 
@@ -40,6 +38,6 @@ target_link_libraries(spoticode
   web_proxy
   # 3rd party
   pthread
-  ${CURL_LIBRARIES}
-  ${JQ}
+  curl
+  jq
 )

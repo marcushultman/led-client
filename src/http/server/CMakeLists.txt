@@ -9,10 +9,10 @@ set(SOURCES
 add_library(http_server ${SOURCES})
 
 target_include_directories(http_server PRIVATE
-  ${ASIO_INCLUDE_DIR}
   ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(http_server
+  asio
   async
   http
 )
