@@ -2,7 +2,7 @@
 
 set -eu
 
-cd ~/spoticode-apa102
+cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null
 git fetch origin main
 git checkout origin/main
 
