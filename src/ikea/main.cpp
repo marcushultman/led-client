@@ -9,9 +9,9 @@
 #include "csignal/signal_handler.h"
 #include "http/http.h"
 #include "http/server/server.h"
+#include "ikea/ikea.h"
 #include "present/presenter.h"
 #include "settings/updater.h"
-#include "spotiled/spotiled.h"
 #include "web_proxy/web_proxy.h"
 
 int main(int argc, char *argv[]) {
@@ -25,10 +25,10 @@ int main(int argc, char *argv[]) {
   auto &main_scheduler = main_thread->scheduler();
   auto settings = settings::Settings();
 
-  auto presenter = present::makePresenter(spotiled::create(main_scheduler, settings));
+  auto presenter = present::makePresenter(ikea::create(main_scheduler, settings));
 
   auto web_proxy = std::make_unique<web_proxy::WebProxy>(
-      main_scheduler, *http, *presenter, opts.base_url, "spotiled",
+      main_scheduler, *http, *presenter, opts.base_url, "ikea",
       web_proxy::StateThingy::Callbacks{
           {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
 

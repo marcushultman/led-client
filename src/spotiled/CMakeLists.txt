@@ -29,7 +29,6 @@ target_link_libraries(spoticode
   csignal
   http
   http_server
-  ikea
   present
   program_options
   settings

@@ -10,8 +10,6 @@ Options parseOptions(int argc, char *argv[]) {
       opts.verbose = true;
     } else if (arg.find("--base-url") == 0) {
       opts.base_url = arg.substr(11);
-    } else if (arg.find("--ikea") == 0) {
-      opts.ikea = true;
     }
   }
   return opts;
