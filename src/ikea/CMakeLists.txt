@@ -1,5 +1,7 @@
 
 set(SOURCES
+  button_reader.h
+  button_reader.cpp
   ikea.h
   ikea.cpp
 )
