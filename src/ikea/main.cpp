@@ -1,4 +1,5 @@
 #include <execinfo.h>
+#include <ikea/button_reader.h>
 #include <program_options/program_options.h>
 #include <unistd.h>
 
@@ -31,6 +32,9 @@ int main(int argc, char *argv[]) {
       main_scheduler, *http, *presenter, opts.base_url, "ikea",
       web_proxy::StateThingy::Callbacks{
           {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
+
+  auto button_reader = std::make_unique<ikea::ButtonReader>(
+      main_scheduler, [&] { web_proxy->updateState("/button"); });
 
   auto server = http::makeServer(main_scheduler, web_proxy->asRequestHandler());
   auto _ = main_scheduler.schedule(

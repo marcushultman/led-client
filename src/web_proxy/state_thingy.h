@@ -35,6 +35,7 @@ struct StateThingy final {
   const std::unordered_map<std::string, State> &states();
 
   std::optional<http::Response> handleRequest(const http::Request &req);
+  void updateState(std::string id);
 
   bool handleStateUpdate(const std::string &json);
   void onServiceResponse(http::Response res, std::string id, State &state);

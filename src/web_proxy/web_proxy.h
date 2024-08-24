@@ -22,6 +22,7 @@ class WebProxy {
   ~WebProxy();
 
   RequestHandler asRequestHandler();
+  void updateState(std::string id);
 
  private:
   http::Lifetime handleRequest(http::Request, http::RequestOptions);

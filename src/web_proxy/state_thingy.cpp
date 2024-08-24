@@ -104,6 +104,8 @@ std::optional<http::Response> StateThingy::handleGetRequest(const http::Request 
   return {};
 }
 
+void StateThingy::updateState(std::string id) { _request_update(id, _states[id]); }
+
 http::Response StateThingy::handlePostRequest(const http::Request &req) {
   auto url = uri::Uri(req.url);
   auto id = std::string(url.path.full);

@@ -38,6 +38,8 @@ WebProxy::RequestHandler WebProxy::asRequestHandler() {
   return [this](auto req, auto opts) { return handleRequest(std::move(req), std::move(opts)); };
 }
 
+void WebProxy::updateState(std::string id) { _state_thingy->updateState(id); }
+
 http::Lifetime WebProxy::handleRequest(http::Request req, http::RequestOptions opts) {
   if (req.url.empty() || req.url[0] == '*') {
     req.url = _base_url;
