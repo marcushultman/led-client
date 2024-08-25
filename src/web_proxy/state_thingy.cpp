@@ -28,6 +28,16 @@ auto toNumber(jv jv_val) {
   return number;
 }
 
+struct HumanReadableDuration {
+  HumanReadableDuration(std::chrono::milliseconds d) : _d{d} {}
+  friend auto &operator<<(std::ostream &os, const HumanReadableDuration &lhs) {
+    return os << (lhs._d < 1min ? duration_cast<std::chrono::seconds>(lhs._d).count()
+                                : duration_cast<std::chrono::minutes>(lhs._d).count())
+              << (lhs._d < 1min ? "s" : "min");
+  }
+  std::chrono::milliseconds _d;
+};
+
 }  // namespace
 
 StateThingy::StateThingy(async::Scheduler &main_scheduler,
@@ -215,14 +225,24 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
       }
       jv_free(jv_display);
 
-      // Poll
+      // timeout & poll
+      auto jv_timeout = jv_object_get(jv_copy(jv_val), jv_string("timeout"));
       auto jv_poll = jv_object_get(jv_copy(jv_val), jv_string("poll"));
-      if (jv_get_kind(jv_poll) == JV_KIND_NUMBER) {
+      if (jv_get_kind(jv_timeout) == JV_KIND_NUMBER) {
+        auto delay = std::chrono::milliseconds{static_cast<int64_t>(jv_number_value(jv_timeout))};
+        std::cout << id << ": updated, timeout in " << HumanReadableDuration(delay) << std::endl;
+        state.work = _main_scheduler.schedule(
+            [this, id, &state] {
+              if (state.display) {
+                _presenter.erase(*state.display);
+              }
+              _states.erase(id);
+              std::cout << id << ": erased" << std::endl;
+            },
+            {.delay = delay});
+      } else if (jv_get_kind(jv_poll) == JV_KIND_NUMBER) {
         auto delay = std::chrono::milliseconds{static_cast<int64_t>(jv_number_value(jv_poll))};
-        std::cout << id << ": updated, poll in "
-                  << (delay < 1min ? duration_cast<std::chrono::seconds>(delay).count()
-                                   : duration_cast<std::chrono::minutes>(delay).count())
-                  << (delay < 1min ? "s" : "min") << std::endl;
+        std::cout << id << ": updated, poll in " << HumanReadableDuration(delay) << std::endl;
         state.work = _main_scheduler.schedule(
             [this, id, &state] { _request_update(std::move(id), state); }, {.delay = delay});
       } else {
@@ -230,6 +250,7 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
         state.work = {};
       }
       jv_free(jv_poll);
+      jv_free(jv_timeout);
 
     } else if (kind == JV_KIND_NULL) {
       if (auto it = _states.find(id); it != _states.end()) {
