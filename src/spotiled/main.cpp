@@ -1,3 +1,4 @@
+#include <csignal/signal_catcher.h>
 #include <execinfo.h>
 #include <program_options/program_options.h>
 #include <unistd.h>
@@ -6,7 +7,6 @@
 #include <future>
 #include <iostream>
 
-#include "csignal/signal_handler.h"
 #include "http/http.h"
 #include "http/server/server.h"
 #include "present/presenter.h"
@@ -37,16 +37,12 @@ int main(int argc, char *argv[]) {
       [port = server->port()] { std::cout << "Listening on port: " << port << std::endl; });
 
   auto interrupt = std::promise<int>();
-  auto sig = csignal::SignalHandler(main_scheduler, [&](auto signal) {
+  auto sig = csignal::SignalCatcher(main_scheduler, {SIGINT}, [&](auto signal) {
     std::cerr << "Signal received: " << signal << std::endl;
-
-    if (signal == SIGINT) {
-      server.reset();
-      web_proxy.reset();
-      presenter.reset();
-      interrupt.set_value(0);
-    }
-    return signal == SIGINT;
+    server.reset();
+    web_proxy.reset();
+    presenter.reset();
+    interrupt.set_value(0);
   });
 
   const auto status = interrupt.get_future().get();
