@@ -1,5 +1,7 @@
 
 set(SOURCES
+  signal_catcher.h
+  signal_catcher.cpp
   signal_handler.h
   signal_handler.cpp
 )
