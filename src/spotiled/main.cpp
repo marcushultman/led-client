@@ -14,6 +14,13 @@
 #include "spotiled/spotiled.h"
 #include "web_proxy/web_proxy.h"
 
+struct Stack {
+  std::unique_ptr<present::Presenter> presenter;
+  std::unique_ptr<web_proxy::WebProxy> web_proxy;
+  std::unique_ptr<http::Server> server;
+  std::unique_ptr<csignal::SignalCatcher> signal;
+};
+
 int main(int argc, char *argv[]) {
   auto http = http::Http::create();
   if (!http) {
@@ -25,24 +32,26 @@ int main(int argc, char *argv[]) {
   auto &main_scheduler = main_thread->scheduler();
   auto settings = settings::Settings();
 
-  auto presenter = present::makePresenter(spotiled::create(main_scheduler, settings));
-
-  auto web_proxy = std::make_unique<web_proxy::WebProxy>(
-      main_scheduler, *http, *presenter, opts.base_url, "spotiled",
-      web_proxy::StateThingy::Callbacks{
-          {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
-
-  auto server = http::makeServer(main_scheduler, web_proxy->asRequestHandler());
-  auto _ = main_scheduler.schedule(
-      [port = server->port()] { std::cout << "Listening on port: " << port << std::endl; });
-
+  auto stack = std::make_unique<Stack>();
   auto interrupt = std::promise<int>();
-  auto sig = csignal::SignalCatcher(main_scheduler, {SIGINT}, [&](auto signal) {
-    std::cerr << "Signal received: " << signal << std::endl;
-    server.reset();
-    web_proxy.reset();
-    presenter.reset();
-    interrupt.set_value(0);
+
+  auto _ = main_scheduler.schedule([&] {
+    stack->presenter = present::makePresenter(spotiled::create(main_scheduler, settings));
+
+    stack->web_proxy = std::make_unique<web_proxy::WebProxy>(
+        main_scheduler, *http, *stack->presenter, opts.base_url, "spotiled",
+        web_proxy::StateThingy::Callbacks{
+            {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
+
+    stack->server = http::makeServer(main_scheduler, stack->web_proxy->asRequestHandler());
+    std::cout << "Listening on port: " << stack->server->port() << std::endl;
+
+    stack->signal = std::make_unique<csignal::SignalCatcher>(
+        main_scheduler, std::vector{SIGINT}, [&](auto signal) {
+          std::cerr << "Signal received: " << signal << std::endl;
+          stack.reset();
+          interrupt.set_value(0);
+        });
   });
 
   const auto status = interrupt.get_future().get();
