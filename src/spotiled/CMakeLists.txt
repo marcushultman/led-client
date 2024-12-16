@@ -13,7 +13,6 @@ target_link_libraries(spotiled
   apa102
   render
   color
-  settings
 )
 
 add_executable(spoticode main.cpp)
@@ -30,7 +29,6 @@ target_link_libraries(spoticode
   http
   http_server
   program_options
-  settings
   spotiled
   uri
   web_proxy

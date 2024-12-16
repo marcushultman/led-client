@@ -29,14 +29,13 @@ int main(int argc, char *argv[]) {
   auto opts = program_options::parseOptions(argc, argv);
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
-  auto settings = settings::Settings{.brightness = 0x3F, .hue = 0xFF};
 
   auto stack = std::make_unique<Stack>();
   auto interrupt = std::promise<int>();
 
   auto _ = main_scheduler.schedule([&] {
     stack->web_proxy = std::make_unique<web_proxy::WebProxy>(
-        main_scheduler, *http, ikea::create(main_scheduler, settings), opts.base_url, "spotiled");
+        main_scheduler, *http, ikea::create(main_scheduler), opts.base_url, "spotiled");
 
     stack->button_reader = std::make_unique<ikea::ButtonReader>(
         main_scheduler, [&] { stack->web_proxy->updateState("/button"); });

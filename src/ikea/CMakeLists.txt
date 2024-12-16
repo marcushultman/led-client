@@ -20,7 +20,6 @@ target_link_libraries(ikea_led
   async
   color
   render
-  settings
 )
 
 if (PI)
@@ -45,7 +44,6 @@ target_link_libraries(ikea
   http_server
   ikea_led
   program_options
-  settings
   uri
   web_proxy
   # 3rd party

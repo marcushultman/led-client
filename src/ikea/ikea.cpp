@@ -2,7 +2,6 @@
 #include <color/color.h>
 #include <ikea/ikea.h>
 #include <render/renderer_impl.h>
-#include <render/time_of_day_brightness.h>
 
 #include <iostream>
 
@@ -22,7 +21,7 @@ constexpr size_t kWidth = 16;
 constexpr size_t kHeight = 16;
 
 struct IkeaLED final : BufferedLED {
-  explicit IkeaLED(const settings::Settings &settings) : _settings{settings} {
+  IkeaLED() {
     static_assert((kWidth * kHeight) % 4 == 0);
     _data.resize(kWidth * kHeight / 8);
 
@@ -93,7 +92,7 @@ struct IkeaLED final : BufferedLED {
   void setLogo(Color color, const Options &options) final {}
   void set(Coord pos, Color color, const Options &options) final {
     if (pos.x >= 0 && pos.x < 16 && pos.y >= 0 && pos.y < 16) {
-      auto [r, g, b] = color * timeOfDayBrightness(_settings);
+      auto [r, g, b] = color;
       auto i = offset(pos);
       if (r || g || b) {
         _data[i >> 3] |= bitMask(i);
@@ -117,7 +116,6 @@ struct IkeaLED final : BufferedLED {
   }
   uint8_t bitMask(size_t i) { return 1 << (7 - (i & 7)); }
 
-  const settings::Settings &_settings;
   std::vector<uint8_t> _data;
 
 #if !WITH_SIMULATOR
@@ -131,9 +129,8 @@ struct IkeaLED final : BufferedLED {
 
 }  // namespace
 
-std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler,
-                                 const settings::Settings &settings) {
-  return createRenderer(main_scheduler, std::make_unique<IkeaLED>(settings));
+std::unique_ptr<Renderer> create(async::Scheduler &main_scheduler) {
+  return createRenderer(main_scheduler, std::make_unique<IkeaLED>());
 }
 
 }  // namespace ikea
