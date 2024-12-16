@@ -11,12 +11,10 @@
 #include "http/http.h"
 #include "http/server/server.h"
 #include "ikea/ikea.h"
-#include "present/presenter.h"
 #include "settings/updater.h"
 #include "web_proxy/web_proxy.h"
 
 struct Stack {
-  std::unique_ptr<present::Presenter> presenter;
   std::unique_ptr<web_proxy::WebProxy> web_proxy;
   std::unique_ptr<ikea::ButtonReader> button_reader;
   std::unique_ptr<http::Server> server;
@@ -38,10 +36,8 @@ int main(int argc, char *argv[]) {
   auto interrupt = std::promise<int>();
 
   auto _ = main_scheduler.schedule([&] {
-    stack->presenter = present::makePresenter(ikea::create(main_scheduler, settings));
-
     stack->web_proxy = std::make_unique<web_proxy::WebProxy>(
-        main_scheduler, *http, *stack->presenter, opts.base_url, "spotiled",
+        main_scheduler, *http, ikea::create(main_scheduler, settings), opts.base_url, "spotiled",
         web_proxy::StateThingy::Callbacks{
             {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
 

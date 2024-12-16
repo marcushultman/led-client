@@ -9,13 +9,11 @@
 
 #include "http/http.h"
 #include "http/server/server.h"
-#include "present/presenter.h"
 #include "settings/updater.h"
 #include "spotiled/spotiled.h"
 #include "web_proxy/web_proxy.h"
 
 struct Stack {
-  std::unique_ptr<present::Presenter> presenter;
   std::unique_ptr<web_proxy::WebProxy> web_proxy;
   std::unique_ptr<http::Server> server;
   std::unique_ptr<csignal::SignalCatcher> signal;
@@ -36,12 +34,11 @@ int main(int argc, char *argv[]) {
   auto interrupt = std::promise<int>();
 
   auto _ = main_scheduler.schedule([&] {
-    stack->presenter = present::makePresenter(spotiled::create(main_scheduler, settings));
-
     stack->web_proxy = std::make_unique<web_proxy::WebProxy>(
-        main_scheduler, *http, *stack->presenter, opts.base_url, "spotiled",
-        web_proxy::StateThingy::Callbacks{
-            {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
+        main_scheduler, *http, spotiled::create(main_scheduler, settings), opts.base_url,
+        "spotiled", web_proxy::StateThingy::Callbacks{{"/settings2", [&](auto data) {
+                                                         settings::updateSettings(settings, data);
+                                                       }}});
 
     stack->server = http::makeServer(main_scheduler, stack->web_proxy->asRequestHandler());
     std::cout << "Listening on port: " << stack->server->port() << std::endl;

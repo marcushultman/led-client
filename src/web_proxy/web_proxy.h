@@ -4,7 +4,7 @@
 
 #include "async/scheduler.h"
 #include "http/http.h"
-#include "present/presenter.h"
+#include "render/renderer.h"
 #include "state_thingy.h"
 
 namespace web_proxy {
@@ -15,7 +15,7 @@ class WebProxy {
 
   WebProxy(async::Scheduler &,
            http::Http &,
-           present::Presenter &,
+           std::unique_ptr<render::Renderer>,
            std::string base_url,
            std::string_view device_id,
            StateThingy::Callbacks);

@@ -11,6 +11,7 @@
 #include "display.h"
 #include "http/http.h"
 #include "present/presenter.h"
+#include "render/renderer.h"
 
 namespace web_proxy {
 
@@ -28,7 +29,7 @@ struct StateThingy final {
 
   StateThingy(async::Scheduler &main_scheduler,
               RequestUpdate request_update,
-              present::Presenter &presenter,
+              std::unique_ptr<render::Renderer>,
               Callbacks);
   ~StateThingy();
 
@@ -47,13 +48,17 @@ struct StateThingy final {
   std::optional<http::Response> handleGetRequest(const http::Request &req);
   http::Response handlePostRequest(const http::Request &req);
 
+  const std::string *findNextToDisplay() const;
+  std::chrono::milliseconds onRender(render::LED &led, std::chrono::milliseconds elapsed);
+
   void onState(std::string_view id, std::string_view data);
 
   async::Scheduler &_main_scheduler;
   RequestUpdate _request_update;
-  present::Presenter &_presenter;
+  std::unique_ptr<render::Renderer> _renderer;
   std::unordered_map<std::string, State> _states;
   std::unordered_set<std::string> _snapshot;
+  Display *_displaying = nullptr;
   Callbacks _state_callbacks;
   async::Lifetime _load_work, _save_work;
 };

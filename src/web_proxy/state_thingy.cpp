@@ -3,6 +3,7 @@
 #include <charconv>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <utility>
 
 #include "encoding/base64.h"
@@ -42,23 +43,19 @@ struct HumanReadableDuration {
 
 StateThingy::StateThingy(async::Scheduler &main_scheduler,
                          RequestUpdate request_update,
-                         present::Presenter &presenter,
+                         std::unique_ptr<render::Renderer> renderer,
                          Callbacks callbacks)
     : _main_scheduler(main_scheduler),
       _request_update(std::move(request_update)),
-      _presenter(presenter),
+      _renderer(std::move(renderer)),
       _state_callbacks{std::move(callbacks)},
       _load_work{_main_scheduler.schedule([this] { loadStates(); })},
       _save_work{
-          _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min})} {}
-StateThingy::~StateThingy() {
-  saveStates();
-  for (auto &[_, state] : _states) {
-    if (state.display) {
-      _presenter.erase(*state.display);
-    }
-  }
+          _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min})} {
+  _renderer->add([this](auto &led, auto elapsed) { return onRender(led, elapsed); });
 }
+
+StateThingy::~StateThingy() { saveStates(); }
 
 void StateThingy::loadStates() {
   std::unordered_set<std::string> set;
@@ -205,23 +202,27 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
         display.xscroll = toNumber(jv_object_get(jv_copy(jv_display), jv_string("xscroll")));
         display.wave = toNumber(jv_object_get(jv_copy(jv_display), jv_string("wave")));
 
-        if (state.display &&
-            (state.display->prio != display.prio || state.display->xscroll != display.xscroll)) {
-          _presenter.erase(*state.display);
-          state.display = {};
+        if (_displaying && (display.prio > _displaying->prio || _displaying == &*state.display)) {
+          _displaying = nullptr;
         }
 
-        if (!std::exchange(state.display, std::move(display))) {
-          _presenter.add(
-              *state.display,
-              {.prio = state.display->prio,
-               .render_period = (state.display->xscroll || state.display->wave) ? 100ms : 1h});
-        } else {
-          _presenter.notify();
+        state.display = display;
+
+        if (!_displaying) {
+          _displaying = &*state.display;
+          _renderer->notify();
         }
+
       } else if (state.display) {
-        _presenter.erase(*state.display);
-        state.display = {};
+        if (_displaying == &*state.display) {
+          _displaying = nullptr;
+          _renderer->notify();
+        }
+        state.display.reset();
+
+        if (auto *id = findNextToDisplay()) {
+          updateState(*id);
+        }
       }
       jv_free(jv_display);
 
@@ -233,11 +234,16 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
         std::cout << id << ": updated, timeout in " << HumanReadableDuration(delay) << std::endl;
         state.work = _main_scheduler.schedule(
             [this, id, &state] {
-              if (state.display) {
-                _presenter.erase(*state.display);
+              if (_displaying == &*state.display) {
+                _displaying = nullptr;
+                _renderer->notify();
               }
               _states.erase(id);
               std::cout << id << ": erased" << std::endl;
+
+              if (auto *id = findNextToDisplay()) {
+                updateState(*id);
+              }
             },
             {.delay = delay});
       } else if (jv_get_kind(jv_poll) == JV_KIND_NUMBER) {
@@ -254,11 +260,16 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
 
     } else if (kind == JV_KIND_NULL) {
       if (auto it = _states.find(id); it != _states.end()) {
-        if (it->second.display) {
-          _presenter.erase(*it->second.display);
+        if (_displaying == &*it->second.display) {
+          _displaying = nullptr;
+          _renderer->notify();
         }
         _states.erase(it);
         std::cout << id << ": erased" << std::endl;
+
+        if (auto *id = findNextToDisplay()) {
+          updateState(*id);
+        }
       }
     }
     jv_free(jv_val);
@@ -303,6 +314,28 @@ void StateThingy::onServiceResponse(http::Response res, std::string id, State &s
   state.work = _main_scheduler.schedule(
       [this, id = std::move(id), &state] { _request_update(std::move(id), state); },
       {.delay = state.retry_backoff});
+}
+
+const std::string *StateThingy::findNextToDisplay() const {
+  std::map<present::Prio, const std::string *> id_by_display_prio;
+  for (auto &[id, state] : _states) {
+    if (auto &display = state.display) {
+      id_by_display_prio[display->prio] = &id;
+    }
+  }
+  return id_by_display_prio.empty() ? nullptr : id_by_display_prio.rbegin()->second;
+}
+
+std::chrono::milliseconds StateThingy::onRender(render::LED &led,
+                                                std::chrono::milliseconds elapsed) {
+  if (_displaying) {
+    _displaying->onRenderPass(led, elapsed);
+
+    if (_displaying->xscroll || _displaying->wave) {
+      return 100ms;
+    }
+  }
+  return 1h;
 }
 
 void StateThingy::onState(std::string_view id, std::string_view data) {
