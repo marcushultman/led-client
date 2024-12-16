@@ -19,8 +19,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
                    http::Http &http,
                    std::unique_ptr<render::Renderer> renderer,
                    std::string base_url,
-                   std::string_view device_id,
-                   StateThingy::Callbacks callbacks)
+                   std::string_view device_id)
     : _main_scheduler{main_scheduler},
       _http{http},
       _base_url{base_url.empty() ? kDefaultBaseUrl : std::move(base_url)},
@@ -29,8 +28,7 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
           [this](auto id, auto &state) { requestStateUpdate(std::move(id), state); },
-          std::move(renderer),
-          std::move(callbacks))} {}
+          std::move(renderer))} {}
 
 WebProxy::~WebProxy() = default;
 

@@ -17,8 +17,7 @@ class WebProxy {
            http::Http &,
            std::unique_ptr<render::Renderer>,
            std::string base_url,
-           std::string_view device_id,
-           StateThingy::Callbacks);
+           std::string_view device_id);
   ~WebProxy();
 
   RequestHandler asRequestHandler();

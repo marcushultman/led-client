@@ -43,12 +43,10 @@ struct HumanReadableDuration {
 
 StateThingy::StateThingy(async::Scheduler &main_scheduler,
                          RequestUpdate request_update,
-                         std::unique_ptr<render::Renderer> renderer,
-                         Callbacks callbacks)
+                         std::unique_ptr<render::Renderer> renderer)
     : _main_scheduler(main_scheduler),
       _request_update(std::move(request_update)),
       _renderer(std::move(renderer)),
-      _state_callbacks{std::move(callbacks)},
       _load_work{_main_scheduler.schedule([this] { loadStates(); })},
       _save_work{
           _main_scheduler.schedule([this] { saveStates(); }, {.delay = 10s, .period = 1min})} {
@@ -70,7 +68,6 @@ void StateThingy::loadStates() {
     auto &state = _states[id];
     state.data = entry.substr(split + 1);
     std::cout << id << ": loaded (" << state.data << ")" << std::endl;
-    onState(id, state.data);
     _request_update(std::move(id), state);
   }
   _snapshot = set;
@@ -157,7 +154,6 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
               jv_get_kind(jv_data) == JV_KIND_STRING ? jv_string_value(jv_data) : std::string();
           data != state.data) {
         state.data = std::move(data);
-        onState(id, state.data);
       }
       jv_free(jv_data);
 
@@ -336,12 +332,6 @@ std::chrono::milliseconds StateThingy::onRender(render::LED &led,
     }
   }
   return 1h;
-}
-
-void StateThingy::onState(std::string_view id, std::string_view data) {
-  for (auto [it, end] = _state_callbacks.equal_range(std::string(id)); it != end; ++it) {
-    it->second(data);
-  }
 }
 
 }  // namespace web_proxy

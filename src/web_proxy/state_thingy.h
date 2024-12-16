@@ -10,7 +10,6 @@
 #include "async/scheduler.h"
 #include "display.h"
 #include "http/http.h"
-#include "present/presenter.h"
 #include "render/renderer.h"
 
 namespace web_proxy {
@@ -24,13 +23,10 @@ struct State {
 
 struct StateThingy final {
   using RequestUpdate = std::function<void(std::string id, State &)>;
-  using StateCallback = std::function<void(std::string_view data)>;
-  using Callbacks = std::unordered_multimap<std::string, StateCallback>;
 
   StateThingy(async::Scheduler &main_scheduler,
               RequestUpdate request_update,
-              std::unique_ptr<render::Renderer>,
-              Callbacks);
+              std::unique_ptr<render::Renderer>);
   ~StateThingy();
 
   const std::unordered_map<std::string, State> &states();
@@ -51,15 +47,12 @@ struct StateThingy final {
   const std::string *findNextToDisplay() const;
   std::chrono::milliseconds onRender(render::LED &led, std::chrono::milliseconds elapsed);
 
-  void onState(std::string_view id, std::string_view data);
-
   async::Scheduler &_main_scheduler;
   RequestUpdate _request_update;
   std::unique_ptr<render::Renderer> _renderer;
   std::unordered_map<std::string, State> _states;
   std::unordered_set<std::string> _snapshot;
   Display *_displaying = nullptr;
-  Callbacks _state_callbacks;
   async::Lifetime _load_work, _save_work;
 };
 
