@@ -11,7 +11,6 @@
 #include "http/http.h"
 #include "http/server/server.h"
 #include "ikea/ikea.h"
-#include "settings/updater.h"
 #include "web_proxy/web_proxy.h"
 
 struct Stack {
@@ -30,7 +29,7 @@ int main(int argc, char *argv[]) {
   auto opts = program_options::parseOptions(argc, argv);
   auto main_thread = async::Thread::create("main");
   auto &main_scheduler = main_thread->scheduler();
-  auto settings = settings::Settings();
+  auto settings = settings::Settings{.brightness = 0x3F, .hue = 0xFF};
 
   auto stack = std::make_unique<Stack>();
   auto interrupt = std::promise<int>();
@@ -38,8 +37,7 @@ int main(int argc, char *argv[]) {
   auto _ = main_scheduler.schedule([&] {
     stack->web_proxy = std::make_unique<web_proxy::WebProxy>(
         main_scheduler, *http, ikea::create(main_scheduler, settings), opts.base_url, "spotiled",
-        web_proxy::StateThingy::Callbacks{
-            {"/settings2", [&](auto data) { settings::updateSettings(settings, data); }}});
+        web_proxy::StateThingy::Callbacks{});
 
     stack->button_reader = std::make_unique<ikea::ButtonReader>(
         main_scheduler, [&] { stack->web_proxy->updateState("/button"); });
