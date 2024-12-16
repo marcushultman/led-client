@@ -191,7 +191,7 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
         }
         jv_free(jv_bytes);
 
-        display.prio = static_cast<present::Prio>(
+        display.prio = static_cast<Display::Prio>(
             toNumber(jv_object_get(jv_copy(jv_display), jv_string("prio"))));
         display.width = toNumber(jv_object_get(jv_copy(jv_display), jv_string("width")));
         display.height = toNumber(jv_object_get(jv_copy(jv_display), jv_string("height")));
@@ -313,7 +313,7 @@ void StateThingy::onServiceResponse(http::Response res, std::string id, State &s
 }
 
 const std::string *StateThingy::findNextToDisplay() const {
-  std::map<present::Prio, const std::string *> id_by_display_prio;
+  std::map<Display::Prio, const std::string *> id_by_display_prio;
   for (auto &[id, state] : _states) {
     if (auto &display = state.display) {
       id_by_display_prio[display->prio] = &id;

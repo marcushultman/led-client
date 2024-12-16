@@ -44,7 +44,6 @@ target_link_libraries(ikea
   http
   http_server
   ikea_led
-  present
   program_options
   settings
   uri

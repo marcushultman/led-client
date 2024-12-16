@@ -18,7 +18,6 @@ target_link_libraries(web_proxy
   encoding
   http
   jq
-  present
   storage
   uri
 )
