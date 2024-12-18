@@ -6,4 +6,4 @@ A C++ client binary that runs on Raspberry Pi. Contains different entry points f
 
 LED panel using 19 + 16 * 23 APA102-based LEDs (Adafruit Neopixels). Entrypoint in [src/spotiled/main.cpp](./src/spotiled/main.cpp)
 
-![SpotiLED](./docs/spotiled.jpg)
+![SpotiLED](./docs/spotiled_anim.gif)
