@@ -27,7 +27,9 @@ WebProxy::WebProxy(async::Scheduler &main_scheduler,
       _device_id{device_id},
       _state_thingy{std::make_unique<StateThingy>(
           _main_scheduler,
-          [this](auto id, auto &state) { requestStateUpdate(std::move(id), state); },
+          [this](auto id, auto &state, auto on_update) {
+            requestStateUpdate(std::move(id), state, std::move(on_update));
+          },
           std::move(renderer))} {}
 
 WebProxy::~WebProxy() = default;
@@ -45,9 +47,8 @@ http::Lifetime WebProxy::handleRequest(http::Request req, http::RequestOptions o
     req.url = _base_url + req.url;
   }
 
-  if (auto res = _state_thingy->handleRequest(req)) {
-    return opts.post_to.schedule(
-        [res = std::move(res), opts = std::move(opts)] { opts.on_response(std::move(*res)); });
+  if (auto lifetime = _state_thingy->handleRequest(req, opts)) {
+    return lifetime;
   }
 
   if (auto it = req.headers.find(kHostHeader); it != req.headers.end()) {
@@ -70,15 +71,18 @@ http::Lifetime WebProxy::handleRequest(http::Request req, http::RequestOptions o
   return _http.request(std::move(req), std::move(opts));
 }
 
-void WebProxy::requestStateUpdate(std::string id, State &state) {
+void WebProxy::requestStateUpdate(std::string id, State &state, std::function<void()> on_update) {
   auto url = _base_url + (id.starts_with('/') ? "" : "/") + std::string(id);
   state.work = _http.request(
       {.method = http::Method::POST,
        .url = std::move(url),
        .headers = {{"content-type", "application/json"}, {"accept-encoding", "identity"}},
        .body = state.data},
-      {.post_to = _main_scheduler, .on_response = [this, id = std::move(id), &state](auto res) {
+      {.post_to = _main_scheduler,
+       .on_response = [this, id = std::move(id), &state,
+                       on_update = std::move(on_update)](auto res) {
          _state_thingy->onServiceResponse(std::move(res), std::move(id), state);
+         on_update ? on_update() : void();
        }});
 }
 

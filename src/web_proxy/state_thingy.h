@@ -22,7 +22,8 @@ struct State {
 };
 
 struct StateThingy final {
-  using RequestUpdate = std::function<void(std::string id, State &)>;
+  using RequestUpdate =
+      std::function<void(std::string id, State &, std::function<void()> on_update)>;
 
   StateThingy(async::Scheduler &main_scheduler,
               RequestUpdate request_update,
@@ -31,18 +32,18 @@ struct StateThingy final {
 
   const std::unordered_map<std::string, State> &states();
 
-  std::optional<http::Response> handleRequest(const http::Request &req);
+  http::Lifetime handleRequest(http::Request &, http::RequestOptions &);
   void updateState(std::string id);
 
-  bool handleStateUpdate(const std::string &json);
-  void onServiceResponse(http::Response res, std::string id, State &state);
+  void handleStateUpdate(const std::string &json);
+  void onServiceResponse(http::Response, std::string id, State &);
 
  private:
   void loadStates();
   void saveStates();
 
-  std::optional<http::Response> handleGetRequest(const http::Request &req);
-  http::Response handlePostRequest(const http::Request &req);
+  std::optional<http::Response> handleGetRequest(const http::Request &);
+  http::Lifetime handlePostRequest(const http::Request &, http::RequestOptions);
 
   const std::string *findNextToDisplay() const;
   std::chrono::milliseconds onRender(render::LED &led, std::chrono::milliseconds elapsed);

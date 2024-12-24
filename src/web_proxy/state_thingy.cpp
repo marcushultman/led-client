@@ -68,7 +68,7 @@ void StateThingy::loadStates() {
     auto &state = _states[id];
     state.data = entry.substr(split + 1);
     std::cout << id << ": loaded (" << state.data << ")" << std::endl;
-    _request_update(std::move(id), state);
+    _request_update(std::move(id), state, {});
   }
   _snapshot = set;
 }
@@ -90,14 +90,16 @@ void StateThingy::saveStates() {
 
 const std::unordered_map<std::string, State> &StateThingy::states() { return _states; }
 
-std::optional<http::Response> StateThingy::handleRequest(const http::Request &req) {
-  if (req.method == http::Method::GET) {
-    return handleGetRequest(req);
+http::Lifetime StateThingy::handleRequest(http::Request &req, http::RequestOptions &opts) {
+  if (auto res = req.method == http::Method::GET ? handleGetRequest(req) : std::nullopt) {
+    auto &post_to = opts.post_to;
+    return post_to.schedule(
+        [res = std::move(*res), opts = std::move(opts)] { opts.on_response(std::move(res)); });
   }
-  if (req.method == http::Method::POST) {  // todo: more factors?
-    return handlePostRequest(req);
+  if (req.method == http::Method::POST) {
+    return handlePostRequest(req, std::move(opts));
   }
-  return {};
+  return nullptr;
 }
 
 std::optional<http::Response> StateThingy::handleGetRequest(const http::Request &req) {
@@ -108,9 +110,9 @@ std::optional<http::Response> StateThingy::handleGetRequest(const http::Request 
   return {};
 }
 
-void StateThingy::updateState(std::string id) { _request_update(id, _states[id]); }
+void StateThingy::updateState(std::string id) { _request_update(id, _states[id], {}); }
 
-http::Response StateThingy::handlePostRequest(const http::Request &req) {
+http::Lifetime StateThingy::handlePostRequest(const http::Request &req, http::RequestOptions opts) {
   auto url = uri::Uri(req.url);
   auto id = std::string(url.path.full);
   auto &state = _states[id];
@@ -118,25 +120,38 @@ http::Response StateThingy::handlePostRequest(const http::Request &req) {
   auto it = req.headers.find("content-type");
   auto content_type = it != req.headers.end() ? it->second : std::string_view();
 
+  auto lifetime = std::make_shared<bool>();
+  auto reply_with_state = [this, id, alive = std::weak_ptr<void>(lifetime), opts] {
+    auto it = _states.find(id);
+    auto res = it != _states.end() ? http::Response(it->second.data) : 404;
+
+    auto &post_to = opts.post_to;
+    auto ref = std::make_shared<http::Lifetime>();
+    *ref = post_to.schedule(
+        [ref, alive = std::move(alive), opts = std::move(opts), res = std::move(res)] {
+          if (!alive.expired()) {
+            opts.on_response(std::move(res));
+          }
+        });
+  };
+
   if (content_type == "application/json") {
-    if (!handleStateUpdate(req.body)) {
-      std::cerr << id << ": update failed (explicit)" << std::endl;
-      return 400;
-    }
+    handleStateUpdate(req.body);
+    reply_with_state();
   } else if (!req.body.empty() && content_type == "application/x-www-form-urlencoded") {
-    _request_update(id + "?" + req.body, state);
+    _request_update(id + "?" + req.body, state, std::move(reply_with_state));
   } else {
-    _request_update({url.path.full.begin(), url.end()}, state);
+    _request_update({url.path.full.begin(), url.end()}, state, std::move(reply_with_state));
   }
-  return 204;
+  return lifetime;
 }
 
-bool StateThingy::handleStateUpdate(const std::string &json) {
+void StateThingy::handleStateUpdate(const std::string &json) {
   auto jv_dict = jv_parse(json.c_str());
 
   if (jv_get_kind(jv_dict) != JV_KIND_OBJECT) {
     jv_free(jv_dict);
-    return false;
+    return;
   }
 
   // todo: split up this massive function?
@@ -246,7 +261,7 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
         auto delay = std::chrono::milliseconds{static_cast<int64_t>(jv_number_value(jv_poll))};
         std::cout << id << ": updated, poll in " << HumanReadableDuration(delay) << std::endl;
         state.work = _main_scheduler.schedule(
-            [this, id, &state] { _request_update(std::move(id), state); }, {.delay = delay});
+            [this, id, &state] { _request_update(std::move(id), state, {}); }, {.delay = delay});
       } else {
         std::cout << id << ": updated" << std::endl;
         state.work = {};
@@ -271,8 +286,6 @@ bool StateThingy::handleStateUpdate(const std::string &json) {
     jv_free(jv_val);
   }
   jv_free(jv_dict);
-
-  return true;
 }
 
 void StateThingy::onServiceResponse(http::Response res, std::string id, State &state) {
@@ -281,10 +294,7 @@ void StateThingy::onServiceResponse(http::Response res, std::string id, State &s
   }
   if (res.status == 200) {
     state.retry_backoff = {};
-    if (handleStateUpdate(res.body)) {
-      // todo: do we always get 200?
-      return;
-    }
+    return handleStateUpdate(res.body);
   }
 
   if (res.status == 404) {
@@ -308,7 +318,7 @@ void StateThingy::onServiceResponse(http::Response res, std::string id, State &s
   std::cerr << id << ": update failed (status " << res.status << "), retrying in "
             << duration_cast<std::chrono::seconds>(state.retry_backoff).count() << "s" << std::endl;
   state.work = _main_scheduler.schedule(
-      [this, id = std::move(id), &state] { _request_update(std::move(id), state); },
+      [this, id = std::move(id), &state] { _request_update(std::move(id), state, {}); },
       {.delay = state.retry_backoff});
 }
 

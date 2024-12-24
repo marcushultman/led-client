@@ -25,7 +25,7 @@ class WebProxy {
 
  private:
   http::Lifetime handleRequest(http::Request, http::RequestOptions);
-  void requestStateUpdate(std::string id, State &);
+  void requestStateUpdate(std::string id, State &, std::function<void()> on_update);
 
   async::Scheduler &_main_scheduler;
   http::Http &_http;
