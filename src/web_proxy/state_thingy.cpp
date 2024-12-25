@@ -121,9 +121,10 @@ http::Lifetime StateThingy::handlePostRequest(const http::Request &req, http::Re
   auto content_type = it != req.headers.end() ? it->second : std::string_view();
 
   auto lifetime = std::make_shared<bool>();
-  auto reply_with_state = [this, id, alive = std::weak_ptr<void>(lifetime), opts] {
+  auto reply = [this, id, alive = std::weak_ptr<void>(lifetime), opts,
+                no_content = url.query.has("FAF")] {
     auto it = _states.find(id);
-    auto res = it != _states.end() ? http::Response(it->second.data) : 404;
+    auto res = no_content ? 204 : it != _states.end() ? http::Response(it->second.data) : 404;
 
     auto &post_to = opts.post_to;
     auto ref = std::make_shared<http::Lifetime>();
@@ -137,11 +138,11 @@ http::Lifetime StateThingy::handlePostRequest(const http::Request &req, http::Re
 
   if (content_type == "application/json") {
     handleStateUpdate(req.body);
-    reply_with_state();
+    reply();
   } else if (!req.body.empty() && content_type == "application/x-www-form-urlencoded") {
-    _request_update(id + "?" + req.body, state, std::move(reply_with_state));
+    _request_update(id + "?" + req.body, state, std::move(reply));
   } else {
-    _request_update({url.path.full.begin(), url.end()}, state, std::move(reply_with_state));
+    _request_update({url.path.full.begin(), url.end()}, state, std::move(reply));
   }
   return lifetime;
 }
