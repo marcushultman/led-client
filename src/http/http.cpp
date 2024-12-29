@@ -17,6 +17,8 @@ constexpr int64_t kMaxBufferSize = 16 * 1024;
 void setMethod(CURL *curl, Method method) {
   switch (method) {
     default:
+    case Method::GET:
+      curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
       break;
     case Method::POST:
       curl_easy_setopt(curl, CURLOPT_POST, 1);
