@@ -119,10 +119,10 @@ http::Lifetime StateThingy::handlePostRequest(const http::Request &req, http::Re
 
   auto it = req.headers.find("content-type");
   auto content_type = it != req.headers.end() ? it->second : std::string_view();
+  auto is_form = content_type == "application/x-www-form-urlencoded";
 
   auto lifetime = std::make_shared<bool>();
-  auto reply = [this, id, alive = std::weak_ptr<void>(lifetime), opts,
-                no_content = url.query.has("FAF")] {
+  auto reply = [this, id, alive = std::weak_ptr<void>(lifetime), opts, no_content = is_form] {
     auto it = _states.find(id);
     auto res = no_content ? 204 : it != _states.end() ? http::Response(it->second.data) : 404;
 
