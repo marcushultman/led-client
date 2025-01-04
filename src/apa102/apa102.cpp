@@ -119,17 +119,13 @@ class SPILED final : public LED {
 
 #else
 
-std::string_view simLogo(const uint8_t *abgr) {
+std::string simLogo(const uint8_t *abgr) {
   auto b = *(abgr + 1), g = *(abgr + 2), r = *(abgr + 3);
-  if (r > g) {
-    return (r > b ? "🔴" : b > r ? "🔵" : "🟣");
-  } else if (g > b) {
-    return (g > r ? "🟢" : r > g ? "🔴" : "🟡");
-  } else if (b > r) {
-    return (b > g ? "🔵" : g > b ? "🟢" : "🌐");
-  } else {
-    return (r ? "⚪️" : "⚫️");
-  }
+  r = r ? 128 + r * 2 : 0;
+  g = g ? 128 + g * 2 : 0;
+  b = b ? 128 + b * 2 : 0;
+  return "\033[38;2;" + std::to_string(r) + ";" + std::to_string(g) + ";" + std::to_string(b) +
+         "m \u2588\033[0m";
 }
 
 std::string simBrightness(const uint8_t *abgr) {
